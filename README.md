@@ -10,10 +10,18 @@
 2. 输出 `review.json`（Actions Artifact：`l1-review-report`）
 3. 在 PR 下**追加**一条带时间戳的 **L1 审核结果** 评论（不覆盖历史，按时间线可回溯）
 
+样例包：
+
+| 路径 | 预期 |
+|------|------|
+| `00temp/demo_algo_clean` | 通过 |
+| `00temp/demo_algo_issues` | 通过（有警告） |
+| `NIMM/02diagnostic/demo_algo_blocker` | **阻断**（正式目录缺必要子目录，Checks 红灯） |
+
 本地试跑：
 
 ```bash
 pip install -r .github/scripts/review/requirements.txt
-python .github/scripts/review/review.py --path 00temp/demo_algo_issues --json review.json
+python .github/scripts/review/review.py --path NIMM/02diagnostic/demo_algo_blocker --json review.json
 python .github/scripts/review/format_comment.py --json review.json --out review-comment.md
 ```
