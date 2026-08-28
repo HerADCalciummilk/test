@@ -1,0 +1,101 @@
+name: L1 review
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  l1-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install review tools
+        run: pip install -r .github/scripts/review/requirements.txt
+
+      - name: Run L1 review
+        id: review
+        run: |
+          set +e
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            python .github/scripts/review/review.py \
+              --base "${{ github.event.pull_request.base.sha }}" \
+              --json review.json
+          else
+            python .github/scripts/review/review.py --json review.json
+          fi
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Render PR comment markdown
+        if: always()
+        env:
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python .github/scripts/review/format_comment.py \
+            --json review.json \
+            --out review-comment.md \
+            --sha "${{ github.sha }}" \
+            --run-url "$GITHUB_RUN_URL"
+
+      - name: Upload review artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l1-review-report
+          path: |
+            review.json
+            review-comment.md
+          if-no-files-found: warn
+
+      - name: Comment review on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- nimm-l1-review -->';
+            const body = fs.readFileSync('review-comment.md', 'utf8');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => c.user.type === 'Bot' && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              core.info(`Updated comment ${existing.id}`);
+            } else {
+              const { data: created } = await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+              core.info(`Created comment ${created.id}`);
+            }
+
+      - name: Fail job when blockers exist
+        if: steps.review.outputs.exit_code != '0'
+        run: |
+          echo "L1 存在阻断项，检查失败。详见 PR 评论或 Artifact review.json"
+          exit 1
