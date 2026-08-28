@@ -35,9 +35,9 @@ RULES = {
     ),
     "MISSING_REQUIRED_DIR": Rule(
         id="MISSING_REQUIRED_DIR",
-        severity="warning",
+        severity="blocker",
         title="中间目录缺少必要子目录",
-        note="00temp/ 下缺失只警告，正式入库再收紧。",
+        note="00temp/ 亦须具备 src、cli、test、docs、nbs、resource；缺失则阻断。",
     ),
     "HARDCODED_BIZ_PATH": Rule(
         id="HARDCODED_BIZ_PATH",

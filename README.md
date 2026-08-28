@@ -15,8 +15,8 @@
 | 路径 | 预期 |
 |------|------|
 | `00temp/demo_algo_clean` | 通过 |
-| `00temp/demo_algo_issues` | 通过（有警告） |
-| `NIMM/02diagnostic/demo_algo_blocker` | **阻断**（正式目录缺必要子目录，Checks 红灯） |
+| `00temp/demo_algo_issues` | **阻断**（中间目录缺必要子目录；另有硬编码路径等警告） |
+| `NIMM/02diagnostic/demo_algo_blocker` | **阻断**（正式目录缺必要子目录） |
 
 本地试跑：
 
