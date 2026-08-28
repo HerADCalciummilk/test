@@ -2,6 +2,8 @@
 
 本仓库用于开发 **算法代码上传审核**（机器检查 + 后续人工/LLM）。
 
+完整规范见：[docs/L1机器审核规范.md](docs/L1机器审核规范.md)。
+
 ## L1 机器检查
 
 提交或更新 Pull Request 后，GitHub Actions 会：

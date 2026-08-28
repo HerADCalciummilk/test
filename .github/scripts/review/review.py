@@ -205,27 +205,6 @@ def run_flake8(repo: Path, py_files: list[Path], findings: list[Finding]) -> Non
         add_finding(findings, "FLAKE8", match.group(1), match.group(3).strip(), int(match.group(2)))
 
 
-def run_black(repo: Path, py_files: list[Path], findings: list[Finding]) -> None:
-    if not py_files:
-        return
-    rel_files = [repo_rel(repo, path) for path in py_files]
-    result = subprocess.run(
-        [sys.executable, "-m", "black", "--check", *rel_files],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if "No module named" in (result.stderr or ""):
-        return
-    if result.returncode == 0:
-        return
-    for raw in (result.stderr or result.stdout).splitlines():
-        if "would reformat" in raw:
-            path_s = raw.split("would reformat", 1)[-1].strip()
-            add_finding(findings, "BLACK", Path(path_s).as_posix(), "与 Black 格式不一致")
-
-
 def github_annotate(findings: list[Finding]) -> None:
     for item in findings:
         kind = "error" if item.severity == "blocker" else "warning"
@@ -293,7 +272,6 @@ def main() -> int:
         if abs_path.is_file() and abs_path.suffix == ".py":
             py_files.append(abs_path)
     run_flake8(repo, py_files, findings)
-    run_black(repo, py_files, findings)
 
     report = build_report([item.as_posix() for item in packages], findings)
     out = Path(args.json)

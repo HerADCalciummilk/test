@@ -60,14 +60,8 @@ RULES = {
     "FLAKE8": Rule(
         id="FLAKE8",
         severity="warning",
-        title="flake8 风格问题",
-        note="属于静态扫描，应当修复，不单独阻断。",
-    ),
-    "BLACK": Rule(
-        id="BLACK",
-        severity="warning",
-        title="Black 格式不一致",
-        note="属于静态扫描，应当修复，不单独阻断。",
+        title="flake8 风格与格式问题",
+        note="以 flake8（对齐 PEP 8，行宽 120）检查风格与格式；应当修复，不单独阻断。",
     ),
 }
 
@@ -105,5 +99,5 @@ SKIP_FILE_SUFFIXES = {".pyc", ".png", ".jpg", ".jpeg", ".gif", ".nc", ".grib", "
 
 MAX_TEXT_FILE_BYTES = 1_000_000
 
-# 用于 PR 评论定位/更新同一条机器人评论
+# 用于 PR 评论识别与「第 N 次」计数（每次检查追加新评论，不覆盖）
 COMMENT_MARKER = "<!-- nimm-l1-review -->"
