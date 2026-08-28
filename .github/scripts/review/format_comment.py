@@ -1,16 +1,23 @@
-"""把 review.json 渲染成 PR 评论 Markdown。"""
+"""把 review.json 渲染成 PR 评论 Markdown。
+
+每次检查追加一条新评论（不覆盖），便于按时间线回溯审核过程。
+"""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from rules import COMMENT_MARKER, RULES
 
+BEIJING = ZoneInfo("Asia/Shanghai")
 
-def _fmt_finding(item: dict, limit: int = 12) -> list[str]:
+
+def _fmt_finding(item: dict) -> list[str]:
     lines: list[str] = []
     rule = RULES.get(item["rule_id"])
     title = rule.title if rule else item["rule_id"]
@@ -26,7 +33,18 @@ def _fmt_finding(item: dict, limit: int = 12) -> list[str]:
     return lines
 
 
-def render_markdown(report: dict, *, run_url: str = "", sha: str = "") -> str:
+def now_beijing_text() -> str:
+    return datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S %z")
+
+
+def render_markdown(
+    report: dict,
+    *,
+    run_url: str = "",
+    sha: str = "",
+    attempt: int = 1,
+    checked_at: str = "",
+) -> str:
     summary = report.get("summary") or {}
     blockers = report.get("blockers") or []
     warnings = report.get("warnings") or []
@@ -42,11 +60,14 @@ def render_markdown(report: dict, *, run_url: str = "", sha: str = "") -> str:
     else:
         status = "通过"
 
+    checked_at = checked_at or now_beijing_text()
+
     lines = [
         COMMENT_MARKER,
-        "## L1 机器审核结果",
+        f"## L1 机器审核结果（第 {attempt} 次）",
         "",
         f"**状态**：{status}",
+        f"**检查时间**：{checked_at}",
         f"**门禁**：`{report.get('gate', 'l1')}`",
         f"**算法包**：{', '.join(f'`{p}`' for p in packages) if packages else '（本次变更未识别到算法包）'}",
         f"**阻断**：{blocker_n}　**警告**：{warning_n}",
@@ -89,8 +110,8 @@ def render_markdown(report: dict, *, run_url: str = "", sha: str = "") -> str:
         [
             "<details><summary>说明</summary>",
             "",
-            "- 本评论由 GitHub Actions 自动更新；同一 PR 内只会保留这一条 L1 结果。",
-            "- 完整 JSON 报告在该次 Actions 的 Artifact：`l1-review-report` / `review.json`。",
+            "- 每次 push / 重跑检查都会**新增**一条评论，不覆盖历史，便于按时间线回溯。",
+            "- 完整 JSON 报告在该次 Actions 的 Artifact：`l1-review-report` / `review.json`（随该次运行保留）。",
             "- 阻断项会导致检查失败；警告不单独阻断合并。",
             "",
             "</details>",
@@ -106,6 +127,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", default="review-comment.md", help="Markdown 输出路径")
     parser.add_argument("--run-url", default="", help="Actions run URL")
     parser.add_argument("--sha", default="", help="提交 SHA")
+    parser.add_argument("--attempt", type=int, default=1, help="本 PR 第几次 L1 检查")
+    parser.add_argument("--checked-at", default="", help="检查时间（默认当前北京时间）")
     return parser.parse_args()
 
 
@@ -115,7 +138,16 @@ def main() -> int:
     report = json.loads(report_path.read_text(encoding="utf-8"))
     run_url = args.run_url or os.environ.get("GITHUB_RUN_URL", "")
     sha = args.sha or os.environ.get("GITHUB_SHA", "")
-    text = render_markdown(report, run_url=run_url, sha=sha)
+    attempt = args.attempt
+    if attempt < 1:
+        attempt = int(os.environ.get("L1_ATTEMPT", "1") or "1")
+    text = render_markdown(
+        report,
+        run_url=run_url,
+        sha=sha,
+        attempt=attempt,
+        checked_at=args.checked_at,
+    )
     out = Path(args.out)
     out.write_text(text, encoding="utf-8")
     print(text)
