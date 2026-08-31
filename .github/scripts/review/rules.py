@@ -77,27 +77,33 @@ RULES = {
     ),
     "NO_CONCRETE_PLUGIN": Rule(
         id="NO_CONCRETE_PLUGIN",
-        severity="warning",
+        severity="blocker",
         title="未找到具体插件类",
-        note="src/（不含 utils）中应至少有一个继承 BasePlugin 或 PostProcessingPlugin 的具体插件类。",
+        note="00temp/ 与 NIMM/ 均须满足：src/（不含 utils）中至少有一个（直接或间接）继承 BasePlugin 或 PostProcessingPlugin 的具体插件类。",
     ),
     "PLUGIN_MISSING_INIT": Rule(
         id="PLUGIN_MISSING_INIT",
-        severity="warning",
+        severity="blocker",
         title="具体插件缺少 __init__",
         note="具体插件类须定义 __init__（无参时可为空实现）。",
     ),
     "PLUGIN_MISSING_PROCESS": Rule(
         id="PLUGIN_MISSING_PROCESS",
-        severity="warning",
+        severity="blocker",
         title="具体插件缺少 process",
         note="具体插件类须定义非空 process 作为主入口。",
     ),
     "PLUGIN_EMPTY_PROCESS": Rule(
         id="PLUGIN_EMPTY_PROCESS",
-        severity="warning",
+        severity="blocker",
         title="具体插件 process 为空",
         note="process 不能仅有 docstring / pass / ...；禁止空实现凑检。",
+    ),
+    "PYTHON_SYNTAX_ERROR": Rule(
+        id="PYTHON_SYNTAX_ERROR",
+        severity="blocker",
+        title="Python 语法错误",
+        note="文件无法被解析，导入或运行必失败；须修复后再合入。",
     ),
     "PLUGIN_BASE_CHAIN": Rule(
         id="PLUGIN_BASE_CHAIN",
@@ -105,15 +111,24 @@ RULES = {
         title="PostProcessingPlugin 未继承 BasePlugin",
         note="中间基类允许扩展，但应直接或名义上挂在 BasePlugin 下（本检查仅看直接基类名）。",
     ),
+    "EMPTY_REQUIRED_DIR": Rule(
+        id="EMPTY_REQUIRED_DIR",
+        severity="warning",
+        title="必要目录无实质内容",
+        note="目录已存在但无文件、或仅有 .gitkeep 占位；不含已缺失目录（缺目录为 blocker）。",
+    ),
 }
 
 # CODEX 约定的算法包必要子目录（中间目录与正式目录均强制，级别见上表）
 REQUIRED_PACKAGE_DIRS = ("src", "cli", "test", "docs", "nbs", "resource")
 
-# 插件继承识别：具体插件 = 继承下列基类，且类名不是这些基类本身
+# 仅占位、不算实质内容的文件名（如 resource/.gitkeep）
+PLACEHOLDER_FILE_NAMES = frozenset({".gitkeep"})
+
+# 插件继承识别：具体插件 =（直接或间接）继承下列基类，且类名不是这些基类本身
 PLUGIN_BASE_NAMES = frozenset({"BasePlugin", "PostProcessingPlugin"})
 
-# 不在这些 src 子目录中查找插件（工具模块不要求 process）
+# 不在这些 src 子目录中要求插件形态（仍参与继承图，便于解析间接继承）
 PLUGIN_SKIP_SRC_DIR_NAMES = frozenset({"utils"})
 
 # 内容扫描用正则 / 后缀（由 review.py 的 check_* 使用）
