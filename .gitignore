@@ -1,3 +1,9 @@
+# L1 / L2 本地报告与评论（勿提交）
+l1-review.json
+l1-review-comment.md
+l2-review.json
+l2-review-comment.md
+# 兼容旧文件名
 review.json
 review-comment.md
 __pycache__/
