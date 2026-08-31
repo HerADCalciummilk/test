@@ -1,4 +1,5 @@
-def test_process():
-    from demo_plugin import process
+from demo_plugin import DemoAlgoPlugin
 
-    assert process(1) == 2
+
+def test_process():
+    assert DemoAlgoPlugin().process(1) == 2

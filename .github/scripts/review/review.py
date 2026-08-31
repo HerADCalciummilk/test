@@ -1,8 +1,21 @@
-"""L1 机器审核入口。对照 rules.py，输出 review.json。"""
+"""L1 机器审核入口（本目录三件套之一：检查）。
+
+职责：根据 git 变更或 --path 定位算法包，对照 rules.py 执行检查，写出 review.json，
+并在 Actions 日志中输出 ::error / ::warning 注解。
+
+典型调用：
+  # PR / CI：相对基线扫描变更涉及的包
+  python review.py --base <base_sha> --json review.json
+  # 本地自检：直接指定包
+  python review.py --path 00temp/demo_algo_clean --json review.json
+
+退出码：存在 blocker 时返回 1，否则 0（workflow 据此决定是否红灯）。
+"""
 
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import subprocess
@@ -16,7 +29,9 @@ from rules import (
     HARDCODED_PATH_PATTERNS,
     MAX_TEXT_FILE_BYTES,
     NATIVE_SUFFIXES,
+    PLUGIN_BASE_NAMES,
     PLUGIN_IO_PATTERNS,
+    PLUGIN_SKIP_SRC_DIR_NAMES,
     REQUIRED_PACKAGE_DIRS,
     RULES,
     SKIP_DIR_NAMES,
@@ -26,6 +41,8 @@ from rules import (
 
 @dataclass
 class Finding:
+    """单条检查发现；severity 来自 RULES[rule_id]。"""
+
     rule_id: str
     severity: str
     path: str
@@ -34,6 +51,7 @@ class Finding:
 
 
 def repo_rel(root: Path, path: Path) -> str:
+    """把绝对路径收成仓库内 posix 相对路径，便于报告跨平台一致。"""
     try:
         return path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
@@ -41,6 +59,7 @@ def repo_rel(root: Path, path: Path) -> str:
 
 
 def iter_files(root: Path) -> Iterable[Path]:
+    """递归列出待扫描文件，跳过缓存目录与大体积数据后缀。"""
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -52,6 +71,7 @@ def iter_files(root: Path) -> Iterable[Path]:
 
 
 def read_text(path: Path) -> str | None:
+    """读取 UTF-8 文本；超大或非文本则返回 None（跳过内容规则）。"""
     if path.stat().st_size > MAX_TEXT_FILE_BYTES:
         return None
     try:
@@ -61,6 +81,12 @@ def read_text(path: Path) -> str | None:
 
 
 def package_root_for(rel: Path) -> Path | None:
+    """从变更文件相对路径解析算法包根。
+
+    - 00temp/<pkg>/...           → 00temp/<pkg>
+    - NIMM/<kind>/<pkg>/...      → NIMM/<kind>/<pkg>
+    其它路径返回 None。
+    """
     parts = rel.parts
     if not parts:
         return None
@@ -72,6 +98,7 @@ def package_root_for(rel: Path) -> Path | None:
 
 
 def changed_paths(repo: Path, base: str) -> list[Path]:
+    """相对 base 的变更文件列表（Added/Copied/Modified/Renamed）。"""
     result = subprocess.run(
         ["git", "diff", "--name-only", "--diff-filter=ACMR", base],
         cwd=repo,
@@ -91,6 +118,7 @@ def changed_paths(repo: Path, base: str) -> list[Path]:
 
 
 def discover_packages(repo: Path, rel_files: list[Path]) -> list[Path]:
+    """由变更文件聚合出算法包；包根下需有 src/ 或 cli/。"""
     found: set[Path] = set()
     for rel in rel_files:
         root = package_root_for(rel)
@@ -109,6 +137,7 @@ def add_finding(
     message: str,
     line: int | None = None,
 ) -> None:
+    """按 RULES 填 severity，追加一条 Finding。"""
     rule = RULES[rule_id]
     findings.append(
         Finding(
@@ -122,6 +151,7 @@ def add_finding(
 
 
 def check_structure(repo: Path, package: Path, findings: list[Finding]) -> None:
+    """必要目录是否齐全；正式树与中间目录使用不同 rule_id，均为 blocker。"""
     official = package.parts[0] == "NIMM"
     rule_id = "MISSING_REQUIRED_DIR_OFFICIAL" if official else "MISSING_REQUIRED_DIR"
     missing = [name for name in REQUIRED_PACKAGE_DIRS if not (repo / package / name).is_dir()]
@@ -135,6 +165,7 @@ def check_structure(repo: Path, package: Path, findings: list[Finding]) -> None:
 
 
 def check_file_content(repo: Path, path: Path, findings: list[Finding]) -> None:
+    """逐行内容规则：凭据、硬编码业务路径；src 下额外查疑似文件 I/O。"""
     rel = repo_rel(repo, path)
     text = read_text(path)
     if text is None:
@@ -161,6 +192,7 @@ def check_file_content(repo: Path, path: Path, findings: list[Finding]) -> None:
 
 
 def check_native_binaries(repo: Path, package: Path, findings: list[Finding]) -> None:
+    """包内 .so/.pyd/.dll 须在 docs 中有所说明。"""
     docs_text = ""
     docs_dir = repo / package / "docs"
     if docs_dir.is_dir():
@@ -177,7 +209,130 @@ def check_native_binaries(repo: Path, package: Path, findings: list[Finding]) ->
             add_finding(findings, "UNDECLARED_NATIVE_BINARY", rel, "docs 中未说明该二进制扩展")
 
 
+def _ast_base_name(node: ast.expr) -> str | None:
+    """从 AST 基类表达式取出简单类名（Name 或 Attribute.attr）。"""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _method_body_empty(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """仅 docstring / pass / ... 视为空实现（禁止用空 process 凑检）。"""
+    for stmt in fn.body:
+        if isinstance(stmt, ast.Pass):
+            continue
+        if isinstance(stmt, ast.Expr):
+            value = stmt.value
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                continue
+            if isinstance(value, ast.Constant) and value.value is Ellipsis:
+                continue
+        return False
+    return True
+
+
+def check_plugins(repo: Path, package: Path, findings: list[Finding]) -> None:
+    """插件形态检查（AST）。
+
+    - 扫描 src/（跳过 utils）
+    - 基类名 BasePlugin / PostProcessingPlugin 本身不要求业务 process
+    - 继承二者的具体类：须有 __init__、非空 process
+    - 包内至少一个具体插件；PostProcessingPlugin 定义时建议直接继承 BasePlugin
+    """
+    src = repo / package / "src"
+    if not src.is_dir():
+        return
+
+    concrete_count = 0
+    for path in src.rglob("*.py"):
+        if any(part in SKIP_DIR_NAMES for part in path.parts):
+            continue
+        try:
+            rel_to_src = path.relative_to(src)
+        except ValueError:
+            continue
+        if any(part in PLUGIN_SKIP_SRC_DIR_NAMES for part in rel_to_src.parts):
+            continue
+
+        text = read_text(path)
+        if text is None:
+            continue
+        try:
+            tree = ast.parse(text, filename=str(path))
+        except SyntaxError:
+            continue
+
+        rel = repo_rel(repo, path)
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+
+            base_names = [name for name in (_ast_base_name(b) for b in node.bases) if name]
+
+            # 中间基类应挂在 BasePlugin 下（仅检查直接基类名）
+            if node.name == "PostProcessingPlugin" and "BasePlugin" not in base_names:
+                add_finding(
+                    findings,
+                    "PLUGIN_BASE_CHAIN",
+                    rel,
+                    "PostProcessingPlugin 未直接继承 BasePlugin",
+                    node.lineno,
+                )
+
+            # 跳过基类定义本身
+            if node.name in PLUGIN_BASE_NAMES:
+                continue
+            if not any(name in PLUGIN_BASE_NAMES for name in base_names):
+                continue
+
+            concrete_count += 1
+            methods = {
+                item.name: item
+                for item in node.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            class_loc = f"{rel}:{node.name}"
+
+            if "__init__" not in methods:
+                add_finding(
+                    findings,
+                    "PLUGIN_MISSING_INIT",
+                    class_loc,
+                    "具体插件类缺少 __init__",
+                    node.lineno,
+                )
+
+            process_fn = methods.get("process")
+            if process_fn is None:
+                add_finding(
+                    findings,
+                    "PLUGIN_MISSING_PROCESS",
+                    class_loc,
+                    "具体插件类缺少 process",
+                    node.lineno,
+                )
+            elif _method_body_empty(process_fn):
+                add_finding(
+                    findings,
+                    "PLUGIN_EMPTY_PROCESS",
+                    class_loc,
+                    "process 为空实现（仅 docstring/pass/...）",
+                    process_fn.lineno,
+                )
+
+    if concrete_count == 0:
+        add_finding(
+            findings,
+            "NO_CONCRETE_PLUGIN",
+            package.as_posix(),
+            "src/ 中未找到继承 BasePlugin/PostProcessingPlugin 的具体插件类（已跳过 src/utils）",
+        )
+
+
 def run_flake8(repo: Path, py_files: list[Path], findings: list[Finding]) -> None:
+    """调用 flake8（含 pep8-naming）；结果一律记为 FLAKE8 warning。"""
     if not py_files:
         return
     rel_files = [repo_rel(repo, path) for path in py_files]
@@ -187,7 +342,7 @@ def run_flake8(repo: Path, py_files: list[Path], findings: list[Finding]) -> Non
             "-m",
             "flake8",
             "--max-line-length=120",
-            "--format=%(path)s:%(row)d:%(text)s",
+            "--format=%(path)s:%(row)d:%(code)s %(text)s",
             *rel_files,
         ],
         cwd=repo,
@@ -206,6 +361,7 @@ def run_flake8(repo: Path, py_files: list[Path], findings: list[Finding]) -> Non
 
 
 def github_annotate(findings: list[Finding]) -> None:
+    """输出 GitHub Actions 注解，便于 Checks / Files changed 展示。"""
     for item in findings:
         kind = "error" if item.severity == "blocker" else "warning"
         line = item.line or 1
@@ -213,6 +369,7 @@ def github_annotate(findings: list[Finding]) -> None:
 
 
 def build_report(packages: list[str], findings: list[Finding]) -> dict:
+    """组装 review.json 结构。"""
     blockers = [asdict(item) for item in findings if item.severity == "blocker"]
     warnings = [asdict(item) for item in findings if item.severity == "warning"]
     return {
@@ -243,6 +400,7 @@ def main() -> int:
     findings: list[Finding] = []
     packages: list[Path] = []
 
+    # 包列表来源：--path 优先；否则用 --base 的变更推断；皆无则不做包级检查
     if args.path:
         packages = [Path(item) for item in args.path]
     elif args.base:
@@ -253,13 +411,16 @@ def main() -> int:
     scan_files: list[Path] = []
     if args.path or args.base:
         if packages:
+            # 识别到算法包：整包结构 / 插件 / 二进制说明 + 包内文件内容
             for package in packages:
                 check_structure(repo, package, findings)
                 check_native_binaries(repo, package, findings)
+                check_plugins(repo, package, findings)
                 for path in iter_files(repo / package):
                     scan_files.append(path)
                     check_file_content(repo, path, findings)
         elif args.base:
+            # 有变更但落在包路径外：仅对变更文件做内容规则
             for rel in changed_paths(repo, args.base):
                 abs_path = repo / rel
                 if abs_path.is_file():
@@ -286,6 +447,7 @@ def main() -> int:
         f"warnings={report['summary']['warning_count']} "
         f"report={out}"
     )
+    # 有阻断则非 0，供 workflow 最后一步失败
     return 1 if report["summary"]["blocker_count"] else 0
 
 

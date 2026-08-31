@@ -1,6 +1,11 @@
-"""把 review.json 渲染成 PR 评论 Markdown。
+"""把 review.json 渲染成 PR 评论 Markdown（本目录三件套之一：评论）。
 
-每次检查追加一条新评论（不覆盖），便于按时间线回溯审核过程。
+职责：读取 L1 检查产出的 JSON，生成带时间戳、「第 N 次」的 Markdown。
+workflow 每次检查会追加一条新评论（不覆盖历史），便于按时间线回溯。
+
+典型调用（CI）：
+  python format_comment.py --json review.json --out review-comment.md \\
+    --sha $GITHUB_SHA --run-url $GITHUB_RUN_URL --attempt N
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ BEIJING = ZoneInfo("Asia/Shanghai")
 
 
 def _fmt_finding(item: dict) -> list[str]:
+    """单条发现格式化为评论中的列表项（含规则标题与位置）。"""
     lines: list[str] = []
     rule = RULES.get(item["rule_id"])
     title = rule.title if rule else item["rule_id"]
@@ -34,6 +40,7 @@ def _fmt_finding(item: dict) -> list[str]:
 
 
 def now_beijing_text() -> str:
+    """检查时间展示用：北京时间，含时区偏移。"""
     return datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S %z")
 
 
@@ -45,6 +52,11 @@ def render_markdown(
     attempt: int = 1,
     checked_at: str = "",
 ) -> str:
+    """由 review.json 结构生成完整评论正文。
+
+    文首 COMMENT_MARKER 供 workflow 统计本 PR 已有多少条 L1 评论。
+    阻断/警告列表过长时截断，完整内容以 Artifact 为准。
+    """
     summary = report.get("summary") or {}
     blockers = report.get("blockers") or []
     warnings = report.get("warnings") or []
@@ -72,6 +84,7 @@ def render_markdown(
         f"**算法包**：{', '.join(f'`{p}`' for p in packages) if packages else '（本次变更未识别到算法包）'}",
         f"**阻断**：{blocker_n}　**警告**：{warning_n}",
     ]
+    # 提交 = git commit SHA；Actions 链接对应该次 run（含 Artifact）
     if sha:
         lines.append(f"**提交**：`{sha[:12]}`")
     if run_url:
@@ -110,8 +123,8 @@ def render_markdown(
         [
             "<details><summary>说明</summary>",
             "",
-            "- 每次 push / 重跑检查都会**新增**一条评论，不覆盖历史，便于按时间线回溯。",
-            "- 完整 JSON 报告在该次 Actions 的 Artifact：`l1-review-report` / `review.json`（随该次运行保留）。",
+            "- 在 **Create PR**（opened）或向 PR **新 push**（synchronize）时追加评论；Re-run 不发评论。",
+            "- 完整 JSON 报告在该次 Actions 的 Artifact：`l1-review-report-<run_id>` / `review.json`（随该次运行保留）。",
             "- 阻断项会导致检查失败；警告不单独阻断合并。",
             "",
             "</details>",

@@ -1,12 +1,19 @@
+# L1 机器审核工作流
+# 流程：检出 → 安装依赖 → review.py 检查 → 上传 Artifact
+#       → 在 PR opened（创建）或 synchronize（新 push）且非 Re-run 时追加评论
+#       → 若有 blocker 则 job 失败（红灯）
+# 脚本目录：.github/scripts/review/（rules.py 规则 / review.py 检查 / format_comment.py 评论）
+
 name: L1 review
 
 on:
+  # 创建或更新 PR 时跑；手动触发不带 --base，通常扫不到包（仅验证 workflow 能跑通）
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: write  # 追加 PR 评论需要
 
 jobs:
   l1-review:
@@ -15,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # 需要完整历史以便相对 base.sha 做 diff
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,6 +32,7 @@ jobs:
       - name: Install review tools
         run: pip install -r .github/scripts/review/requirements.txt
 
+      # 有 blocker 时 review.py 返回非 0；此处先记下 exit_code，保证后续 Artifact 仍执行
       - name: Run L1 review
         id: review
         run: |
@@ -40,8 +48,13 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
+      # 创建 PR（opened）或新 push（synchronize），且非 Re-run 时准备/追加评论
       - name: Count prior L1 comments
-        if: always() && github.event_name == 'pull_request'
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
         id: prior
         uses: actions/github-script@v7
         with:
@@ -68,7 +81,11 @@ jobs:
             core.info(`Prior L1 comments: ${total}; this attempt: ${attempt}`);
 
       - name: Render PR comment markdown
-        if: always()
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
         env:
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -81,6 +98,7 @@ jobs:
             --run-url "$GITHUB_RUN_URL" \
             --attempt "$ATTEMPT"
 
+      # 每次 run 仍上传 Artifact（含 Re-run），便于下载完整报告
       - name: Upload review artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,8 +109,13 @@ jobs:
             review-comment.md
           if-no-files-found: warn
 
+      # opened / synchronize + 首次 attempt 追加评论（Re-run 不刷屏）
       - name: Append review comment on PR
-        if: always() && github.event_name == 'pull_request'
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
         uses: actions/github-script@v7
         with:
           script: |

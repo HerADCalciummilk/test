@@ -1,8 +1,4 @@
-"""正式目录阻断演示包：故意缺少 CODEX 必要子目录。
-
-仅保留 src/，缺少 cli、test、docs、nbs、resource，
-应触发 MISSING_REQUIRED_DIR_OFFICIAL（blocker）。
-"""
+"""正式目录阻断演示：缺必要目录，且无具体插件类。"""
 
 
 def process(value):

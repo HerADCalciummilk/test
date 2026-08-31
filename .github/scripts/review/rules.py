@@ -1,7 +1,14 @@
-"""L1 审核规则。
+"""L1 审核规则定义（本目录三件套之一：规则）。
 
-blocker：检查失败，workflow 红灯，开发者需修复后再推。
-warning：写入 review.json 与 PR 评论，不单独阻断合并。
+职责：集中维护规则 ID、严重级别、说明文案，以及匹配用的常量/正则。
+检查逻辑在 review.py；PR 评论渲染在 format_comment.py。
+对外说明见 docs/L1机器审核规范.md。
+
+严重级别：
+- blocker：检查失败，workflow 红灯，开发者需修复后再推。
+- warning：写入 review.json 与 PR 评论，不单独阻断合并。
+
+改规则时改本文件（必要时同步改 review.py 与规范文档），经 PR 合入后全员生效。
 """
 
 from __future__ import annotations
@@ -14,12 +21,17 @@ Severity = Literal["blocker", "warning"]
 
 @dataclass(frozen=True)
 class Rule:
+    """单条规则的元数据；severity 决定是否令 job 失败。"""
+
     id: str
     severity: Severity
     title: str
     note: str
 
 
+# ---------------------------------------------------------------------------
+# 规则表：review.py 通过 rule_id 引用；format_comment.py 用 title 展示给人看
+# ---------------------------------------------------------------------------
 RULES = {
     "CREDENTIAL_PATTERN": Rule(
         id="CREDENTIAL_PATTERN",
@@ -60,13 +72,51 @@ RULES = {
     "FLAKE8": Rule(
         id="FLAKE8",
         severity="warning",
-        title="flake8 风格与格式问题",
-        note="以 flake8（对齐 PEP 8，行宽 120）检查风格与格式；应当修复，不单独阻断。",
+        title="flake8 风格、格式与命名问题",
+        note="flake8 + pep8-naming（PEP 8，行宽 120）；含类名 CapWords（N801）等命名检查；应当修复，不单独阻断。",
+    ),
+    "NO_CONCRETE_PLUGIN": Rule(
+        id="NO_CONCRETE_PLUGIN",
+        severity="warning",
+        title="未找到具体插件类",
+        note="src/（不含 utils）中应至少有一个继承 BasePlugin 或 PostProcessingPlugin 的具体插件类。",
+    ),
+    "PLUGIN_MISSING_INIT": Rule(
+        id="PLUGIN_MISSING_INIT",
+        severity="warning",
+        title="具体插件缺少 __init__",
+        note="具体插件类须定义 __init__（无参时可为空实现）。",
+    ),
+    "PLUGIN_MISSING_PROCESS": Rule(
+        id="PLUGIN_MISSING_PROCESS",
+        severity="warning",
+        title="具体插件缺少 process",
+        note="具体插件类须定义非空 process 作为主入口。",
+    ),
+    "PLUGIN_EMPTY_PROCESS": Rule(
+        id="PLUGIN_EMPTY_PROCESS",
+        severity="warning",
+        title="具体插件 process 为空",
+        note="process 不能仅有 docstring / pass / ...；禁止空实现凑检。",
+    ),
+    "PLUGIN_BASE_CHAIN": Rule(
+        id="PLUGIN_BASE_CHAIN",
+        severity="warning",
+        title="PostProcessingPlugin 未继承 BasePlugin",
+        note="中间基类允许扩展，但应直接或名义上挂在 BasePlugin 下（本检查仅看直接基类名）。",
     ),
 }
 
+# CODEX 约定的算法包必要子目录（中间目录与正式目录均强制，级别见上表）
 REQUIRED_PACKAGE_DIRS = ("src", "cli", "test", "docs", "nbs", "resource")
 
+# 插件继承识别：具体插件 = 继承下列基类，且类名不是这些基类本身
+PLUGIN_BASE_NAMES = frozenset({"BasePlugin", "PostProcessingPlugin"})
+
+# 不在这些 src 子目录中查找插件（工具模块不要求 process）
+PLUGIN_SKIP_SRC_DIR_NAMES = frozenset({"utils"})
+
+# 内容扫描用正则 / 后缀（由 review.py 的 check_* 使用）
 HARDCODED_PATH_PATTERNS = (
     r"/home/nimm\b",
     r"/home/[^/\s\"']+/nimm\b",
@@ -86,6 +136,7 @@ PLUGIN_IO_PATTERNS = (
 
 NATIVE_SUFFIXES = (".so", ".pyd", ".dll")
 
+# 遍历仓库时跳过的目录 / 不做文本规则扫描的后缀
 SKIP_DIR_NAMES = {
     ".git",
     "__pycache__",
@@ -97,7 +148,8 @@ SKIP_DIR_NAMES = {
 
 SKIP_FILE_SUFFIXES = {".pyc", ".png", ".jpg", ".jpeg", ".gif", ".nc", ".grib", ".grb"}
 
+# 过大文本不读入做内容匹配，避免拖慢 CI
 MAX_TEXT_FILE_BYTES = 1_000_000
 
-# 用于 PR 评论识别与「第 N 次」计数（每次检查追加新评论，不覆盖）
+# PR 评论中的隐藏标记：用于统计「第 N 次」检查（每次追加新评论，不覆盖）
 COMMENT_MARKER = "<!-- nimm-l1-review -->"

@@ -10,15 +10,15 @@
 
 1. 扫描本次变更涉及的 `00temp/<算法>/` 或 `NIMM/<种类>/<算法>/`
 2. 输出 `review.json`（Actions Artifact：`l1-review-report`）
-3. 在 PR 下**追加**一条带时间戳的 **L1 审核结果** 评论（不覆盖历史，按时间线可回溯）
+3. **Create PR** 或向 PR **新 push** 时追加一条带时间戳的 **L1 审核结果** 评论（Re-run 不发评论）
 
 样例包：
 
 | 路径 | 预期 |
 |------|------|
-| `00temp/demo_algo_clean` | 通过 |
-| `00temp/demo_algo_issues` | **阻断**（中间目录缺必要子目录；另有硬编码路径等警告） |
-| `NIMM/02diagnostic/demo_algo_blocker` | **阻断**（正式目录缺必要子目录） |
+| `00temp/demo_algo_clean` | 通过（含合规具体插件类） |
+| `00temp/demo_algo_issues` | **阻断**（中间目录缺必要子目录；另有硬编码路径、无具体插件等警告） |
+| `NIMM/02diagnostic/demo_algo_blocker` | **阻断**（正式目录缺必要子目录；另有无具体插件警告） |
 
 本地试跑：
 
