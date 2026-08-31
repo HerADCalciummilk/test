@@ -1,0 +1,290 @@
+# =============================================================================
+# 算法上传审核（统一入口）
+# -----------------------------------------------------------------------------
+# 维护约定：
+#   - 本文件是 CI 唯一入口；不要再拆成并行的 l1-*.yml / l2-*.yml
+#   - Job 划分：l1 = 机器门禁；l2 = LLM 语义（仅当 l1 成功后执行）
+#   - 脚本目录 .github/scripts/review/：
+#       common.py / rules.py
+#       l1_review.py + format_l1_comment.py
+#       l2_review.py + format_l2_comment.py
+#   - 报告命名：l1-review.json / l2-review.json；L2 下载 L1 Artifact 复用摘要
+#
+# 流程：
+#   PR / 手动触发
+#     → job l1：机器检查 → Artifact →（条件）PR 评论 → blocker 则失败
+#     → job l2：needs l1 且成功 → 下载 l1-review.json → LLM → Artifact →（条件）PR 评论
+#
+# Secrets（仅 l2）：OPENAI_API_KEY；可选 OPENAI_BASE_URL、OPENAI_MODEL
+# 分支保护：建议必过「L1 machine review」；「L2 LLM review」按是否强制 API 决定
+# =============================================================================
+
+name: Algorithm review
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# ---------------------------------------------------------------------------
+# Job：L1 机器审核
+# ---------------------------------------------------------------------------
+jobs:
+  l1:
+    name: L1 machine review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install review tools
+        run: pip install -r .github/scripts/review/requirements.txt
+
+      # blocker 时 l1_review.py 非 0；先记 exit_code，保证后续 Artifact / 评论仍执行
+      - name: Run L1 review
+        id: review
+        run: |
+          set +e
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            python .github/scripts/review/l1_review.py \
+              --base "${{ github.event.pull_request.base.sha }}" \
+              --json l1-review.json
+          else
+            python .github/scripts/review/l1_review.py --json l1-review.json
+          fi
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Count prior L1 comments
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
+        id: prior_l1
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- nimm-l1-review -->';
+            let page = 1;
+            let total = 0;
+            while (true) {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+                page,
+              });
+              if (!comments.length) break;
+              total += comments.filter((c) => c.body && c.body.includes(marker)).length;
+              if (comments.length < 100) break;
+              page += 1;
+              if (page > 20) break;
+            }
+            core.setOutput('attempt', String(total + 1));
+            core.info(`Prior L1 comments: ${total}; this attempt: ${total + 1}`);
+
+      - name: Render L1 PR comment
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
+        env:
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          ATTEMPT="${{ steps.prior_l1.outputs.attempt }}"
+          if [ -z "$ATTEMPT" ]; then ATTEMPT=1; fi
+          python .github/scripts/review/format_l1_comment.py \
+            --json l1-review.json \
+            --out l1-review-comment.md \
+            --sha "${{ github.sha }}" \
+            --run-url "$GITHUB_RUN_URL" \
+            --attempt "$ATTEMPT"
+
+      - name: Upload L1 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l1-review-report-${{ github.run_id }}
+          path: |
+            l1-review.json
+            l1-review-comment.md
+          if-no-files-found: warn
+
+      - name: Append L1 comment on PR
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('l1-review-comment.md', 'utf8');
+            const { data: created } = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+            core.info(`Appended L1 comment ${created.id}`);
+
+      - name: Fail L1 when blockers exist
+        if: steps.review.outputs.exit_code != '0'
+        run: |
+          echo "L1 存在阻断项，检查失败；不会进入 L2。详见 PR 评论或 Artifact。"
+          exit 1
+
+  # -------------------------------------------------------------------------
+  # Job：L2 LLM 审核（仅 L1 成功后执行；不再重复跑 l1_review.py）
+  # -------------------------------------------------------------------------
+  l2:
+    name: L2 LLM review
+    needs: l1
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install review tools
+        run: pip install -r .github/scripts/review/requirements.txt
+
+      - name: Download L1 report
+        uses: actions/download-artifact@v4
+        with:
+          name: l1-review-report-${{ github.run_id }}
+          path: .
+
+      - name: Run L2 LLM review
+        id: l2
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+        run: |
+          set +e
+          L1_ARG=""
+          if [ -f l1-review.json ]; then
+            L1_ARG="--l1-json l1-review.json"
+          fi
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            python .github/scripts/review/l2_review.py \
+              --base "${{ github.event.pull_request.base.sha }}" \
+              --json l2-review.json \
+              $L1_ARG
+          else
+            python .github/scripts/review/l2_review.py \
+              --json l2-review.json \
+              $L1_ARG
+          fi
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Count prior L2 comments
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
+        id: prior_l2
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- nimm-l2-review -->';
+            let page = 1;
+            let total = 0;
+            while (true) {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+                page,
+              });
+              if (!comments.length) break;
+              total += comments.filter((c) => c.body && c.body.includes(marker)).length;
+              if (comments.length < 100) break;
+              page += 1;
+              if (page > 20) break;
+            }
+            core.setOutput('attempt', String(total + 1));
+            core.info(`Prior L2 comments: ${total}; this attempt: ${total + 1}`);
+
+      - name: Render L2 PR comment
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
+        env:
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          ATTEMPT="${{ steps.prior_l2.outputs.attempt }}"
+          if [ -z "$ATTEMPT" ]; then ATTEMPT=1; fi
+          python .github/scripts/review/format_l2_comment.py \
+            --json l2-review.json \
+            --out l2-review-comment.md \
+            --sha "${{ github.sha }}" \
+            --run-url "$GITHUB_RUN_URL" \
+            --attempt "$ATTEMPT"
+
+      - name: Upload L2 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l2-review-report-${{ github.run_id }}
+          path: |
+            l2-review.json
+            l2-review-comment.md
+          if-no-files-found: warn
+
+      - name: Append L2 comment on PR
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
+          github.run_attempt == 1
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('l2-review-comment.md')) {
+              core.warning('l2-review-comment.md missing; skip comment');
+              return;
+            }
+            const body = fs.readFileSync('l2-review-comment.md', 'utf8');
+            const { data: created } = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+            core.info(`Appended L2 comment ${created.id}`);
+
+      - name: Fail L2 when pipeline error
+        if: steps.l2.outputs.exit_code != '0'
+        run: |
+          echo "L2 未成功完成（缺 API Key 或调用失败）。LLM 发现项本身不阻断；请检查 Secrets / 日志。"
+          exit 1

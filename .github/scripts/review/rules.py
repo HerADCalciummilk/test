@@ -1,14 +1,14 @@
-"""L1 审核规则定义（本目录三件套之一：规则）。
+"""L1 审核规则定义。
 
 职责：集中维护规则 ID、严重级别、说明文案，以及匹配用的常量/正则。
-检查逻辑在 review.py；PR 评论渲染在 format_comment.py。
-对外说明见 docs/L1机器审核规范.md。
+检查逻辑在 l1_review.py；PR 评论渲染在 format_l1_comment.py。
+对外说明见 docs/L1_机器审核规范.md。
 
 严重级别：
 - blocker：检查失败，workflow 红灯，开发者需修复后再推。
-- warning：写入 review.json 与 PR 评论，不单独阻断合并。
+- warning：写入 l1-review.json 与 PR 评论，不单独阻断合并。
 
-改规则时改本文件（必要时同步改 review.py 与规范文档），经 PR 合入后全员生效。
+改规则时改本文件（必要时同步改 l1_review.py 与规范文档），经 PR 合入后全员生效。
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ class Rule:
 
 
 # ---------------------------------------------------------------------------
-# 规则表：review.py 通过 rule_id 引用；format_comment.py 用 title 展示给人看
+# 规则表：l1_review.py 通过 rule_id 引用；format_l1_comment.py 用 title 展示给人看
 # ---------------------------------------------------------------------------
 RULES = {
     "CREDENTIAL_PATTERN": Rule(
@@ -131,7 +131,7 @@ PLUGIN_BASE_NAMES = frozenset({"BasePlugin", "PostProcessingPlugin"})
 # 不在这些 src 子目录中要求插件形态（仍参与继承图，便于解析间接继承）
 PLUGIN_SKIP_SRC_DIR_NAMES = frozenset({"utils"})
 
-# 内容扫描用正则 / 后缀（由 review.py 的 check_* 使用）
+# 内容扫描用正则 / 后缀（由 l1_review.py 的 check_* 使用）
 HARDCODED_PATH_PATTERNS = (
     r"/home/nimm\b",
     r"/home/[^/\s\"']+/nimm\b",
@@ -167,4 +167,5 @@ SKIP_FILE_SUFFIXES = {".pyc", ".png", ".jpg", ".jpeg", ".gif", ".nc", ".grib", "
 MAX_TEXT_FILE_BYTES = 1_000_000
 
 # PR 评论中的隐藏标记：用于统计「第 N 次」检查（每次追加新评论，不覆盖）
-COMMENT_MARKER = "<!-- nimm-l1-review -->"
+COMMENT_MARKER_L1 = "<!-- nimm-l1-review -->"
+COMMENT_MARKER_L2 = "<!-- nimm-l2-review -->"

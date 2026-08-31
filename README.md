@@ -1,29 +1,49 @@
 # test
 
-本仓库用于开发 **算法代码上传审核**（机器检查 + 后续人工/LLM）。
+本仓库用于开发 **算法代码上传审核**（L1 机器检查 + L2 LLM + 后续人工）。
 
-完整规范见：[docs/L1机器审核规范.md](docs/L1机器审核规范.md)。
+- L1 规范：[docs/L1_机器审核规范.md](docs/L1_机器审核规范.md)
+- L2 规范：[docs/L2_LLM审核规范.md](docs/L2_LLM审核规范.md)
+- CI 入口：`.github/workflows/algorithm-review.yml`（job `l1` → 成功后 job `l2`）
 
-## L1 机器检查
+## 目录速览
 
-提交或更新 Pull Request 后，GitHub Actions 会：
+```text
+.github/
+  workflows/algorithm-review.yml
+  scripts/review/
+    common.py              # 共用包发现
+    rules.py               # L1 规则与 marker
+    l1_review.py           # → l1-review.json
+    format_l1_comment.py
+    l2_review.py           # → l2-review.json
+    format_l2_comment.py
+    requirements.txt
+```
 
-1. 扫描本次变更涉及的 `00temp/<算法>/` 或 `NIMM/<种类>/<算法>/`
-2. 输出 `review.json`（Actions Artifact：`l1-review-report`）
-3. **Create PR** 或向 PR **新 push** 时追加一条带时间戳的 **L1 审核结果** 评论（Re-run 不发评论）
+## 流水线
 
-样例包：
+```text
+Pull Request / 手动触发
+  → L1 machine review（机器门禁）
+       ├─ 有 blocker → 红灯，不跑 L2
+       └─ 通过 → L2 LLM review（下载 l1-review.json，不重跑机器检查）
+```
 
-| 路径 | 预期 |
-|------|------|
-| `00temp/demo_algo_clean` | 通过（可有 warning：`resource/` 仅 `.gitkeep`） |
-| `00temp/demo_algo_issues` | **阻断**（缺必要目录 + 无具体插件；另有硬编码路径等警告） |
-| `NIMM/02diagnostic/demo_algo_blocker` | **阻断**（正式目录缺必要目录 + 无具体插件） |
+分支保护建议必过：**`L1 machine review`**。按需勾选 **`L2 LLM review`**。
 
-本地试跑：
+## 本地命令
 
 ```bash
 pip install -r .github/scripts/review/requirements.txt
-python .github/scripts/review/review.py --path NIMM/02diagnostic/demo_algo_blocker --json review.json
-python .github/scripts/review/format_comment.py --json review.json --out review-comment.md
+
+# L1
+python .github/scripts/review/l1_review.py --path 00temp/demo_algo_clean --json l1-review.json
+python .github/scripts/review/format_l1_comment.py --json l1-review.json --out l1-review-comment.md
+
+# L2（dry-run 不调 API）
+python .github/scripts/review/l2_review.py --path 00temp/demo_algo_clean --dry-run --json l2-review.json
+python .github/scripts/review/format_l2_comment.py --json l2-review.json --out l2-review-comment.md
 ```
+
+样例包预期见 [docs/L1_机器审核规范.md](docs/L1_机器审核规范.md)。

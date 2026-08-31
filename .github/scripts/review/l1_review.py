@@ -1,13 +1,11 @@
-"""L1 机器审核入口（本目录三件套之一：检查）。
+"""L1 机器审核入口。
 
-职责：根据 git 变更或 --path 定位算法包，对照 rules.py 执行检查，写出 review.json，
+职责：根据 git 变更或 --path 定位算法包，对照 rules.py 执行检查，写出 l1-review.json，
 并在 Actions 日志中输出 ::error / ::warning 注解。
 
 典型调用：
-  # PR / CI：相对基线扫描变更涉及的包
-  python review.py --base <base_sha> --json review.json
-  # 本地自检：直接指定包
-  python review.py --path 00temp/demo_algo_clean --json review.json
+  python l1_review.py --base <base_sha> --json l1-review.json
+  python l1_review.py --path 00temp/demo_algo_clean --json l1-review.json
 
 退出码：存在 blocker 时返回 1，否则 0（workflow 据此决定是否红灯）。
 """
@@ -22,12 +20,17 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable
 
+from common import (
+    changed_paths,
+    discover_packages,
+    iter_files,
+    read_text,
+    repo_rel,
+)
 from rules import (
     CREDENTIAL_PATTERNS,
     HARDCODED_PATH_PATTERNS,
-    MAX_TEXT_FILE_BYTES,
     NATIVE_SUFFIXES,
     PLACEHOLDER_FILE_NAMES,
     PLUGIN_BASE_NAMES,
@@ -36,7 +39,6 @@ from rules import (
     REQUIRED_PACKAGE_DIRS,
     RULES,
     SKIP_DIR_NAMES,
-    SKIP_FILE_SUFFIXES,
 )
 
 
@@ -49,86 +51,6 @@ class Finding:
     path: str
     line: int | None
     message: str
-
-
-def repo_rel(root: Path, path: Path) -> str:
-    """把绝对路径收成仓库内 posix 相对路径，便于报告跨平台一致。"""
-    try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def iter_files(root: Path) -> Iterable[Path]:
-    """递归列出待扫描文件，跳过缓存目录与大体积数据后缀。"""
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if any(part in SKIP_DIR_NAMES for part in path.parts):
-            continue
-        if path.suffix.lower() in SKIP_FILE_SUFFIXES:
-            continue
-        yield path
-
-
-def read_text(path: Path) -> str | None:
-    """读取 UTF-8 文本；超大或非文本则返回 None（跳过内容规则）。"""
-    if path.stat().st_size > MAX_TEXT_FILE_BYTES:
-        return None
-    try:
-        return path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return None
-
-
-def package_root_for(rel: Path) -> Path | None:
-    """从变更文件相对路径解析算法包根。
-
-    - 00temp/<pkg>/...           → 00temp/<pkg>
-    - NIMM/<kind>/<pkg>/...      → NIMM/<kind>/<pkg>
-    其它路径返回 None。
-    """
-    parts = rel.parts
-    if not parts:
-        return None
-    if parts[0] == "00temp" and len(parts) >= 2 and parts[1] not in SKIP_DIR_NAMES:
-        return Path(parts[0]) / parts[1]
-    if parts[0] == "NIMM" and len(parts) >= 3 and parts[1] not in SKIP_DIR_NAMES:
-        return Path(parts[0]) / parts[1] / parts[2]
-    return None
-
-
-def changed_paths(repo: Path, base: str) -> list[Path]:
-    """相对 base 的变更文件列表（Added/Copied/Modified/Renamed）。"""
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=ACMR", base],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        print(result.stderr.strip() or "git diff 失败", file=sys.stderr)
-        return []
-    paths = []
-    for line in result.stdout.splitlines():
-        line = line.strip()
-        if line:
-            paths.append(Path(line))
-    return paths
-
-
-def discover_packages(repo: Path, rel_files: list[Path]) -> list[Path]:
-    """由变更文件聚合出算法包；包根下需有 src/ 或 cli/。"""
-    found: set[Path] = set()
-    for rel in rel_files:
-        root = package_root_for(rel)
-        if root is None:
-            continue
-        abs_root = repo / root
-        if (abs_root / "src").is_dir() or (abs_root / "cli").is_dir():
-            found.add(root)
-    return sorted(found)
 
 
 def add_finding(
@@ -460,7 +382,7 @@ def github_annotate(findings: list[Finding]) -> None:
 
 
 def build_report(packages: list[str], findings: list[Finding]) -> dict:
-    """组装 review.json 结构。"""
+    """组装 l1-review.json 结构。"""
     blockers = [asdict(item) for item in findings if item.severity == "blocker"]
     warnings = [asdict(item) for item in findings if item.severity == "warning"]
     return {
@@ -480,7 +402,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo-root", default=".", help="仓库根目录")
     parser.add_argument("--base", default="", help="git diff 的基准 commit / ref")
     parser.add_argument("--path", action="append", default=[], help="直接指定算法包相对路径，可重复")
-    parser.add_argument("--json", default="review.json", help="报告输出路径")
+    parser.add_argument("--json", default="l1-review.json", help="报告输出路径")
     return parser.parse_args()
 
 

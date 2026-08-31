@@ -1,10 +1,10 @@
-"""把 review.json 渲染成 PR 评论 Markdown（本目录三件套之一：评论）。
+"""把 l1-review.json 渲染成 PR 评论 Markdown。
 
 职责：读取 L1 检查产出的 JSON，生成带时间戳、「第 N 次」的 Markdown。
 workflow 每次检查会追加一条新评论（不覆盖历史），便于按时间线回溯。
 
 典型调用（CI）：
-  python format_comment.py --json review.json --out review-comment.md \\
+  python format_l1_comment.py --json l1-review.json --out l1-review-comment.md \\
     --sha $GITHUB_SHA --run-url $GITHUB_RUN_URL --attempt N
 """
 
@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from rules import COMMENT_MARKER, RULES
+from rules import COMMENT_MARKER_L1, RULES
 
 BEIJING = ZoneInfo("Asia/Shanghai")
 
@@ -52,9 +52,9 @@ def render_markdown(
     attempt: int = 1,
     checked_at: str = "",
 ) -> str:
-    """由 review.json 结构生成完整评论正文。
+    """由 l1-review.json 结构生成完整评论正文。
 
-    文首 COMMENT_MARKER 供 workflow 统计本 PR 已有多少条 L1 评论。
+    文首 COMMENT_MARKER_L1 供 workflow 统计本 PR 已有多少条 L1 评论。
     阻断/警告列表过长时截断，完整内容以 Artifact 为准。
     """
     summary = report.get("summary") or {}
@@ -75,7 +75,7 @@ def render_markdown(
     checked_at = checked_at or now_beijing_text()
 
     lines = [
-        COMMENT_MARKER,
+        COMMENT_MARKER_L1,
         f"## L1 机器审核结果（第 {attempt} 次）",
         "",
         f"**状态**：{status}",
@@ -84,7 +84,6 @@ def render_markdown(
         f"**算法包**：{', '.join(f'`{p}`' for p in packages) if packages else '（本次变更未识别到算法包）'}",
         f"**阻断**：{blocker_n}　**警告**：{warning_n}",
     ]
-    # 提交 = git commit SHA；Actions 链接对应该次 run（含 Artifact）
     if sha:
         lines.append(f"**提交**：`{sha[:12]}`")
     if run_url:
@@ -98,7 +97,7 @@ def render_markdown(
         shown = 0
         for item in blockers:
             if shown >= 20:
-                lines.append(f"- … 另有 {len(blockers) - shown} 条，详见 Artifact `review.json`")
+                lines.append(f"- … 另有 {len(blockers) - shown} 条，详见 Artifact `l1-review.json`")
                 break
             lines.extend(_fmt_finding(item))
             shown += 1
@@ -110,7 +109,7 @@ def render_markdown(
         shown = 0
         for item in warnings:
             if shown >= 20:
-                lines.append(f"- … 另有 {len(warnings) - shown} 条，详见 Artifact `review.json`")
+                lines.append(f"- … 另有 {len(warnings) - shown} 条，详见 Artifact `l1-review.json`")
                 break
             lines.extend(_fmt_finding(item))
             shown += 1
@@ -124,7 +123,7 @@ def render_markdown(
             "<details><summary>说明</summary>",
             "",
             "- 在 **Create PR**（opened）或向 PR **新 push**（synchronize）时追加评论；Re-run 不发评论。",
-            "- 完整 JSON 报告在该次 Actions 的 Artifact：`l1-review-report-<run_id>` / `review.json`（随该次运行保留）。",
+            "- 完整 JSON 报告在该次 Actions 的 Artifact：`l1-review-report-<run_id>` / `l1-review.json`。",
             "- 阻断项会导致检查失败；警告不单独阻断合并。",
             "",
             "</details>",
@@ -136,8 +135,8 @@ def render_markdown(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="渲染 L1 PR 评论")
-    parser.add_argument("--json", default="review.json", help="review.json 路径")
-    parser.add_argument("--out", default="review-comment.md", help="Markdown 输出路径")
+    parser.add_argument("--json", default="l1-review.json", help="l1-review.json 路径")
+    parser.add_argument("--out", default="l1-review-comment.md", help="Markdown 输出路径")
     parser.add_argument("--run-url", default="", help="Actions run URL")
     parser.add_argument("--sha", default="", help="提交 SHA")
     parser.add_argument("--attempt", type=int, default=1, help="本 PR 第几次 L1 检查")
