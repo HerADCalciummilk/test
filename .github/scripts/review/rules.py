@@ -117,6 +117,12 @@ RULES = {
         title="必要目录无实质内容",
         note="目录已存在但无文件、或仅有 .gitkeep 占位；不含已缺失目录（缺目录为 blocker）。",
     ),
+    "PACKAGE_NO_ENTRY_DIR": Rule(
+        id="PACKAGE_NO_ENTRY_DIR",
+        severity="blocker",
+        title="疑似算法路径缺少 src/cli",
+        note="变更落在 00temp/<包> 或 NIMM/<种类>/<包> 下，但包根同时缺少 src/ 与 cli/；视为缺少关键入口目录，阻断。应补齐 src/ 或 cli/，或移出算法路径。",
+    ),
 }
 
 # CODEX 约定的算法包必要子目录（中间目录与正式目录均强制，级别见上表）

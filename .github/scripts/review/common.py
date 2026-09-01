@@ -92,3 +92,20 @@ def discover_packages(repo: Path, rel_files: list[Path]) -> list[Path]:
         if (abs_root / "src").is_dir() or (abs_root / "cli").is_dir():
             found.add(root)
     return sorted(found)
+
+
+def packages_missing_entry_dirs(repo: Path, rel_files: list[Path]) -> list[Path]:
+    """变更落在算法路径形态下，但包根同时缺少 src/ 与 cli/ 的候选根。
+
+    此类路径不进入 discover_packages，整包检查会跳过；调用方应记 PACKAGE_NO_ENTRY_DIR（blocker）。
+    """
+    missing: set[Path] = set()
+    for rel in rel_files:
+        root = package_root_for(rel)
+        if root is None:
+            continue
+        abs_root = repo / root
+        if (abs_root / "src").is_dir() or (abs_root / "cli").is_dir():
+            continue
+        missing.add(root)
+    return sorted(missing)

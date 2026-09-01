@@ -25,6 +25,7 @@ from common import (
     changed_paths,
     discover_packages,
     iter_files,
+    packages_missing_entry_dirs,
     read_text,
     repo_rel,
 )
@@ -415,9 +416,28 @@ def main() -> int:
 
     # 包列表来源：--path 优先；否则用 --base 的变更推断；皆无则不做包级检查
     if args.path:
-        packages = [Path(item) for item in args.path]
+        packages = []
+        for package in (Path(item) for item in args.path):
+            abs_root = repo / package
+            if (abs_root / "src").is_dir() or (abs_root / "cli").is_dir():
+                packages.append(package)
+            else:
+                add_finding(
+                    findings,
+                    "PACKAGE_NO_ENTRY_DIR",
+                    package.as_posix(),
+                    "指定路径下同时缺少 src/ 与 cli/，无法按算法包做整包检查",
+                )
     elif args.base:
-        packages = discover_packages(repo, changed_paths(repo, args.base))
+        changed = changed_paths(repo, args.base)
+        packages = discover_packages(repo, changed)
+        for package in packages_missing_entry_dirs(repo, changed):
+            add_finding(
+                findings,
+                "PACKAGE_NO_ENTRY_DIR",
+                package.as_posix(),
+                "变更落在算法路径下但同时缺少 src/ 与 cli/，未按算法包做整包检查",
+            )
     else:
         packages = []
 
@@ -435,7 +455,7 @@ def main() -> int:
                     check_python_syntax(repo, path, findings)
                     check_file_content(repo, path, findings)
         elif args.base:
-            # 有变更但落在包路径外：仅对变更文件做内容规则
+            # 有变更但未识别到完整算法包：仍对变更文件做内容规则（并可能已有 PACKAGE_NO_ENTRY_DIR）
             for rel in changed_paths(repo, args.base):
                 abs_path = repo / rel
                 if abs_path.is_file():
