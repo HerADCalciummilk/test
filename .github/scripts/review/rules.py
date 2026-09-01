@@ -42,8 +42,12 @@ RULES = {
     "MISSING_REQUIRED_DIR_OFFICIAL": Rule(
         id="MISSING_REQUIRED_DIR_OFFICIAL",
         severity="blocker",
-        title="正式目录缺少必要子目录",
-        note="NIMM/ 下算法包必须有 src、cli、test、docs、nbs、resource。",
+        title="正式算法缺少必要目录树",
+        note=(
+            "正式算法 (kind,pkg) 须具备："
+            "NIMM/<kind>/<pkg>/ 以及同级配套 "
+            "cli|test|docs|nbs|resource/<kind>/<pkg>/。"
+        ),
     ),
     "MISSING_REQUIRED_DIR": Rule(
         id="MISSING_REQUIRED_DIR",
@@ -60,8 +64,8 @@ RULES = {
     "PLUGIN_FILE_IO": Rule(
         id="PLUGIN_FILE_IO",
         severity="warning",
-        title="src 中疑似文件 I/O",
-        note="规范要求插件 process() 不读写文件；当前先警告。",
+        title="源码中疑似文件 I/O",
+        note="规范要求插件 process() 不读写文件；中间扫 src/，正式扫 NIMM/<kind>/<pkg>/；当前先警告。",
     ),
     "UNDECLARED_NATIVE_BINARY": Rule(
         id="UNDECLARED_NATIVE_BINARY",
@@ -79,7 +83,10 @@ RULES = {
         id="NO_CONCRETE_PLUGIN",
         severity="blocker",
         title="未找到具体插件类",
-        note="00temp/ 与 NIMM/ 均须满足：src/（不含 utils）中至少有一个（直接或间接）继承 BasePlugin 或 PostProcessingPlugin 的具体插件类。",
+        note=(
+            "中间包扫 00temp/<pkg>/src/，正式包扫 NIMM/<kind>/<pkg>/（均跳过其下 utils/）："
+            "至少有一个（直接或间接）继承 BasePlugin 或 PostProcessingPlugin 的具体插件类。"
+        ),
     ),
     "PLUGIN_MISSING_INIT": Rule(
         id="PLUGIN_MISSING_INIT",
@@ -120,8 +127,20 @@ RULES = {
     "PACKAGE_NO_ENTRY_DIR": Rule(
         id="PACKAGE_NO_ENTRY_DIR",
         severity="blocker",
-        title="疑似算法路径缺少 src/cli",
-        note="变更落在 00temp/<包> 或 NIMM/<种类>/<包> 下，但包根同时缺少 src/ 与 cli/；视为缺少关键入口目录，阻断。应补齐 src/ 或 cli/，或移出算法路径。",
+        title="中间目录缺少 src/cli",
+        note=(
+            "仅针对 00temp/<pkg>：变更落在该路径下但包内同时缺少 src/ 与 cli/，阻断。"
+            "正式树缺 NIMM/<kind>/<pkg> 归入 MISSING_REQUIRED_DIR_OFFICIAL。"
+        ),
+    ),
+    "DANGEROUS_API": Rule(
+        id="DANGEROUS_API",
+        severity="warning",
+        title="疑似危险 API",
+        note=(
+            "变更或包内代码出现 eval/exec/os.system/pickle.load(s)；"
+            "不含列表形式的 subprocess（误报多）。审核脚本目录不做此项扫描。"
+        ),
     ),
 }
 
@@ -153,6 +172,13 @@ PLUGIN_IO_PATTERNS = (
     r"\bread_csv\s*\(",
     r"\bto_csv\s*\(",
     r"\bPath\([^)]+\)\s*\.\s*write",
+)
+
+DANGEROUS_API_PATTERNS = (
+    r"\beval\s*\(",
+    r"\bexec\s*\(",
+    r"\bos\.system\s*\(",
+    r"\bpickle\.loads?\s*\(",
 )
 
 NATIVE_SUFFIXES = (".so", ".pyd", ".dll")
