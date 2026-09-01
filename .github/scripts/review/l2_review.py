@@ -246,17 +246,65 @@ def build_user_prompt(contexts: list[str], l1_summary: str) -> str:
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
-    """从模型输出中取出 JSON 对象（容忍偶发 Markdown 围栏）。"""
+    """从模型输出中取出 JSON 对象（容忍 Markdown 围栏与前后说明文字）。"""
     text = text.strip()
-    fence = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
-    if fence:
-        text = fence.group(1)
-    else:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start >= 0 and end > start:
-            text = text[start : end + 1]
-    return json.loads(text)
+    blobs: list[str] = [text]
+    for fence in re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", text):
+        blobs.insert(0, fence.group(1).strip())
+
+    candidates: list[str] = []
+    for blob in blobs:
+        for i, ch in enumerate(blob):
+            if ch != "{":
+                continue
+            depth = 0
+            in_str = False
+            escape = False
+            for j in range(i, len(blob)):
+                c = blob[j]
+                if in_str:
+                    if escape:
+                        escape = False
+                    elif c == "\\":
+                        escape = True
+                    elif c == '"':
+                        in_str = False
+                    continue
+                if c == '"':
+                    in_str = True
+                elif c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidates.append(blob[i : j + 1])
+                        break
+
+    errors: list[str] = []
+    seen: set[str] = set()
+    for raw in candidates:
+        if raw in seen:
+            continue
+        seen.add(raw)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            errors.append(str(exc))
+            continue
+        if isinstance(data, dict):
+            return data
+
+    start = text.find("{")
+    if start >= 0:
+        try:
+            data, _ = json.JSONDecoder().raw_decode(text[start:])
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError as exc:
+            errors.append(str(exc))
+
+    detail = "; ".join(errors[:3]) if errors else "未找到可解析的 JSON 对象"
+    raise ValueError(f"无法从模型输出解析 JSON：{detail}")
 
 
 def call_chat_completions(
