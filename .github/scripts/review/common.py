@@ -159,8 +159,20 @@ def package_root_for(rel: Path) -> Path | None:
 
 def changed_paths(repo: Path, base: str) -> list[Path]:
     """相对 base 的变更文件列表（Added/Copied/Modified/Renamed）。"""
+    # 先解析为 commit SHA，避免 base 以「-」开头时被 git 当成选项
+    verified = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{base}^{{commit}}"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if verified.returncode != 0:
+        print((verified.stderr or "").strip() or f"无效的 git 基准: {base}", file=sys.stderr)
+        return []
+    sha = verified.stdout.strip()
     result = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=ACMR", base],
+        ["git", "diff", "--name-only", "--diff-filter=ACMR", sha, "--"],
         cwd=repo,
         capture_output=True,
         text=True,

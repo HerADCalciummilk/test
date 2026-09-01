@@ -137,7 +137,10 @@ RULES = {
         id="DANGEROUS_API",
         severity="warning",
         title="疑似危险 API",
-        note="变更或包内代码出现 eval/exec/os.system/随意 pickle.load 等；无包（如 NIMM/utils）文件级扫描也会检查。",
+        note=(
+            "变更或包内代码出现 eval/exec/os.system/pickle.load(s)；"
+            "不含列表形式的 subprocess（误报多）。审核脚本目录不做此项扫描。"
+        ),
     ),
 }
 
@@ -176,7 +179,6 @@ DANGEROUS_API_PATTERNS = (
     r"\bexec\s*\(",
     r"\bos\.system\s*\(",
     r"\bpickle\.loads?\s*\(",
-    r"\bsubprocess\.(?:call|run|Popen|check_output)\s*\(",
 )
 
 NATIVE_SUFFIXES = (".so", ".pyd", ".dll")

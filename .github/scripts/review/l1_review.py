@@ -130,6 +130,11 @@ def check_empty_required_dirs(repo: Path, package: PackageRef, findings: list[Fi
             add_finding(findings, "EMPTY_REQUIRED_DIR", rel_s, "目录为空（本层无文件）")
 
 
+def _is_review_script(rel: str) -> bool:
+    """审核脚本自身（含规则正则定义）不做路径/危险 API 等内容规则，避免自触发。"""
+    return rel.replace("\\", "/").startswith(".github/scripts/review/")
+
+
 def check_file_content(
     repo: Path,
     path: Path,
@@ -143,15 +148,23 @@ def check_file_content(
     if text is None:
         return
 
+    # 审核脚本目录：仍查凭据；跳过硬编码路径 / I/O / 危险 API（规则文件会自匹配）
+    skip_heuristic = _is_review_script(rel)
+
     for index, line in enumerate(text.splitlines(), start=1):
         for pattern in CREDENTIAL_PATTERNS:
             if re.search(pattern, line):
                 add_finding(findings, "CREDENTIAL_PATTERN", rel, "匹配到疑似凭据或私钥", index)
                 break
+        if skip_heuristic:
+            continue
         for pattern in HARDCODED_PATH_PATTERNS:
             if re.search(pattern, line):
                 add_finding(findings, "HARDCODED_BIZ_PATH", rel, line.strip()[:200], index)
                 break
+
+    if skip_heuristic:
+        return
 
     scan_io = False
     if plugin_source_root is not None and path.suffix == ".py":
