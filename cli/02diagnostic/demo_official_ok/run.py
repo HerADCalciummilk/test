@@ -1,11 +1,12 @@
 """正式包 cli：实例化插件并调用 process。"""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
-# 测试仓内相对导入：把 NIMM 包路径加入 sys.path
-_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(_ROOT / "NIMM" / "02diagnostic" / "demo_official_ok"))
+# 测试仓未做成可安装包：把同算法的 NIMM 源码根加入 path
+_REPO = Path(__file__).resolve().parents[3]
+_SRC = _REPO / "NIMM" / "02diagnostic" / "demo_official_ok"
+sys.path.insert(0, str(_SRC))
 
 from demo_plugin import OfficialDemoPlugin  # noqa: E402
 

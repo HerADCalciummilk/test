@@ -1,6 +1,8 @@
-"""公共库样例：不当算法包；触发 L1 DANGEROUS_API，并由 L2 按变更文件审。"""
+"""公共库样例：安全解析，无 eval。"""
+
+import ast
 
 
-def risky_transform(expr: str):
-    # 故意：eval → DANGEROUS_API warning
-    return eval(expr)
+def safe_transform(expr: str):
+    """仅接受字面量表达式（如数字、字符串、列表）。"""
+    return ast.literal_eval(expr)

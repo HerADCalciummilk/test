@@ -1,0 +1,1 @@
+placeholder resource for demo_official_ok

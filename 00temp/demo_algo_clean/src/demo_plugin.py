@@ -1,4 +1,4 @@
-"""中间目录样例：可过 L1 的具体插件（含故意 warning 点）。"""
+"""中间目录样例：可过 L1 的具体插件（无硬编码路径、无 process 内文件 I/O）。"""
 
 
 class BasePlugin:
@@ -12,15 +12,7 @@ class BasePlugin:
 class DemoCleanPlugin(BasePlugin):
     def __init__(self) -> None:
         super().__init__()
-        # 故意：硬编码业务路径 → L1 HARDCODED_BIZ_PATH warning
-        self.data_root = "/home/nimm/data/demo_clean"
 
     def process(self, data):
-        # 故意：源码内文件 I/O → L1 PLUGIN_FILE_IO warning
-        path = self.data_root + "/input.txt"
-        try:
-            with open(path, encoding="utf-8") as handle:
-                _ = handle.read(1)
-        except OSError:
-            pass
+        # 仅处理内存中的数据；文件读写由 cli 负责
         return {"ok": True, "value": data}
