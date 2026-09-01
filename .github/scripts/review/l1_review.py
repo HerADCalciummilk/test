@@ -22,22 +22,25 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from common import (
+    PackageRef,
     changed_paths,
     discover_packages,
     iter_files,
+    mid_has_entry_dirs,
     packages_missing_entry_dirs,
     read_text,
     repo_rel,
+    resolve_path_arg,
 )
 from rules import (
     CREDENTIAL_PATTERNS,
+    DANGEROUS_API_PATTERNS,
     HARDCODED_PATH_PATTERNS,
     NATIVE_SUFFIXES,
     PLACEHOLDER_FILE_NAMES,
     PLUGIN_BASE_NAMES,
     PLUGIN_IO_PATTERNS,
     PLUGIN_SKIP_SRC_DIR_NAMES,
-    REQUIRED_PACKAGE_DIRS,
     RULES,
     SKIP_DIR_NAMES,
 )
@@ -74,30 +77,38 @@ def add_finding(
     )
 
 
-def check_structure(repo: Path, package: Path, findings: list[Finding]) -> None:
-    """必要目录是否齐全；正式树与中间目录使用不同 rule_id，均为 blocker。"""
-    official = package.parts[0] == "NIMM"
-    rule_id = "MISSING_REQUIRED_DIR_OFFICIAL" if official else "MISSING_REQUIRED_DIR"
-    missing = [name for name in REQUIRED_PACKAGE_DIRS if not (repo / package / name).is_dir()]
+def _under_dir(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def check_structure(repo: Path, package: PackageRef, findings: list[Finding]) -> None:
+    """必要目录是否齐全；正式六棵树与中间包内六目录，均为 blocker。"""
+    rule_id = (
+        "MISSING_REQUIRED_DIR_OFFICIAL"
+        if package.layout == "official"
+        else "MISSING_REQUIRED_DIR"
+    )
+    missing: list[str] = []
+    for name, rel in package.required_tree_paths().items():
+        if not (repo / rel).is_dir():
+            missing.append(rel.as_posix())
     if missing:
         add_finding(
             findings,
             rule_id,
-            package.as_posix(),
+            package.package_id,
             f"缺少必要目录: {', '.join(missing)}",
         )
 
 
-def check_empty_required_dirs(repo: Path, package: Path, findings: list[Finding]) -> None:
-    """必要目录已存在时，检查本层是否有实质内容（不含仅有 .gitkeep 占位）。
-
-    - 本层有非占位文件 → 通过
-    - 本层无文件但有非 skip 子目录（如 src/utils/）→ 通过
-    - 本层无任何文件且无子目录 → 空目录 warning
-    - 本层仅有 .gitkeep → 占位 warning
-    """
-    for name in REQUIRED_PACKAGE_DIRS:
-        abs_dir = repo / package / name
+def check_empty_required_dirs(repo: Path, package: PackageRef, findings: list[Finding]) -> None:
+    """已存在的必要目录：本层是否有实质内容（不含仅有 .gitkeep 占位）。"""
+    for _name, rel in package.required_tree_paths().items():
+        abs_dir = repo / rel
         if not abs_dir.is_dir():
             continue
 
@@ -110,17 +121,23 @@ def check_empty_required_dirs(repo: Path, package: Path, findings: list[Finding]
         subdirs = [p for p in children if p.is_dir() and p.name not in SKIP_DIR_NAMES]
         substantive_files = [p for p in files if p.name not in PLACEHOLDER_FILE_NAMES]
 
-        rel = f"{package.as_posix()}/{name}"
+        rel_s = rel.as_posix()
         if substantive_files or subdirs:
             continue
         if files and not substantive_files:
-            add_finding(findings, "EMPTY_REQUIRED_DIR", rel, "目录仅占位（仅有 .gitkeep 等占位文件）")
+            add_finding(findings, "EMPTY_REQUIRED_DIR", rel_s, "目录仅占位（仅有 .gitkeep 等占位文件）")
         else:
-            add_finding(findings, "EMPTY_REQUIRED_DIR", rel, "目录为空（本层无文件）")
+            add_finding(findings, "EMPTY_REQUIRED_DIR", rel_s, "目录为空（本层无文件）")
 
 
-def check_file_content(repo: Path, path: Path, findings: list[Finding]) -> None:
-    """逐行内容规则：凭据、硬编码业务路径；src 下额外查疑似文件 I/O。"""
+def check_file_content(
+    repo: Path,
+    path: Path,
+    findings: list[Finding],
+    *,
+    plugin_source_root: Path | None = None,
+) -> None:
+    """逐行内容规则：凭据、硬编码业务路径；插件源码根下额外查疑似文件 I/O。"""
     rel = repo_rel(repo, path)
     text = read_text(path)
     if text is None:
@@ -136,7 +153,16 @@ def check_file_content(repo: Path, path: Path, findings: list[Finding]) -> None:
                 add_finding(findings, "HARDCODED_BIZ_PATH", rel, line.strip()[:200], index)
                 break
 
-    if "src" in path.parts and path.suffix == ".py":
+    scan_io = False
+    if plugin_source_root is not None and path.suffix == ".py":
+        scan_io = _under_dir(path, plugin_source_root)
+    elif path.suffix == ".py" and (
+        "src" in path.parts or (len(path.parts) >= 1 and path.parts[0] == "NIMM")
+    ):
+        # 中间 src/、正式 NIMM/（含公共 utils）源码侧疑似 I/O
+        scan_io = True
+
+    if scan_io:
         for index, line in enumerate(text.splitlines(), start=1):
             if line.lstrip().startswith("#"):
                 continue
@@ -145,23 +171,33 @@ def check_file_content(repo: Path, path: Path, findings: list[Finding]) -> None:
                     add_finding(findings, "PLUGIN_FILE_IO", rel, line.strip()[:200], index)
                     break
 
+    if path.suffix == ".py":
+        for index, line in enumerate(text.splitlines(), start=1):
+            if line.lstrip().startswith("#"):
+                continue
+            for pattern in DANGEROUS_API_PATTERNS:
+                if re.search(pattern, line):
+                    add_finding(findings, "DANGEROUS_API", rel, line.strip()[:200], index)
+                    break
 
-def check_native_binaries(repo: Path, package: Path, findings: list[Finding]) -> None:
-    """包内 .so/.pyd/.dll 须在 docs 中有所说明。"""
+
+def check_native_binaries(repo: Path, package: PackageRef, findings: list[Finding]) -> None:
+    """包相关树内 .so/.pyd/.dll 须在 docs 中有所说明。"""
     docs_text = ""
-    docs_dir = repo / package / "docs"
+    docs_dir = package.docs_dir(repo)
     if docs_dir.is_dir():
         for doc in docs_dir.rglob("*"):
             if doc.is_file() and doc.suffix.lower() in {".md", ".txt", ".rst"}:
                 piece = read_text(doc)
                 if piece:
                     docs_text += piece
-    for path in iter_files(repo / package):
-        if path.suffix.lower() not in NATIVE_SUFFIXES:
-            continue
-        rel = repo_rel(repo, path)
-        if path.name.lower() not in docs_text.lower() and path.suffix.lower() not in docs_text.lower():
-            add_finding(findings, "UNDECLARED_NATIVE_BINARY", rel, "docs 中未说明该二进制扩展")
+    for root in package.iter_scan_roots(repo):
+        for path in iter_files(root):
+            if path.suffix.lower() not in NATIVE_SUFFIXES:
+                continue
+            rel = repo_rel(repo, path)
+            if path.name.lower() not in docs_text.lower() and path.suffix.lower() not in docs_text.lower():
+                add_finding(findings, "UNDECLARED_NATIVE_BINARY", rel, "docs 中未说明该二进制扩展")
 
 
 def check_python_syntax(repo: Path, path: Path, findings: list[Finding]) -> None:
@@ -234,15 +270,13 @@ class _ClassRecord:
     in_utils: bool
 
 
-def check_plugins(repo: Path, package: Path, findings: list[Finding]) -> None:
+def check_plugins(repo: Path, package: PackageRef, findings: list[Finding]) -> None:
     """插件形态检查（AST）。
 
-    - 扫描 src/ 全部 .py：utils 参与继承图，但不要求其业务 process
-    - 识别具体插件：类名不是 BasePlugin/PostProcessingPlugin，且（直接或间接）继承二者
-    - 具体插件须有 __init__、非空 process；包内至少一个（非 utils）
-    - PostProcessingPlugin 定义时建议直接继承 BasePlugin
+    - 中间扫 包/src/，正式扫 NIMM/<kind>/<pkg>/；utils 参与继承图，但不要求业务 process
+    - 具体插件须有 __init__、非空 process；至少一个（非 utils）
     """
-    src = repo / package / "src"
+    src = package.source_dir(repo)
     if not src.is_dir():
         return
 
@@ -294,7 +328,6 @@ def check_plugins(repo: Path, package: Path, findings: list[Finding]) -> None:
                     node.lineno,
                 )
 
-    # 同名类后者覆盖：包内按简单类名建继承图（含 utils，供间接继承解析）
     bases_by_class: dict[str, list[str]] = {rec.name: rec.base_names for rec in records}
 
     concrete_count = 0
@@ -337,12 +370,91 @@ def check_plugins(repo: Path, package: Path, findings: list[Finding]) -> None:
             )
 
     if concrete_count == 0:
+        src_label = repo_rel(repo, src) if src.is_dir() else package.package_id
         add_finding(
             findings,
             "NO_CONCRETE_PLUGIN",
-            package.as_posix(),
-            "src/ 中未找到（直接或间接）继承 BasePlugin/PostProcessingPlugin 的具体插件类（已跳过 src/utils）",
+            package.package_id,
+            f"{src_label}/ 中未找到（直接或间接）继承 BasePlugin/PostProcessingPlugin 的具体插件类（已跳过 utils/）",
         )
+
+
+def check_plugins_on_files(repo: Path, py_files: list[Path], findings: list[Finding]) -> None:
+    """无包时的弱插件检查：仅在本次文件集合内建继承图，不要求「至少一个具体插件」。"""
+    records: list[_ClassRecord] = []
+    for path in py_files:
+        if path.suffix != ".py" or not path.is_file():
+            continue
+        if any(part in SKIP_DIR_NAMES for part in path.parts):
+            continue
+        text = read_text(path)
+        if text is None:
+            continue
+        try:
+            tree = ast.parse(text, filename=str(path))
+        except SyntaxError:
+            continue
+        rel = repo_rel(repo, path)
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            base_names = [name for name in (_ast_base_name(b) for b in node.bases) if name]
+            methods = {
+                item.name: item
+                for item in node.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            records.append(
+                _ClassRecord(
+                    name=node.name,
+                    base_names=base_names,
+                    methods=methods,
+                    rel=rel,
+                    lineno=node.lineno,
+                    in_utils=False,
+                )
+            )
+            if node.name == "PostProcessingPlugin" and "BasePlugin" not in base_names:
+                add_finding(
+                    findings,
+                    "PLUGIN_BASE_CHAIN",
+                    rel,
+                    "PostProcessingPlugin 未直接继承 BasePlugin",
+                    node.lineno,
+                )
+
+    bases_by_class: dict[str, list[str]] = {rec.name: rec.base_names for rec in records}
+    for rec in records:
+        if rec.name in PLUGIN_BASE_NAMES:
+            continue
+        if not _inherits_plugin_base(rec.name, bases_by_class):
+            continue
+        class_loc = f"{rec.rel}:{rec.name}"
+        if "__init__" not in rec.methods:
+            add_finding(
+                findings,
+                "PLUGIN_MISSING_INIT",
+                class_loc,
+                "具体插件类缺少 __init__（无包文件级检查）",
+                rec.lineno,
+            )
+        process_fn = rec.methods.get("process")
+        if process_fn is None:
+            add_finding(
+                findings,
+                "PLUGIN_MISSING_PROCESS",
+                class_loc,
+                "具体插件类缺少 process（无包文件级检查）",
+                rec.lineno,
+            )
+        elif _method_body_empty(process_fn):
+            add_finding(
+                findings,
+                "PLUGIN_EMPTY_PROCESS",
+                class_loc,
+                "process 为空实现（无包文件级检查）",
+                process_fn.lineno,
+            )
 
 
 def run_flake8(repo: Path, py_files: list[Path], findings: list[Finding]) -> None:
@@ -412,22 +524,30 @@ def main() -> int:
     repo = Path(args.repo_root).resolve()
 
     findings: list[Finding] = []
-    packages: list[Path] = []
+    packages: list[PackageRef] = []
 
     # 包列表来源：--path 优先；否则用 --base 的变更推断；皆无则不做包级检查
     if args.path:
         packages = []
-        for package in (Path(item) for item in args.path):
-            abs_root = repo / package
-            if (abs_root / "src").is_dir() or (abs_root / "cli").is_dir():
-                packages.append(package)
-            else:
+        for raw in args.path:
+            ref = resolve_path_arg(repo, raw)
+            if ref is None:
                 add_finding(
                     findings,
                     "PACKAGE_NO_ENTRY_DIR",
-                    package.as_posix(),
-                    "指定路径下同时缺少 src/ 与 cli/，无法按算法包做整包检查",
+                    raw,
+                    "无法识别为中间包 00temp/<pkg> 或正式包 NIMM|配套/<kind>/<pkg>",
                 )
+                continue
+            if ref.layout == "mid" and not mid_has_entry_dirs(repo, ref):
+                add_finding(
+                    findings,
+                    "PACKAGE_NO_ENTRY_DIR",
+                    ref.package_id,
+                    "指定中间包同时缺少 src/ 与 cli/，无法按算法包做整包检查",
+                )
+                continue
+            packages.append(ref)
     elif args.base:
         changed = changed_paths(repo, args.base)
         packages = discover_packages(repo, changed)
@@ -435,8 +555,8 @@ def main() -> int:
             add_finding(
                 findings,
                 "PACKAGE_NO_ENTRY_DIR",
-                package.as_posix(),
-                "变更落在算法路径下但同时缺少 src/ 与 cli/，未按算法包做整包检查",
+                package.package_id,
+                "变更落在 00temp 算法路径下但同时缺少 src/ 与 cli/，未按算法包做整包检查",
             )
     else:
         packages = []
@@ -444,24 +564,32 @@ def main() -> int:
     scan_files: list[Path] = []
     if args.path or args.base:
         if packages:
-            # 识别到算法包：整包结构 / 插件 / 二进制说明 + 包内文件内容
             for package in packages:
                 check_structure(repo, package, findings)
                 check_empty_required_dirs(repo, package, findings)
                 check_native_binaries(repo, package, findings)
                 check_plugins(repo, package, findings)
-                for path in iter_files(repo / package):
-                    scan_files.append(path)
-                    check_python_syntax(repo, path, findings)
-                    check_file_content(repo, path, findings)
+                src_root = package.source_dir(repo)
+                for root in package.iter_scan_roots(repo):
+                    for path in iter_files(root):
+                        scan_files.append(path)
+                        check_python_syntax(repo, path, findings)
+                        check_file_content(
+                            repo, path, findings, plugin_source_root=src_root
+                        )
         elif args.base:
-            # 有变更但未识别到完整算法包：仍对变更文件做内容规则（并可能已有 PACKAGE_NO_ENTRY_DIR）
             for rel in changed_paths(repo, args.base):
                 abs_path = repo / rel
                 if abs_path.is_file():
                     scan_files.append(abs_path)
                     check_python_syntax(repo, abs_path, findings)
                     check_file_content(repo, abs_path, findings)
+            # 无算法包：对变更 .py 做弱插件形态检查（如 NIMM/utils）
+            check_plugins_on_files(
+                repo,
+                [p for p in scan_files if p.suffix == ".py"],
+                findings,
+            )
 
     py_files = []
     for path in scan_files:
@@ -470,7 +598,7 @@ def main() -> int:
             py_files.append(abs_path)
     run_flake8(repo, py_files, findings)
 
-    report = build_report([item.as_posix() for item in packages], findings)
+    report = build_report([item.package_id for item in packages], findings)
     out = Path(args.json)
     if not out.is_absolute():
         out = repo / out
@@ -483,7 +611,6 @@ def main() -> int:
         f"warnings={report['summary']['warning_count']} "
         f"report={out}"
     )
-    # 有阻断则非 0，供 workflow 最后一步失败
     return 1 if report["summary"]["blocker_count"] else 0
 
 
