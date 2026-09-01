@@ -281,7 +281,7 @@ def _extract_json_object(text: str) -> dict[str, Any]:
                 elif c == "}":
                     depth -= 1
                     if depth == 0:
-                        candidates.append(blob[i : j + 1])
+                        candidates.append(blob[i:j + 1])
                         break
 
     errors: list[str] = []
