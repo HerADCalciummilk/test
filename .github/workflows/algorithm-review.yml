@@ -17,6 +17,7 @@
 #
 # Secrets（仅 l2）：OPENAI_API_KEY；可选 OPENAI_BASE_URL、OPENAI_MODEL
 # 分支保护：建议必过「L1 machine review」；「L2 LLM review」按是否强制 API 决定
+# Actions 版本：使用 Node 24 兼容大版本，避免 runner 上 Node 16/20 弃用告警
 # =============================================================================
 
 name: Algorithm review
@@ -38,12 +39,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -73,7 +74,7 @@ jobs:
           (github.event.action == 'opened' || github.event.action == 'synchronize') &&
           github.run_attempt == 1
         id: prior_l1
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const marker = '<!-- nimm-l1-review -->';
@@ -116,7 +117,7 @@ jobs:
 
       - name: Upload L1 artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: l1-review-report-${{ github.run_id }}
           path: |
@@ -130,7 +131,7 @@ jobs:
           github.event_name == 'pull_request' &&
           (github.event.action == 'opened' || github.event.action == 'synchronize') &&
           github.run_attempt == 1
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
@@ -158,12 +159,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -171,7 +172,7 @@ jobs:
         run: pip install -r .github/scripts/review/requirements.txt
 
       - name: Download L1 report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: l1-review-report-${{ github.run_id }}
           path: .
@@ -209,7 +210,7 @@ jobs:
           (github.event.action == 'opened' || github.event.action == 'synchronize') &&
           github.run_attempt == 1
         id: prior_l2
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const marker = '<!-- nimm-l2-review -->';
@@ -252,7 +253,7 @@ jobs:
 
       - name: Upload L2 artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: l2-review-report-${{ github.run_id }}
           path: |
@@ -266,7 +267,7 @@ jobs:
           github.event_name == 'pull_request' &&
           (github.event.action == 'opened' || github.event.action == 'synchronize') &&
           github.run_attempt == 1
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
