@@ -65,15 +65,13 @@ def render_markdown(
     summary = report.get("summary") or {}
     findings = report.get("findings") or []
     packages = report.get("packages") or []
-    checklist = report.get("human_checklist") or []
     risk = summary.get("risk_level") or report.get("risk_level") or "low"
     skipped = bool(report.get("skipped"))
-    needs = bool(summary.get("needs_human_attention"))
 
     if skipped:
         status = f"已跳过（{report.get('skip_reason') or '见报告'}）"
-    elif risk == "high" or needs:
-        status = "建议人工重点关注"
+    elif risk == "high":
+        status = "总体风险高（见发现项；不阻断合并）"
     elif findings:
         status = "有发现（advisory，不阻断合并）"
     else:
@@ -119,21 +117,14 @@ def render_markdown(
             shown += 1
         lines.append("")
 
-    if checklist:
-        lines.append("### 建议人工核对")
-        lines.append("")
-        for item in checklist[:15]:
-            lines.append(f"- {item}")
-        lines.append("")
-
-    if not findings and not checklist and not overview and not skipped:
+    if not findings and not overview and not skipped:
         lines.extend(["模型未返回有效内容。", ""])
 
     lines.extend(
         [
             "<details><summary>说明</summary>",
             "",
-            "- L2 为 **LLM 辅助评审**，默认**不阻断**合并；以证据与建议为主。",
+            "- L2 为 **LLM 辅助评审**，默认**不阻断**合并；人工以发现项（含严重度）为准。",
             "- 在 Create PR 或新 push 时追加评论；Re-run 不发评论。",
             "- 完整报告见 Artifact：`l2-review-report-<run_id>` / `l2-review.json`。",
             "- 需配置 Secrets：`OPENAI_API_KEY`；可选 `OPENAI_BASE_URL`、`OPENAI_MODEL`。",

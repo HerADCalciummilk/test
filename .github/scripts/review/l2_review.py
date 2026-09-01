@@ -1,6 +1,6 @@
 """L2 LLM 语义审核入口。
 
-职责：定位算法包 → 收集 docs/src 等文本上下文（可选附带 L1 报告）→
+职责：定位算法包 → 收集 docs/src/cli 文本上下文（可选附带 L1 报告）→
 调用 OpenAI 兼容 Chat Completions → 写出结构化 l2-review.json。
 
 典型调用：
@@ -27,7 +27,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from rules import MAX_TEXT_FILE_BYTES
 from common import (
     changed_paths,
     discover_packages,
@@ -35,6 +34,7 @@ from common import (
     read_text,
     repo_rel,
 )
+from rules import MAX_TEXT_FILE_BYTES
 
 # 单文件 / 总上下文上限，控制 token
 MAX_FILE_CHARS = 12_000
@@ -43,32 +43,37 @@ DOC_SUFFIXES = {".md", ".txt", ".rst"}
 CODE_SUFFIXES = {".py"}
 
 SYSTEM_PROMPT = """你是算法仓库的 L2 代码审核助手（辅助人工，不替代机器门禁与人工终审）。
-根据给定的算法包源码与文档，做**语义与意图**层面的评审，不要重复罗列 L1 已能用规则判定的事项（缺目录、缺 __init__/process、flake8 风格等），除非对理解风险有必要一笔带过。
+根据给定的算法包源码与文档，做**尽量全面**的语义与工程意图评审。
+不要重复罗列 L1 已能用规则判定的事项（缺目录、缺 __init__/process、flake8 风格等），除非对理解风险有必要一笔带过。
 
-重点关注：
-1. process() 是否像真实核心算法入口，而非空壳/无关转发
-2. 实现与 docs 描述是否大致一致
-3. 可疑逻辑：硬编码业务假设、隐蔽 I/O、不安全执行、明显错误的科学/工程做法（有依据再写）
-4. 人工终审应重点看的点
+核查范围（有依据再写，覆盖你能看到的 docs/src/cli）：
+1. 算法/插件逻辑是否像真实业务实现（含 process 是否空壳、无关转发）
+2. **cli 是否真正调用插件业务**：应实例化具体插件（或等价调度）并调用 process（或约定主入口）；仅 print/占位、未调用则必须写入 findings
+3. 与 docs 描述、参数/数据含义、命名与领域概念是否大致一致
+4. 可疑点：硬编码业务假设、隐蔽 I/O、不安全执行、明显不合理的科学/工程做法、明显遗漏或易错处
+5. 其它你认为入库前应让人知道的问题
 
 输出必须是**仅含一个 JSON 对象**的文本（不要 Markdown 围栏），schema：
 {
   "risk_level": "low" | "medium" | "high",
-  "needs_human_attention": boolean,
   "overview": "一两句中文总评",
   "findings": [
     {
       "severity": "low" | "medium" | "high",
-      "category": "semantics" | "docs" | "security" | "other",
+      "category": "semantics" | "docs" | "security" | "cli" | "other",
       "path": "相对路径或类名，未知则空字符串",
       "title": "短标题",
       "detail": "说明",
       "evidence": "引用或依据（可短）"
     }
-  ],
-  "human_checklist": ["人工建议核对的条目，中文"]
+  ]
 }
+字段约定：
+- findings = 发现的问题（带严重度）；人工据此逐条处理即可（可按 severity 优先看 high）
+- risk_level = 本趟总体风险（综合 findings）
+- 不要输出 needs_human_attention、human_checklist
 若信息不足，risk_level 用 low，在 overview 说明局限，findings 可为空。
+对 cli：有可读 cli 文件时必须明确「有调用插件业务 / 无调用并写入 findings」。
 """
 
 
@@ -79,9 +84,13 @@ def _truncate(text: str, limit: int) -> str:
 
 
 def collect_package_context(repo: Path, package: Path) -> str:
-    """收集单个算法包的 docs + src 等文本，拼成给模型的上下文。"""
+    """收集单个算法包的 docs + src + cli 文本，拼成给模型的上下文。"""
     root = repo / package
-    chunks: list[str] = [f"## 算法包 `{package.as_posix()}`\n"]
+    chunks: list[str] = [
+        f"## 算法包 `{package.as_posix()}`\n",
+        "说明：请尽量全面核查；并特别核对 `cli/` 是否实例化插件并调用 `process`（或等价业务主入口）。"
+        "仅占位/print、未调用插件业务时必须写入 findings。\n",
+    ]
     used = 0
 
     candidates: list[Path] = []
@@ -90,12 +99,12 @@ def collect_package_context(repo: Path, package: Path) -> str:
         if d.is_dir():
             candidates.extend(iter_files(d))
 
-    # docs 优先，再 src，再 cli
     def sort_key(p: Path) -> tuple[int, str]:
         rel = repo_rel(repo, p)
-        if "/docs/" in f"/{rel}/" or rel.startswith(f"{package.as_posix()}/docs"):
+        posix = f"/{rel}/"
+        if "/docs/" in posix or rel.startswith(f"{package.as_posix()}/docs"):
             pri = 0
-        elif "/src/" in f"/{rel}/":
+        elif "/src/" in posix:
             pri = 1
         else:
             pri = 2
@@ -149,9 +158,7 @@ def load_l1_summary(path: Path | None) -> str:
 
 
 def build_user_prompt(contexts: list[str], l1_summary: str) -> str:
-    parts = [
-        "请评审下列算法包内容，并按 system 要求输出 JSON。\n",
-    ]
+    parts = ["请评审下列算法包内容，并按 system 要求输出 JSON。\n"]
     if l1_summary:
         parts.append(l1_summary)
     parts.extend(contexts)
@@ -215,7 +222,7 @@ def normalize_model_result(raw: dict[str, Any]) -> dict[str, Any]:
         if sev not in {"low", "medium", "high"}:
             sev = "low"
         cat = str(item.get("category") or "other").lower()
-        if cat not in {"semantics", "docs", "security", "other"}:
+        if cat not in {"semantics", "docs", "security", "cli", "other"}:
             cat = "other"
         findings.append(
             {
@@ -227,25 +234,18 @@ def normalize_model_result(raw: dict[str, Any]) -> dict[str, Any]:
                 "evidence": str(item.get("evidence") or ""),
             }
         )
-    checklist = raw.get("human_checklist") or []
-    if not isinstance(checklist, list):
-        checklist = []
     return {
         "risk_level": risk,
-        "needs_human_attention": bool(raw.get("needs_human_attention")),
         "overview": str(raw.get("overview") or ""),
         "findings": findings,
-        "human_checklist": [str(x) for x in checklist if str(x).strip()],
     }
 
 
 def dry_run_result(packages: list[str]) -> dict[str, Any]:
     return {
         "risk_level": "low",
-        "needs_human_attention": False,
         "overview": "dry-run：未调用 LLM，仅验证流水线与报告格式。",
         "findings": [],
-        "human_checklist": ["确认已配置 OPENAI_API_KEY 后再跑正式 L2"],
         "packages_note": packages,
     }
 
@@ -269,13 +269,11 @@ def build_report(
         "skip_reason": skip_reason,
         "error": error,
         "summary": {
-            "risk_level": result.get("risk_level") or ("low" if skipped else "low"),
-            "needs_human_attention": bool(result.get("needs_human_attention")),
+            "risk_level": result.get("risk_level") or "low",
             "finding_count": len(findings),
         },
         "overview": result.get("overview") or "",
         "findings": findings,
-        "human_checklist": result.get("human_checklist") or [],
     }
 
 
@@ -323,10 +321,8 @@ def main() -> int:
             skip_reason="未识别到算法包，跳过 LLM",
             result={
                 "risk_level": "low",
-                "needs_human_attention": False,
                 "overview": "本次变更未识别到算法包，未调用 LLM。",
                 "findings": [],
-                "human_checklist": [],
             },
         )
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -354,15 +350,12 @@ def main() -> int:
             skip_reason="未配置 OPENAI_API_KEY",
             result={
                 "risk_level": "low",
-                "needs_human_attention": True,
                 "overview": "未配置 OPENAI_API_KEY，L2 未执行。请在仓库 Secrets 中配置后重跑。",
                 "findings": [],
-                "human_checklist": ["配置 OPENAI_API_KEY（及可选 OPENAI_BASE_URL / OPENAI_MODEL）"],
             },
         )
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"L2 跳过：无 API Key report={out}")
-        # 配置缺失视为流程失败，便于发现 Secrets 未配
         return 1
 
     contexts = [collect_package_context(repo, pkg) for pkg in packages]
@@ -392,10 +385,8 @@ def main() -> int:
             skip_reason="LLM 调用或解析失败",
             result={
                 "risk_level": "low",
-                "needs_human_attention": True,
                 "overview": "L2 调用失败，请查看 Actions 日志。",
                 "findings": [],
-                "human_checklist": ["检查 API Key / Base URL / 模型名与网络"],
             },
             error=str(exc),
         )
@@ -416,5 +407,4 @@ if __name__ == "__main__":
     _here = Path(__file__).resolve().parent
     if str(_here) not in sys.path:
         sys.path.insert(0, str(_here))
-    # 同目录可导入 common / rules
     raise SystemExit(main())

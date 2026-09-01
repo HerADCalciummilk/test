@@ -14,7 +14,7 @@ L1（机器规则）见 [L1_机器审核规范.md](./L1_机器审核规范.md)�
 |------|------|
 | 门禁级别 | L2（LLM 辅助，默认 **advisory**，发现项不单独阻断合并） |
 | 审核对象 | PR 变更所涉及的算法包（包发现逻辑与 L1 相同） |
-| 擅长 | `process` 是否像真实入口、与 docs 一致性、可疑逻辑、人工应看的点 |
+| 擅长 | 尽量全面的语义/工程意图核查（含 **cli 是否调用插件业务**）；输出 findings 供人工按严重度审核 |
 | 不擅长 / 不做 | 替代目录/插件形态/flake8 等可规则化检查（由 L1 负责） |
 
 分工建议：
@@ -22,8 +22,8 @@ L1（机器规则）见 [L1_机器审核规范.md](./L1_机器审核规范.md)�
 | 层级 | 职责 |
 |------|------|
 | L1 | 结构、语法、插件形态、密钥模式、风格 |
-| L2 | 语义与意图、证据型建议 |
-| L3 | 人工领域终审 |
+| L2 | 语义与意图、证据型 findings |
+| L3 | 人工按 findings 终审 |
 
 ---
 
@@ -80,14 +80,20 @@ python .github/scripts/review/l2_review.py --path 00temp/demo_algo_clean --json 
 | `gate` | 固定 `l2` |
 | `packages` | 本次算法包列表 |
 | `model` | 使用的模型名 |
-| `skipped` / `skip_reason` | 是否跳过及原因 |
-| `summary.risk_level` | 本趟总体风险：`low` / `medium` / `high` |
-| `summary.needs_human_attention` | 是否建议人工重点看 |
+| `skipped` / `skip_reason` | **流水线是否调用了 LLM**（无包 / 缺 Key / 调用失败等）；与「算法有无问题」无关 |
+| `summary.risk_level` | 本趟**总体**风险：`low` / `medium` / `high` |
 | `summary.finding_count` | 发现条数 |
 | `overview` | 中文总评 |
-| `findings[]` | 单条含自有 `severity`；与总体 `risk_level` 不同 |
-| `human_checklist[]` | 建议人工核对清单 |
+| `findings[]` | **问题列表**（人工主要据此审核）；每条自有 `severity` |
 | `error` | 调用失败时的错误信息 |
+
+已去掉 `needs_human_attention`、`human_checklist`：人工直接按 findings（可优先看 high）审核即可。
+
+### 5.1 cli 与全面核查
+
+- 对 docs/src/cli 做尽量全面的语义核查。
+- **cli** 须判断是否真正调用插件 `process`/业务入口；仅占位则写入 findings。
+- 发现项默认仍不单独阻断合并（advisory）。
 
 Artifact：`l2-review-report-<run_id>`（`l2-review.json` / `l2-review-comment.md`）。
 
@@ -100,3 +106,4 @@ Artifact：`l2-review-report-<run_id>`（`l2-review.json` / `l2-review-comment.m
 | 2026-08-31 | 初版：OpenAI 兼容 API、独立 PR 评论与 Artifact、默认 advisory |
 | 2026-08-31 | 并入 `algorithm-review.yml`：`needs: l1`，去掉 L2 内重复跑 L1 |
 | 2026-08-31 | 与 L1 对称命名：`l2_review.py` / `format_l2_comment.py`；报告 `l2-review.json` |
+| 2026-09-01 | 扩大核查范围；强调 cli 插件调用；移除 `needs_human_attention` 与 `human_checklist` |
