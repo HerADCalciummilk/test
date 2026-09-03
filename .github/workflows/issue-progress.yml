@@ -1,0 +1,82 @@
+# =============================================================================
+# 需求 Issue 进展同步
+# -----------------------------------------------------------------------------
+# 正式 PR（非草稿）把代码改动摘要写到已关联的需求 Issue。
+# 不新建 Issue、不改勾选、不复制 L1/L2。
+# =============================================================================
+
+name: Issue progress sync
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, edited]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: issue-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Comment linked issues
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Fetch PR SHAs for diff
+        run: |
+          git fetch --no-tags origin \
+            "pull/${{ github.event.pull_request.number }}/head" \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
+          if [ -n "${{ github.event.before }}" ]; then
+            git fetch --no-tags origin "${{ github.event.before }}" || true
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install tools
+        run: pip install -r .github/scripts/review/requirements.txt
+
+      - name: Write PR bodies
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const pr = context.payload.pull_request || {};
+            fs.writeFileSync('pr-body.txt', pr.body || '');
+            const prev =
+              (context.payload.changes &&
+                context.payload.changes.body &&
+                context.payload.changes.body.from) ||
+              (pr.body || '');
+            fs.writeFileSync('pr-body-prev.txt', prev);
+
+      - name: Sync progress comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          python .github/scripts/release/issue_sync.py \
+            --pr "${{ github.event.pull_request.number }}" \
+            --action "${{ github.event.action }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --before "${{ github.event.before }}" \
+            --body-file pr-body.txt \
+            --previous-body-file pr-body-prev.txt
