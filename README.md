@@ -1,10 +1,12 @@
 # test
 
-本仓库用于 **算法代码上传审核**：L1 机器检查、L2 LLM 语义辅助、人工终审（L3）。
+本仓库用于 **算法代码上传审核**，以及合入后的 **整仓发版**（人触发 `vX.Y.Z`）。
 
 - [L1 机器审核规范](docs/L1_机器审核规范.md)
 - [L2 LLM 审核规范](docs/L2_LLM审核规范.md)
-- CI：`.github/workflows/algorithm-review.yml`
+- [算法代码更新管理](docs/算法更新管理.md)（需求 Issue + Milestone + 人触发 `vX.Y.Z`）
+- 审核 CI：`.github/workflows/algorithm-review.yml`（草稿 PR 也跑 L1/L2）
+- 需求进展 CI：`.github/workflows/issue-progress.yml`（正式 PR 将「改了啥」写到已关联 Issue）
 
 ## 审核流水线
 
@@ -16,6 +18,8 @@ Pull Request / 手动触发
 ```
 
 分支保护建议必过：**`L1 machine review`**。按需勾选 **`L2 LLM review`**。
+
+需求跟踪：先开 Issue（须选 Milestone，模板见 `.github/ISSUE_TEMPLATE/`），PR 描述写 `Fixes #`。合入不自动发版。
 
 ## 目录约定（摘要）
 
@@ -33,14 +37,11 @@ cli|test|docs|nbs|resource/<kind>/<pkg>/   # 配套（与 NIMM 同级）
 ## 脚本布局
 
 ```text
-.github/scripts/review/
-  common.py              # 包发现、git diff
-  rules.py               # L1 规则定义
-  l1_review.py           # → l1-review.json
-  format_l1_comment.py
-  l2_review.py             # → l2-review.json
-  format_l2_comment.py
-  requirements.txt
+.github/scripts/review/     # L1 / L2
+.github/scripts/release/    # 需求 Issue 进展同步：issue_sync.py
+.github/ISSUE_TEMPLATE/     # 算法需求模板（须选 Milestone）
+.github/pull_request_template.md
+.cursor/skills/algo-release/  # 发版 Skill（人触发 gh release create）
 ```
 
 ## 本地命令
@@ -55,6 +56,9 @@ python .github/scripts/review/format_l1_comment.py --json l1-review.json --out l
 # L2（dry-run 不调用 API）
 python .github/scripts/review/l2_review.py --path 00temp/<pkg> --dry-run --json l2-review.json
 python .github/scripts/review/format_l2_comment.py --json l2-review.json --out l2-review-comment.md
+
+# 需求 Issue 进展同步单测
+python .github/scripts/release/test_issue_sync.py
 ```
 
 算法样例请放在独立测试分支中维护；合入 `main` 的 PR 应避免带入故意失败的样例，以免 L1 红灯。详见 [L1 规范](docs/L1_机器审核规范.md)。

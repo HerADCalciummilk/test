@@ -1,0 +1,59 @@
+name: 算法优化或修复
+description: 规划一件算法需求。创建时必须在右侧选择 Milestone。
+title: "[kind/pkg] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        一张 Issue 只代表 **一件** 优化或修复，不要写成某个插件的总账。
+
+        **创建前务必在右侧栏选择一个 Milestone**（例如 `v1.3.0`）。模板无法代选。没有合适版本时，先到 Issues → Milestones 新建，再开本 Issue。
+
+        Milestone 用于把需求划进某一版，便于按版本筛选和追溯；截止日期只是计划时间，到期不会自动关单或发版。发版仍需人工打 `vX.Y.Z` Tag。
+  - type: input
+    id: plugin
+    attributes:
+      label: 插件
+      description: 正式包如 NIMM/02diagnostic/demo_official_ok；中间包如 00temp/demo_pkg。
+      placeholder: NIMM/<kind>/<pkg>
+    validations:
+      required: true
+  - type: dropdown
+    id: change_type
+    attributes:
+      label: 类型
+      options:
+        - 优化 / 新能力
+        - 缺陷修复
+        - 文档
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 要解决什么问题、怎样算做完。有数写数，没数写可观察现象。
+      placeholder: 例如：夜间误报明显下降。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 步骤
+      description: 跟进时勾选。机器不会改这些勾选。
+      value: |
+        - [ ] 复现 / 说明现状
+        - [ ] 修改
+        - [ ] 验证
+        - [ ] 开 PR（描述里写 Fixes #本编号）
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收
+      description: 通过才勾。不要用「已经开 PR」代替验收。
+      value: |
+        - [ ]
+    validations:
+      required: true
