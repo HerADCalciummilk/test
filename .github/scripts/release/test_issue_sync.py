@@ -18,7 +18,6 @@ from issue_sync import (
     format_progress_comment,
     format_progress_heading,
     intersect_push_with_base,
-    issue_fields_from_payload,
     linked_from_timeline,
     linked_issue_numbers_from_timeline,
     parse_closing_issue_numbers,
@@ -188,32 +187,18 @@ class ProgressLlmParseTests(unittest.TestCase):
         self.assertEqual(sanitize_progress_title("本次修改：更新复测说明。"), "更新复测说明")
 
 
-class IssueContextTests(unittest.TestCase):
-    def test_payload_title_and_body(self) -> None:
-        title, body = issue_fields_from_payload(
-            {"title": "降低夜间误报", "body": "### 本次项\n- [ ] 调阈值"}
-        )
-        self.assertEqual(title, "降低夜间误报")
-        self.assertIn("本次项", body)
-
-    def test_payload_missing_is_empty(self) -> None:
-        self.assertEqual(issue_fields_from_payload(None), ("", ""))
-        self.assertEqual(issue_fields_from_payload({"title": None, "body": None}), ("", ""))
-
-    def test_user_message_includes_issue_body(self) -> None:
+class ProgressUserMessageTests(unittest.TestCase):
+    def test_user_message_is_diff_only(self) -> None:
         text = build_progress_user_message(
             paths=["a.py"],
             diff="diff --git a/a.py",
             hint="调阈值",
-            issue_number=26,
-            issue_title="更新管理复测",
-            issue_body="### 本次项\n- [ ] 草稿不写评论",
         )
-        self.assertIn("Issue #26", text)
-        self.assertIn("更新管理复测", text)
-        self.assertIn("草稿不写评论", text)
+        self.assertIn("调阈值", text)
         self.assertIn("a.py", text)
         self.assertIn("diff --git a/a.py", text)
+        self.assertNotIn("本次项", text)
+        self.assertNotIn("Issue #", text)
 
     def test_clip_text_truncates(self) -> None:
         text = clip_text("x" * 50, 30)
