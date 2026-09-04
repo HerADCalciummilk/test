@@ -14,5 +14,5 @@ class OfficialDemoPlugin(BasePlugin):
         super().__init__()
 
     def process(self, data):
-        # Issue #26：合入后更新管理复测（草稿→转正→再 push）
+        # Issue #32：#31 后更新管理再测（草稿→转正→再 push）
         return {"kind": "02diagnostic", "echo": data}
