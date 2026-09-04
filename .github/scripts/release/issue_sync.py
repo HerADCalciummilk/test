@@ -176,9 +176,23 @@ def changed_paths(before: str, after: str, cwd: Path) -> list[str]:
     return [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
 
 
-def unified_diff(before: str, after: str, cwd: Path) -> str:
-    """before..after 的 unified diff，超长截断后给 LLM。"""
-    result = run_git(["diff", before, after, "--"], cwd)
+def intersect_push_with_base(push_paths: list[str], vs_base_paths: list[str]) -> list[str]:
+    """再 push：只保留「这一推改过、且相对目标分支仍不同」的路径。
+
+    合入 main 带进来的文件已与目标分支一致，从进展评论中去掉，避免把别人的需求写进本 Issue。
+    """
+    keep = set(vs_base_paths)
+    return [path for path in push_paths if path in keep]
+
+
+def unified_diff(before: str, after: str, cwd: Path, paths: list[str] | None = None) -> str:
+    """before..after 的 unified diff，超长截断后给 LLM。可限定路径。"""
+    args = ["diff", before, after]
+    if paths:
+        args.extend(["--", *paths])
+    else:
+        args.append("--")
+    result = run_git(args, cwd)
     text = result.stdout or ""
     if len(text) > MAX_DIFF_CHARS:
         return text[: MAX_DIFF_CHARS - 20] + "\n\n...[truncated]...\n"
@@ -502,6 +516,11 @@ def cmd_sync(args: argparse.Namespace) -> int:
         return 0
 
     paths = changed_paths(start, after, cwd)
+    if action == "synchronize" and (args.base or "").strip():
+        paths = intersect_push_with_base(
+            paths,
+            changed_paths(args.base.strip(), after, cwd),
+        )
     if not paths:
         print("无文件变更，跳过")
         return 0
@@ -509,7 +528,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     hint = args.title or os.environ.get("PR_TITLE") or commit_hint(start, after, cwd)
     summary = summarize_with_llm(
         paths=paths,
-        diff=unified_diff(start, after, cwd),
+        diff=unified_diff(start, after, cwd, paths=paths),
         hint=hint,
     ) or fallback_summary(paths, hint)
     comment = format_progress_comment(

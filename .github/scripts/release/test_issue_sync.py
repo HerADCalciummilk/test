@@ -14,6 +14,7 @@ from issue_sync import (
     fallback_summary,
     fetch_all_pages,
     format_progress_comment,
+    intersect_push_with_base,
     linked_from_timeline,
     linked_issue_numbers_from_timeline,
     parse_closing_issue_numbers,
@@ -81,6 +82,32 @@ class DiffRangeTests(unittest.TestCase):
         )
         self.assertIsNone(resolve_diff_range("synchronize", "base", "head", ""))
         self.assertIsNone(resolve_diff_range("opened", "same", "same", ""))
+
+
+class PushPathFilterTests(unittest.TestCase):
+    def test_drops_paths_only_brought_by_merging_base(self) -> None:
+        push = [
+            ".github/scripts/release/issue_sync.py",
+            "docs/02diagnostic/demo_official_ok/README.md",
+            "docs/算法更新管理.md",
+        ]
+        vs_base = ["docs/02diagnostic/demo_official_ok/README.md"]
+        self.assertEqual(
+            intersect_push_with_base(push, vs_base),
+            ["docs/02diagnostic/demo_official_ok/README.md"],
+        )
+
+    def test_keeps_own_edit_to_file_also_on_base(self) -> None:
+        self.assertEqual(
+            intersect_push_with_base(["a.py", "b.py"], ["a.py", "b.py", "c.py"]),
+            ["a.py", "b.py"],
+        )
+
+    def test_merge_only_push_is_empty(self) -> None:
+        self.assertEqual(
+            intersect_push_with_base(["from-main.py"], ["my.py"]),
+            [],
+        )
 
 
 class CommentFormatTests(unittest.TestCase):
