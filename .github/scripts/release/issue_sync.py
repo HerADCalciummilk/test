@@ -160,22 +160,36 @@ def format_progress_heading(title: str = "") -> str:
     return "### 本次修改："
 
 
+_FENCED_BLOCK = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
+
+
+def _first_json_object(blob: str) -> dict[str, Any] | None:
+    """从文本中取出第一个 JSON 对象；没有则 None。"""
+    decoder = json.JSONDecoder()
+    for idx, char in enumerate(blob):
+        if char != "{":
+            continue
+        try:
+            data, _end = decoder.raw_decode(blob[idx:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
+
+
 def parse_progress_llm(content: str) -> tuple[str, str] | None:
     """解析 LLM 输出为 (短标题, 正文)。无效则 None，走路径降级。"""
     text = (content or "").strip()
     if not text:
         return None
-    fenced = re.match(r"^```(?:json)?\s*([\s\S]*?)\s*```$", text)
-    if fenced:
-        text = fenced.group(1).strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        if text.startswith("{") or text.startswith("["):
+    fenced = _FENCED_BLOCK.search(text)
+    candidate = fenced.group(1).strip() if fenced else text
+    data = _first_json_object(candidate)
+    if data is None:
+        if fenced or text.startswith("{") or text.startswith("["):
             return None
         return "", text
-    if not isinstance(data, dict):
-        return None
     body = str(data.get("body") or data.get("summary") or "").strip()
     if not body:
         return None

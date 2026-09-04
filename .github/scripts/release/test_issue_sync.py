@@ -173,6 +173,21 @@ class ProgressLlmParseTests(unittest.TestCase):
         raw = '```json\n{"title":"修过滤","body":"去掉 merge 进来的路径。"}\n```'
         self.assertEqual(parse_progress_llm(raw), ("修过滤", "去掉 merge 进来的路径。"))
 
+    def test_fenced_json_with_preamble(self) -> None:
+        raw = (
+            "如下：\n"
+            '```json\n{"title":"修过滤","body":"去掉 merge 进来的路径。"}\n```\n'
+            "以上。"
+        )
+        self.assertEqual(parse_progress_llm(raw), ("修过滤", "去掉 merge 进来的路径。"))
+
+    def test_raw_json_with_preamble(self) -> None:
+        raw = '好的。{"title":"修过滤","body":"去掉 merge 进来的路径。"}'
+        self.assertEqual(parse_progress_llm(raw), ("修过滤", "去掉 merge 进来的路径。"))
+
+    def test_invalid_fence_does_not_become_body(self) -> None:
+        self.assertIsNone(parse_progress_llm("如下：\n```json\n不是对象\n```"))
+
     def test_empty_body_is_failure(self) -> None:
         self.assertIsNone(parse_progress_llm('{"title":"只有标题","body":""}'))
         self.assertIsNone(parse_progress_llm(""))
