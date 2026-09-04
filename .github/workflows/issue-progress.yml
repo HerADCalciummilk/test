@@ -49,19 +49,13 @@ jobs:
       - name: Install tools
         run: pip install -r .github/scripts/review/requirements.txt
 
-      - name: Write PR bodies
+      - name: Write PR body
         uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
             const pr = context.payload.pull_request || {};
             fs.writeFileSync('pr-body.txt', pr.body || '');
-            const prev =
-              (context.payload.changes &&
-                context.payload.changes.body &&
-                context.payload.changes.body.from) ||
-              (pr.body || '');
-            fs.writeFileSync('pr-body-prev.txt', prev);
 
       - name: Sync progress comment
         env:
@@ -78,5 +72,4 @@ jobs:
             --head "${{ github.event.pull_request.head.sha }}" \
             --base "${{ github.event.pull_request.base.sha }}" \
             --before "${{ github.event.before }}" \
-            --body-file pr-body.txt \
-            --previous-body-file pr-body-prev.txt
+            --body-file pr-body.txt

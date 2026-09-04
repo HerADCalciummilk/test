@@ -21,12 +21,15 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 COMMENT_MARKER = "<!-- nimm-issue-sync -->"
 MAX_DIFF_CHARS = 40_000
 MAX_PATHS = 20
 USER_AGENT = "nimm-issue-sync"
+# GitHub 单页最多 100；翻页并设上限，避免超长时间线静默截断。
+API_PER_PAGE = 100
+API_MAX_PAGES = 10
 
 # GitHub 关闭关键字（不含 Refs / Related）
 _CLOSING_KW = r"(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)"
@@ -41,8 +44,8 @@ _CLOSE_URL = re.compile(
 
 PROGRESS_SYSTEM = """你为算法仓库的需求 Issue 写「这一次代码改了什么」，不是审核、不是发版 notes。
 根据 diff 用中文写 3～6 句：改了哪些与需求相关的点。
-可以提「可能对应 Issue 中的某一步」，但不要宣称目标或验收已完成。
-不要评价代码质量，不要提 L1/L2，不要猜测 diff 中未出现的需求。
+可以提与「本次项」中哪一条相关，但不要宣称目标或验收已完成。
+不要评价代码质量，不要猜测 diff 中未出现的需求。
 不要使用 Markdown 标题。输出纯文本段落即可。
 """
 
@@ -59,15 +62,8 @@ query($owner:String!, $name:String!, $number:Int!) {
 """
 
 
-def repo_root() -> Path:
-    return Path(os.environ.get("GITHUB_WORKSPACE") or Path.cwd())
-
-
-def _read_text(path: str) -> str:
-    return Path(path).read_text(encoding="utf-8")
-
-
 def run_git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    """在仓库根执行 git，不抛异常（由调用方看 returncode）。"""
     return subprocess.run(
         ["git", *args],
         cwd=cwd,
@@ -88,34 +84,26 @@ def parse_closing_issue_numbers(text: str) -> set[int]:
     return found
 
 
-def newly_linked_issues(current: set[int], previous: set[int]) -> set[int]:
-    return set(current) - set(previous)
-
-
-def issues_to_comment(action: str, current: set[int], previous: set[int]) -> set[int]:
-    if action == "edited":
-        return newly_linked_issues(current, previous)
-    return set(current)
-
-
-def should_skip_draft(draft: bool) -> bool:
-    return bool(draft)
-
-
-def sha_marker(sha: str) -> str:
-    return f"<!-- sha:{sha} -->"
-
-
-def already_synced(comments: list[dict[str, Any]], sha: str) -> bool:
-    needle = sha_marker(sha)
+def already_synced(
+    comments: list[dict[str, Any]],
+    sha: str,
+    pr_number: int | None = None,
+) -> bool:
+    """同一 Issue 上已有「本 PR + 本 SHA」的进展评论则跳过。"""
+    sha_needle = f"<!-- sha:{sha} -->"
+    pr_needle = f"<!-- pr:{pr_number} -->" if pr_number is not None else ""
     for item in comments:
         body = item.get("body") or ""
-        if COMMENT_MARKER in body and needle in body:
-            return True
+        if COMMENT_MARKER not in body or sha_needle not in body:
+            continue
+        if pr_needle and pr_needle not in body:
+            continue
+        return True
     return False
 
 
 def fallback_summary(paths: list[str], hint: str) -> str:
+    """无 LLM 时的降级摘要：提交说明 + 路径列表。"""
     shown = paths[:MAX_PATHS]
     extra = len(paths) - len(shown)
     path_part = "、".join(f"`{p}`" for p in shown) if shown else "（无路径信息）"
@@ -129,18 +117,8 @@ def fallback_summary(paths: list[str], hint: str) -> str:
     return f"修改了 {path_part}。"
 
 
-def _path_bullets(paths: list[str]) -> list[str]:
-    shown = paths[:MAX_PATHS]
-    lines = [f"- `{p}`" for p in shown]
-    extra = len(paths) - len(shown)
-    if extra > 0:
-        lines.append(f"- … 另有 {extra} 个文件")
-    if not lines:
-        lines.append("- （无）")
-    return lines
-
-
 def format_progress_time(when: datetime | None = None) -> str:
+    """进展评论时间：UTC，形如 2026-09-03 03:56 UTC。"""
     stamp = when or datetime.now(timezone.utc)
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=timezone.utc)
@@ -154,42 +132,37 @@ def format_progress_comment(
     sha: str,
     paths: list[str],
     summary: str,
-    scope: str,
     when: datetime | None = None,
 ) -> str:
-    heading = (
-        "相对 base 的当前改动"
-        if scope == "full"
-        else "这一推"
-    )
+    """Issue 进展评论正文；HTML 注释用于按 SHA 去重。"""
+    shown = paths[:MAX_PATHS]
+    bullets = [f"- `{p}`" for p in shown]
+    extra = len(paths) - len(shown)
+    if extra > 0:
+        bullets.append(f"- … 另有 {extra} 个文件")
+    if not bullets:
+        bullets.append("- （无）")
     return "\n".join(
         [
             COMMENT_MARKER,
-            sha_marker(sha),
+            f"<!-- sha:{sha} -->",
             f"<!-- pr:{pr_number} -->",
-            f"## PR #{pr_number}（{heading}）",
+            f"## PR #{pr_number}",
             "",
             f"- 时间：{format_progress_time(when)}",
             f"- 提交：`{sha[:12]}`",
             "- 路径：",
-            *_path_bullets(paths),
+            *bullets,
             "",
             "### 改了什么",
             summary.strip(),
-            "",
-            "目标和验收请在本 Issue 中人工勾选；本评论不更新清单，也不含 L1/L2 结论。",
             "",
         ]
     )
 
 
-def comment_scope(action: str) -> str:
-    if action in {"opened", "ready_for_review", "edited"}:
-        return "full"
-    return "push"
-
-
 def changed_paths(before: str, after: str, cwd: Path) -> list[str]:
+    """before..after 的变更路径（含删除）。"""
     result = run_git(
         ["diff", "--name-only", "--diff-filter=ACMRD", before, after, "--"],
         cwd,
@@ -201,6 +174,7 @@ def changed_paths(before: str, after: str, cwd: Path) -> list[str]:
 
 
 def unified_diff(before: str, after: str, cwd: Path) -> str:
+    """before..after 的 unified diff，超长截断后给 LLM。"""
     result = run_git(["diff", before, after, "--"], cwd)
     text = result.stdout or ""
     if len(text) > MAX_DIFF_CHARS:
@@ -209,6 +183,7 @@ def unified_diff(before: str, after: str, cwd: Path) -> str:
 
 
 def commit_hint(before: str, after: str, cwd: Path) -> str:
+    """区间内 commit subject，拼成 LLM 提示。"""
     result = run_git(["log", "--format=%s", f"{before}..{after}"], cwd)
     if result.returncode != 0:
         return ""
@@ -217,6 +192,7 @@ def commit_hint(before: str, after: str, cwd: Path) -> str:
 
 
 def _headers(token: str, *, json_body: bool = False, extra: dict[str, str] | None = None) -> dict[str, str]:
+    """GitHub REST/GraphQL 共用请求头。"""
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
@@ -237,6 +213,7 @@ def _api(
     payload: dict[str, Any] | None = None,
     extra_headers: dict[str, str] | None = None,
 ) -> Any:
+    """GitHub REST：返回解析后的 JSON；空 body 为 None。"""
     url = f"https://api.github.com{path}"
     data = None
     headers = _headers(token, json_body=payload is not None, extra=extra_headers)
@@ -254,7 +231,46 @@ def _api(
         raise RuntimeError(f"GitHub API {method} {path} -> {exc.code}: {body}") from exc
 
 
+def fetch_all_pages(
+    fetch_page: Callable[[int], Any],
+    *,
+    per_page: int = API_PER_PAGE,
+    max_pages: int = API_MAX_PAGES,
+    label: str,
+) -> list[Any]:
+    """按 page=1,2,… 拉取直到不满一页。后续页失败时保留已拉到的条目并告警。"""
+    items: list[Any] = []
+    for page in range(1, max_pages + 1):
+        try:
+            chunk = fetch_page(page)
+        except RuntimeError as exc:
+            if not items:
+                raise
+            print(
+                f"{label} 第 {page} 页失败，使用已拉取的 {len(items)} 条：{exc}",
+                file=sys.stderr,
+            )
+            break
+        if chunk is None:
+            chunk = []
+        if not isinstance(chunk, list):
+            if not items:
+                return []
+            print(f"{label} 第 {page} 页不是列表，停止翻页", file=sys.stderr)
+            break
+        items.extend(chunk)
+        if len(chunk) < per_page:
+            break
+        if page == max_pages:
+            print(
+                f"{label} 已拉 {max_pages} 页仍满页，后续事件未读入（共 {len(items)} 条）",
+                file=sys.stderr,
+            )
+    return items
+
+
 def graphql(token: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    """GitHub GraphQL；仅 errors 且无 data 时抛错。"""
     data = json.dumps({"query": query, "variables": variables}).encode("utf-8")
     req = urllib.request.Request(
         "https://api.github.com/graphql",
@@ -274,6 +290,7 @@ def graphql(token: str, query: str, variables: dict[str, Any]) -> dict[str, Any]
 
 
 def linked_from_graphql(owner: str, repo: str, token: str, pr_number: int) -> set[int]:
+    """closingIssuesReferences：Fixes 等会关闭的 Issue。"""
     try:
         data = graphql(
             token,
@@ -297,48 +314,72 @@ def linked_from_graphql(owner: str, repo: str, token: str, pr_number: int) -> se
     return found
 
 
-def linked_from_timeline(owner: str, repo: str, token: str, pr_number: int) -> set[int]:
-    """Development 栏「已连接」但未写 Fixes 时，closingIssuesReferences 可能为空。"""
-    found: set[int] = set()
-    try:
-        items = _api(
-            "GET",
-            f"/repos/{owner}/{repo}/issues/{pr_number}/timeline?per_page=100",
-            token,
-            extra_headers={"Accept": "application/vnd.github+json"},
-        ) or []
-    except RuntimeError as exc:
-        print(f"读取 PR timeline 失败：{exc}", file=sys.stderr)
-        return found
-    connected: set[int] = set()
-    disconnected: set[int] = set()
-    if not isinstance(items, list):
-        return found
-    for event in items:
+def linked_issue_numbers_from_timeline(items: list[Any]) -> set[int]:
+    """按时间回放 Development 连接事件：connected 加入，disconnected 去掉。"""
+    events = [item for item in items if isinstance(item, dict)]
+    events.sort(key=lambda item: str(item.get("created_at") or ""))
+    linked: set[int] = set()
+    for event in events:
         kind = event.get("event")
+        if kind not in ("connected", "disconnected"):
+            continue
         source = event.get("source") or {}
         issue = source.get("issue") or source
         number = issue.get("number") if isinstance(issue, dict) else None
         if number is None:
             continue
-        n = int(number)
+        try:
+            n = int(number)
+        except (TypeError, ValueError):
+            continue
         if kind == "connected":
-            connected.add(n)
-        elif kind == "disconnected":
-            disconnected.add(n)
-    return connected - disconnected
+            linked.add(n)
+        else:
+            linked.discard(n)
+    return linked
+
+
+def linked_from_timeline(owner: str, repo: str, token: str, pr_number: int) -> set[int]:
+    """Development 栏「已连接」但未写 Fixes 时，closingIssuesReferences 可能为空。"""
+
+    def fetch_page(page: int) -> Any:
+        return _api(
+            "GET",
+            (
+                f"/repos/{owner}/{repo}/issues/{pr_number}/timeline"
+                f"?per_page={API_PER_PAGE}&page={page}"
+            ),
+            token,
+            extra_headers={"Accept": "application/vnd.github+json"},
+        )
+
+    try:
+        items = fetch_all_pages(fetch_page, label="PR timeline")
+    except RuntimeError as exc:
+        print(f"读取 PR timeline 失败：{exc}", file=sys.stderr)
+        return set()
+    return linked_issue_numbers_from_timeline(items)
 
 
 def list_comments(owner: str, repo: str, token: str, issue_number: int) -> list[dict[str, Any]]:
-    items = _api(
-        "GET",
-        f"/repos/{owner}/{repo}/issues/{issue_number}/comments?per_page=100",
-        token,
-    ) or []
-    return items if isinstance(items, list) else []
+    """Issue 现有评论，供 already_synced 判断。"""
+
+    def fetch_page(page: int) -> Any:
+        return _api(
+            "GET",
+            (
+                f"/repos/{owner}/{repo}/issues/{issue_number}/comments"
+                f"?per_page={API_PER_PAGE}&page={page}"
+            ),
+            token,
+        )
+
+    items = fetch_all_pages(fetch_page, label=f"Issue #{issue_number} comments")
+    return [item for item in items if isinstance(item, dict)]
 
 
 def post_comment(owner: str, repo: str, token: str, issue_number: int, body: str) -> None:
+    """向 Issue 追加一条评论。"""
     _api(
         "POST",
         f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
@@ -348,6 +389,7 @@ def post_comment(owner: str, repo: str, token: str, issue_number: int, body: str
 
 
 def summarize_with_llm(*, paths: list[str], diff: str, hint: str) -> str | None:
+    """有 OPENAI_API_KEY 时生成中文「改了什么」；失败返回 None 走降级。"""
     api_key = os.environ.get("OPENAI_API_KEY") or ""
     if not api_key:
         return None
@@ -383,10 +425,11 @@ def summarize_with_llm(*, paths: list[str], diff: str, hint: str) -> str | None:
 
 
 def resolve_diff_range(action: str, base: str, head: str, before: str) -> tuple[str, str] | None:
+    """opened/ready/edited 相对 base；synchronize 相对上一推。区间无效则 None。"""
     after = (head or "").strip()
     if not after:
         return None
-    if comment_scope(action) == "push":
+    if action == "synchronize":
         start = (before or "").strip()
     else:
         start = (base or "").strip() or (before or "").strip()
@@ -403,6 +446,7 @@ def collect_linked_issues(
     token: str,
     pr_number: int,
 ) -> set[int]:
+    """描述里的 Fixes + GraphQL 关闭关系 + Development 栏 connected。"""
     linked = parse_closing_issue_numbers(body)
     if token:
         linked |= linked_from_graphql(owner, repo, token, pr_number)
@@ -411,7 +455,8 @@ def collect_linked_issues(
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
-    if should_skip_draft(args.draft):
+    """一次 PR 事件：找出关联 Issue，写（或跳过）进展评论。"""
+    if args.draft:
         print("草稿 PR，不同步 Issue")
         return 0
 
@@ -421,16 +466,10 @@ def cmd_sync(args: argparse.Namespace) -> int:
         print("需要 GITHUB_TOKEN 与 GITHUB_REPOSITORY", file=sys.stderr)
         return 1
     owner, repo = repo_sl.split("/", 1)
-    cwd = repo_root()
+    cwd = Path(os.environ.get("GITHUB_WORKSPACE") or Path.cwd())
     action = args.action
     pr_number = int(args.pr)
-    body = _read_text(args.body_file) if args.body_file else (args.body or "")
-    if args.previous_body_file:
-        previous_body = _read_text(args.previous_body_file)
-    elif args.previous_body is not None:
-        previous_body = args.previous_body
-    else:
-        previous_body = body
+    body = Path(args.body_file).read_text(encoding="utf-8") if args.body_file else (args.body or "")
 
     current = collect_linked_issues(
         body=body,
@@ -439,11 +478,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         token=token,
         pr_number=pr_number,
     )
-    previous = parse_closing_issue_numbers(previous_body)
-    if action != "edited":
-        previous = set()
-    targets = issues_to_comment(action, current, previous)
-    if not targets:
+    if not current:
         print("无待写入的关联 Issue，跳过")
         return 0
 
@@ -452,6 +487,17 @@ def cmd_sync(args: argparse.Namespace) -> int:
         print("无法确定 diff 区间，跳过")
         return 0
     start, after = rng
+    pending: list[int] = []
+    for number in sorted(current):
+        comments = list_comments(owner, repo, token, number)
+        if already_synced(comments, after, pr_number):
+            print(f"Issue #{number} 已有 {after[:12]}，跳过")
+            continue
+        pending.append(number)
+    if not pending:
+        print("没有新评论")
+        return 0
+
     paths = changed_paths(start, after, cwd)
     if not paths:
         print("无文件变更，跳过")
@@ -463,21 +509,15 @@ def cmd_sync(args: argparse.Namespace) -> int:
         diff=unified_diff(start, after, cwd),
         hint=hint,
     ) or fallback_summary(paths, hint)
-    scope = comment_scope(action)
     comment = format_progress_comment(
         pr_number=pr_number,
         sha=after,
         paths=paths,
         summary=summary,
-        scope=scope,
     )
 
     posted = 0
-    for number in sorted(targets):
-        comments = list_comments(owner, repo, token, number)
-        if already_synced(comments, after):
-            print(f"Issue #{number} 已有 {after[:12]}，跳过")
-            continue
+    for number in pending:
         if args.dry_run:
             print(f"[dry-run] 将评论 Issue #{number}")
             posted += 1
@@ -503,8 +543,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--before", default="", help="上一推 SHA（synchronize 用）")
     parser.add_argument("--body", default="", help="当前 PR 描述")
     parser.add_argument("--body-file", default="", help="当前 PR 描述文件")
-    parser.add_argument("--previous-body", default=None, help="edited 之前的 PR 描述")
-    parser.add_argument("--previous-body-file", default="", help="edited 之前的 PR 描述文件")
     parser.add_argument("--title", default="", help="PR 标题")
     parser.add_argument("--draft", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

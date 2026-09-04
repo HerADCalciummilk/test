@@ -41,6 +41,7 @@ class PackageRef:
         return repo / "NIMM" / self.kind / self.pkg
 
     def docs_dir(self, repo: Path) -> Path:
+        """说明文档目录。"""
         if self.layout == "mid":
             assert self.mid_root is not None
             return repo / self.mid_root / "docs"
@@ -48,6 +49,7 @@ class PackageRef:
         return repo / "docs" / self.kind / self.pkg
 
     def cli_dir(self, repo: Path) -> Path:
+        """调度入口目录。"""
         if self.layout == "mid":
             assert self.mid_root is not None
             return repo / self.mid_root / "cli"
@@ -107,12 +109,23 @@ def read_text(path: Path) -> str | None:
         return None
 
 
+def path_is_under(path: Path, root: Path) -> bool:
+    """path 是否位于 root 目录树内（解析符号链接后再比）。"""
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def _mid_ref(pkg: str) -> PackageRef:
+    """构造中间包引用。"""
     root = Path("00temp") / pkg
     return PackageRef(layout="mid", package_id=root.as_posix(), mid_root=root)
 
 
 def _official_ref(kind: str, pkg: str) -> PackageRef:
+    """构造正式包引用（稳定 ID 为 NIMM/<kind>/<pkg>）。"""
     return PackageRef(
         layout="official",
         package_id=f"NIMM/{kind}/{pkg}",
@@ -127,6 +140,7 @@ def parse_package_ref(rel: Path) -> PackageRef | None:
     if not parts:
         return None
 
+    # 三种能推出包 ID 的前缀；NIMM/utils 等公共库故意返回 None
     if parts[0] == "00temp" and len(parts) >= 2 and parts[1] not in SKIP_DIR_NAMES:
         return _mid_ref(parts[1])
 
@@ -138,6 +152,7 @@ def parse_package_ref(rel: Path) -> PackageRef | None:
             return None
         return _official_ref(kind, pkg)
 
+    # 改配套树（cli/docs/...）也算同一正式包，不要求这次一定改了 NIMM 源码
     if parts[0] in OFFICIAL_COMPANION_TOPS and len(parts) >= 3:
         kind, pkg = parts[1], parts[2]
         if kind in SKIP_DIR_NAMES or kind in OFFICIAL_SKIP_KINDS:
@@ -147,14 +162,6 @@ def parse_package_ref(rel: Path) -> PackageRef | None:
         return _official_ref(kind, pkg)
 
     return None
-
-
-def package_root_for(rel: Path) -> Path | None:
-    """兼容旧接口：返回用于展示的包 ID 路径（中间为 00temp/pkg，正式为 NIMM/kind/pkg）。"""
-    ref = parse_package_ref(rel)
-    if ref is None:
-        return None
-    return Path(ref.package_id)
 
 
 def changed_paths(repo: Path, base: str) -> list[Path]:
