@@ -28,6 +28,7 @@ from common import (
     iter_files,
     mid_has_entry_dirs,
     packages_missing_entry_dirs,
+    path_is_under,
     read_text,
     repo_rel,
     resolve_path_arg,
@@ -77,14 +78,6 @@ def add_finding(
     )
 
 
-def _under_dir(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
-        return False
-
-
 def check_structure(repo: Path, package: PackageRef, findings: list[Finding]) -> None:
     """必要目录是否齐全；正式六棵树与中间包内六目录，均为 blocker。"""
     rule_id = (
@@ -130,11 +123,6 @@ def check_empty_required_dirs(repo: Path, package: PackageRef, findings: list[Fi
             add_finding(findings, "EMPTY_REQUIRED_DIR", rel_s, "目录为空（本层无文件）")
 
 
-def _is_review_script(rel: str) -> bool:
-    """审核脚本自身（含规则正则定义）不做路径/危险 API 等内容规则，避免自触发。"""
-    return rel.replace("\\", "/").startswith(".github/scripts/review/")
-
-
 def check_file_content(
     repo: Path,
     path: Path,
@@ -148,8 +136,8 @@ def check_file_content(
     if text is None:
         return
 
-    # 审核脚本目录：仍查凭据；跳过硬编码路径 / I/O / 危险 API（规则文件会自匹配）
-    skip_heuristic = _is_review_script(rel)
+    # 凭据始终扫；硬编码路径与后面的 I/O、危险 API 在审核脚本目录跳过（规则正则会自匹配）
+    skip_heuristic = rel.replace("\\", "/").startswith(".github/scripts/review/")
 
     for index, line in enumerate(text.splitlines(), start=1):
         for pattern in CREDENTIAL_PATTERNS:
@@ -166,9 +154,10 @@ def check_file_content(
     if skip_heuristic:
         return
 
+    # 有包：只扫该包源码根；无包：中间 src/ 或正式 NIMM（含 utils）里的 .py
     scan_io = False
     if plugin_source_root is not None and path.suffix == ".py":
-        scan_io = _under_dir(path, plugin_source_root)
+        scan_io = path_is_under(path, plugin_source_root)
     elif path.suffix == ".py" and (
         "src" in path.parts or (len(path.parts) >= 1 and path.parts[0] == "NIMM")
     ):
@@ -248,7 +237,7 @@ def _method_body_empty(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
                 continue
             if isinstance(value, ast.Constant) and value.value is Ellipsis:
                 continue
-        return False
+        return False  # 出现其它语句即非空
     return True
 
 
@@ -261,9 +250,10 @@ def _inherits_plugin_base(
     if visited is None:
         visited = set()
     if class_name in visited:
-        return False
+        return False  # 环状继承时停止，避免递归
     visited.add(class_name)
     for base in bases_by_class.get(class_name, []):
+        # 只认本包 AST 里出现的短类名（from x import BasePlugin as Y 会对不上）
         if base in PLUGIN_BASE_NAMES:
             return True
         if _inherits_plugin_base(base, bases_by_class, visited):
@@ -308,11 +298,12 @@ def check_plugins(repo: Path, package: PackageRef, findings: list[Finding]) -> N
         try:
             tree = ast.parse(text, filename=str(path))
         except SyntaxError:
-            continue
+            continue  # 语法错误由 check_python_syntax 记 blocker，这里不重复扫插件
 
         in_utils = any(part in PLUGIN_SKIP_SRC_DIR_NAMES for part in rel_to_src.parts)
         rel = repo_rel(repo, path)
         for node in tree.body:
+            # 只看模块顶层 class，不递归嵌套类
             if not isinstance(node, ast.ClassDef):
                 continue
             base_names = [name for name in (_ast_base_name(b) for b in node.bases) if name]
@@ -346,7 +337,7 @@ def check_plugins(repo: Path, package: PackageRef, findings: list[Finding]) -> N
     concrete_count = 0
     for rec in records:
         if rec.in_utils:
-            continue
+            continue  # utils 仍在 bases_by_class 里，只是不当业务插件计数
         if rec.name in PLUGIN_BASE_NAMES:
             continue
         if not _inherits_plugin_base(rec.name, bases_by_class):

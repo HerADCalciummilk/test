@@ -1,10 +1,9 @@
-"""把 l2-review.json 渲染成 PR 评论 Markdown。
+"""把 l2-review.json 渲染成审核评论中「LLM审核」一节的 Markdown。
 
-与 format_l1_comment.py 并列：独立 marker、独立模板；评论发布流程可复用。
+只输出该节正文，不含 SHA 标题、提交、算法包、Actions（这些在整条评论顶部已有）。
 
 典型调用：
-  python format_l2_comment.py --json l2-review.json --out l2-review-comment.md \\
-    --sha $GITHUB_SHA --run-url $GITHUB_RUN_URL --attempt N
+  python format_l2_comment.py --json l2-review.json --out l2-review-comment.md
 """
 
 from __future__ import annotations
@@ -27,11 +26,8 @@ RISK_LABEL = {
 }
 
 
-def now_beijing_text() -> str:
-    return datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S %z")
-
-
 def _fmt_finding(item: dict) -> list[str]:
+    """单条 LLM 发现：严重度、类别、标题、路径、详情与依据。"""
     lines: list[str] = []
     sev = item.get("severity") or "low"
     title = (item.get("title") or "").strip() or "(无标题)"
@@ -59,12 +55,12 @@ def render_markdown(
     *,
     run_url: str = "",
     sha: str = "",
-    attempt: int = 1,
     checked_at: str = "",
 ) -> str:
+    """渲染 LLM审核节正文。sha / run_url 保留以兼容旧调用，不写入正文。"""
+    del run_url, sha
     summary = report.get("summary") or {}
     findings = report.get("findings") or []
-    packages = report.get("packages") or []
     risk = summary.get("risk_level") or report.get("risk_level") or "low"
     skipped = bool(report.get("skipped"))
 
@@ -73,40 +69,31 @@ def render_markdown(
     elif risk == "high":
         status = "总体风险高（见发现项；不阻断合并）"
     elif findings:
-        status = "有发现（advisory，不阻断合并）"
+        status = "有发现（不阻断合并）"
     else:
         status = "未见明显语义风险"
 
-    checked_at = checked_at or now_beijing_text()
+    checked_at = checked_at or datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M:%S %z")
 
     lines = [
         COMMENT_MARKER_L2,
-        f"## L2 LLM 审核结果（第 {attempt} 次）",
-        "",
-        f"**状态**：{status}",
-        f"**检查时间**：{checked_at}",
-        f"**门禁**：`{report.get('gate', 'l2')}`（advisory）",
-        f"**风险等级**：{RISK_LABEL.get(str(risk), str(risk))}",
-        f"**算法包**：{', '.join(f'`{p}`' for p in packages) if packages else '（无）'}",
+        f"**结果**：{status}",
+        f"**完成时间**：{checked_at}",
+        f"**风险**：{RISK_LABEL.get(str(risk), str(risk))}",
         f"**发现数**：{int(summary.get('finding_count') or len(findings))}",
         f"**模型**：`{report.get('model') or '—'}`",
+        "",
     ]
-    if sha:
-        lines.append(f"**提交**：`{sha[:12]}`")
-    if run_url:
-        lines.append(f"**Actions 运行**：[查看日志与 Artifact]({run_url})")
-
-    lines.extend(["", "---", ""])
 
     overview = (report.get("overview") or "").strip()
     if overview:
-        lines.extend(["### 总评", "", overview, ""])
+        lines.extend(["#### 总评", "", overview, ""])
 
     if report.get("error"):
-        lines.extend(["### 错误", "", f"```\n{report['error']}\n```", ""])
+        lines.extend(["#### 错误", "", f"```\n{report['error']}\n```", ""])
 
     if findings:
-        lines.append("### 发现项")
+        lines.append("#### 发现项")
         lines.append("")
         shown = 0
         for item in findings:
@@ -120,29 +107,16 @@ def render_markdown(
     if not findings and not overview and not skipped:
         lines.extend(["模型未返回有效内容。", ""])
 
-    lines.extend(
-        [
-            "<details><summary>说明</summary>",
-            "",
-            "- L2 为 **LLM 辅助评审**，默认**不阻断**合并；人工以发现项（含严重度）为准。",
-            "- 在 Create PR 或新 push 时追加评论；Re-run 不发评论。",
-            "- 完整报告见 Artifact：`l2-review-report-<run_id>` / `l2-review.json`。",
-            "- 需配置 Secrets：`OPENAI_API_KEY`；可选 `OPENAI_BASE_URL`、`OPENAI_MODEL`。",
-            "",
-            "</details>",
-            "",
-        ]
-    )
     return "\n".join(lines)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="渲染 L2 PR 评论")
+    parser = argparse.ArgumentParser(description="渲染 LLM审核节（写入整条评论的占位）")
     parser.add_argument("--json", default="l2-review.json")
     parser.add_argument("--out", default="l2-review-comment.md")
-    parser.add_argument("--run-url", default="")
-    parser.add_argument("--sha", default="")
-    parser.add_argument("--attempt", type=int, default=1)
+    parser.add_argument("--run-url", default="", help="已忽略（兼容旧调用）")
+    parser.add_argument("--sha", default="", help="已忽略（兼容旧调用）")
+    parser.add_argument("--attempt", type=int, default=1, help="已忽略（兼容旧调用）")
     parser.add_argument("--checked-at", default="")
     return parser.parse_args()
 
@@ -152,12 +126,10 @@ def main() -> int:
     report = json.loads(Path(args.json).read_text(encoding="utf-8"))
     run_url = args.run_url or os.environ.get("GITHUB_RUN_URL", "")
     sha = args.sha or os.environ.get("GITHUB_SHA", "")
-    attempt = args.attempt if args.attempt >= 1 else 1
     text = render_markdown(
         report,
         run_url=run_url,
         sha=sha,
-        attempt=attempt,
         checked_at=args.checked_at,
     )
     out = Path(args.out)

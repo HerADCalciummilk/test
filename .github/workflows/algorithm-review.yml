@@ -12,11 +12,11 @@
 #
 # 流程：
 #   PR / 手动触发
-#     → job l1：机器检查 → Artifact →（条件）PR 评论 → blocker 则失败
+#     → job l1：静态检查 → Artifact →（条件）PR 评论 → blocker 则失败
 #     → job l2：needs l1 且成功 → 下载 l1-review.json → LLM → Artifact →（条件）PR 评论
 #
 # Secrets（仅 l2）：OPENAI_API_KEY；可选 OPENAI_BASE_URL、OPENAI_MODEL
-# 分支保护：建议必过「L1 machine review」；「L2 LLM review」按是否强制 API 决定
+# 分支保护：在 GitHub Settings 勾选必过的 Checks，不是脚本开关。建议必过 L1；L2 依赖 API Key，一般不要勾成必过。
 # Actions 版本：使用 Node 24 兼容大版本，避免 runner 上 Node 16/20 弃用告警
 # =============================================================================
 
@@ -67,53 +67,25 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Count prior L1 comments
-        if: >-
-          always() &&
-          github.event_name == 'pull_request' &&
-          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
-          github.run_attempt == 1
-        id: prior_l1
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const marker = '<!-- nimm-l1-review -->';
-            let page = 1;
-            let total = 0;
-            while (true) {
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                per_page: 100,
-                page,
-              });
-              if (!comments.length) break;
-              total += comments.filter((c) => c.body && c.body.includes(marker)).length;
-              if (comments.length < 100) break;
-              page += 1;
-              if (page > 20) break;
-            }
-            core.setOutput('attempt', String(total + 1));
-            core.info(`Prior L1 comments: ${total}; this attempt: ${total + 1}`);
-
       - name: Render L1 PR comment
         if: >-
           always() &&
           github.event_name == 'pull_request' &&
-          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
-          github.run_attempt == 1
+          (github.event.action == 'opened' || github.event.action == 'synchronize')
         env:
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          ATTEMPT="${{ steps.prior_l1.outputs.attempt }}"
-          if [ -z "$ATTEMPT" ]; then ATTEMPT=1; fi
+          L2_STATUS=pending
+          if [ "${{ steps.review.outputs.exit_code }}" != "0" ]; then
+            L2_STATUS=skipped
+          fi
           python .github/scripts/review/format_l1_comment.py \
             --json l1-review.json \
             --out l1-review-comment.md \
-            --sha "${{ github.sha }}" \
+            --sha "$HEAD_SHA" \
             --run-url "$GITHUB_RUN_URL" \
-            --attempt "$ATTEMPT"
+            --l2-status "$L2_STATUS"
 
       - name: Upload L1 artifacts
         if: always()
@@ -125,24 +97,45 @@ jobs:
             l1-review-comment.md
           if-no-files-found: warn
 
-      - name: Append L1 comment on PR
+      - name: Upsert L1 comment on PR
         if: >-
           always() &&
           github.event_name == 'pull_request' &&
-          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
-          github.run_attempt == 1
+          (github.event.action == 'opened' || github.event.action == 'synchronize')
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
+            const sha = process.env.HEAD_SHA || '';
+            const marker = `<!-- nimm-review-round:${sha} -->`;
             const body = fs.readFileSync('l1-review-comment.md', 'utf8');
-            const { data: created } = await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
-            core.info(`Appended L1 comment ${created.id}`);
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            let page = 1;
+            let existing = null;
+            while (page <= 20) {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner, repo, issue_number, per_page: 100, page,
+              });
+              if (!comments.length) break;
+              existing = comments.find((c) => c.body && c.body.includes(marker));
+              if (existing) break;
+              if (comments.length < 100) break;
+              page += 1;
+            }
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+              core.info(`Updated review comment ${existing.id} for ${sha.slice(0, 12)}`);
+            } else {
+              const { data: created } = await github.rest.issues.createComment({
+                owner, repo, issue_number, body,
+              });
+              core.info(`Created review comment ${created.id} for ${sha.slice(0, 12)}`);
+            }
 
       - name: Fail L1 when blockers exist
         if: steps.review.outputs.exit_code != '0'
@@ -203,53 +196,20 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Count prior L2 comments
+      - name: Render L2 section
         if: >-
           always() &&
           github.event_name == 'pull_request' &&
-          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
-          github.run_attempt == 1
-        id: prior_l2
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const marker = '<!-- nimm-l2-review -->';
-            let page = 1;
-            let total = 0;
-            while (true) {
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                per_page: 100,
-                page,
-              });
-              if (!comments.length) break;
-              total += comments.filter((c) => c.body && c.body.includes(marker)).length;
-              if (comments.length < 100) break;
-              page += 1;
-              if (page > 20) break;
-            }
-            core.setOutput('attempt', String(total + 1));
-            core.info(`Prior L2 comments: ${total}; this attempt: ${total + 1}`);
-
-      - name: Render L2 PR comment
-        if: >-
-          always() &&
-          github.event_name == 'pull_request' &&
-          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
-          github.run_attempt == 1
+          (github.event.action == 'opened' || github.event.action == 'synchronize')
         env:
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          ATTEMPT="${{ steps.prior_l2.outputs.attempt }}"
-          if [ -z "$ATTEMPT" ]; then ATTEMPT=1; fi
           python .github/scripts/review/format_l2_comment.py \
             --json l2-review.json \
             --out l2-review-comment.md \
-            --sha "${{ github.sha }}" \
-            --run-url "$GITHUB_RUN_URL" \
-            --attempt "$ATTEMPT"
+            --sha "$HEAD_SHA" \
+            --run-url "$GITHUB_RUN_URL"
 
       - name: Upload L2 artifacts
         if: always()
@@ -261,12 +221,13 @@ jobs:
             l2-review-comment.md
           if-no-files-found: warn
 
-      - name: Append L2 comment on PR
+      - name: Attach L2 to the same review comment
         if: >-
           always() &&
           github.event_name == 'pull_request' &&
-          (github.event.action == 'opened' || github.event.action == 'synchronize') &&
-          github.run_attempt == 1
+          (github.event.action == 'opened' || github.event.action == 'synchronize')
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         uses: actions/github-script@v8
         with:
           script: |
@@ -275,14 +236,45 @@ jobs:
               core.warning('l2-review-comment.md missing; skip comment');
               return;
             }
-            const body = fs.readFileSync('l2-review-comment.md', 'utf8');
-            const { data: created } = await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
+            const sha = process.env.HEAD_SHA || '';
+            const marker = `<!-- nimm-review-round:${sha} -->`;
+            const slotStart = '<!-- nimm-l2-slot -->';
+            const slotEnd = '<!-- /nimm-l2-slot -->';
+            const l2 = fs.readFileSync('l2-review-comment.md', 'utf8').trim();
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            let page = 1;
+            let existing = null;
+            while (page <= 20) {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner, repo, issue_number, per_page: 100, page,
+              });
+              if (!comments.length) break;
+              existing = comments.find((c) => c.body && c.body.includes(marker));
+              if (existing) break;
+              if (comments.length < 100) break;
+              page += 1;
+            }
+            const slot = `${slotStart}\n\n${l2}\n\n${slotEnd}`;
+            if (!existing) {
+              core.warning('L1 review comment not found; posting L2 as fallback');
+              await github.rest.issues.createComment({
+                owner, repo, issue_number,
+                body: `${marker}\n## 审核 \`${sha.slice(0, 12)}\`\n\n${slot}\n`,
+              });
+              return;
+            }
+            let body = existing.body || '';
+            const re = /<!-- nimm-l2-slot -->[\s\S]*?<!-- \/nimm-l2-slot -->/;
+            if (re.test(body)) {
+              body = body.replace(re, slot);
+            } else {
+              body = `${body.trim()}\n\n${slot}\n`;
+            }
+            await github.rest.issues.updateComment({
+              owner, repo, comment_id: existing.id, body,
             });
-            core.info(`Appended L2 comment ${created.id}`);
+            core.info(`Attached L2 to review comment ${existing.id}`);
 
       - name: Fail L2 when pipeline error
         if: steps.l2.outputs.exit_code != '0'

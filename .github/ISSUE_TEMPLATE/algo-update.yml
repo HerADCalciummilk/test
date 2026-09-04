@@ -1,23 +1,14 @@
 name: 算法优化或修复
-description: 规划一件算法需求。创建时必须在右侧选择 Milestone。
-title: "[kind/pkg] "
+description: 说明这一次要完成的优化或修复，并在右侧选择 Milestone。
 body:
   - type: markdown
     attributes:
       value: |
-        一张 Issue 只代表 **一件** 优化或修复，不要写成某个插件的总账。
+        请把 **这一次要完成的工作** 写清楚。具体需求请用下方清单逐条列出。
 
-        **创建前务必在右侧栏选择一个 Milestone**（例如 `v1.3.0`）。模板无法代选。没有合适版本时，先到 Issues → Milestones 新建，再开本 Issue。
+        填写前请选择 **Milestone**（例如 `v1.3.0`），表示本需求计划进哪一版。若还没有对应版本，请先到 Issues → Milestones 新建，再继续填写。
 
-        Milestone 用于把需求划进某一版，便于按版本筛选和追溯；截止日期只是计划时间，到期不会自动关单或发版。发版仍需人工打 `vX.Y.Z` Tag。
-  - type: input
-    id: plugin
-    attributes:
-      label: 插件
-      description: 正式包如 NIMM/02diagnostic/demo_official_ok；中间包如 00temp/demo_pkg。
-      placeholder: NIMM/<kind>/<pkg>
-    validations:
-      required: true
+        标题请概括这次工作的需求，例如「降低夜间误报」或「修复空输入崩溃」。
   - type: dropdown
     id: change_type
     attributes:
@@ -32,27 +23,26 @@ body:
     id: goal
     attributes:
       label: 目标
-      description: 要解决什么问题、怎样算做完。有数写数，没数写可观察现象。
-      placeholder: 例如：夜间误报明显下降。
+      description: 做完之后应达到什么效果。有数据就写数据，没有就写可观察的现象。
+      placeholder: 例如：夜间误报下降；空输入不再崩溃。
     validations:
       required: true
   - type: textarea
-    id: steps
+    id: items
     attributes:
-      label: 步骤
-      description: 跟进时勾选。机器不会改这些勾选。
+      label: 本次项
+      description: 列出这次要完成的每一项。需要时写上包路径（如 NIMM/02diagnostic/foo）。完成后请在对应项前打勾。
       value: |
-        - [ ] 复现 / 说明现状
-        - [ ] 修改
-        - [ ] 验证
-        - [ ] 开 PR（描述里写 Fixes #本编号）
+        - [ ] 
+        - [ ]
     validations:
       required: true
   - type: textarea
     id: acceptance
     attributes:
       label: 验收
-      description: 通过才勾。不要用「已经开 PR」代替验收。
+      description: 怎样判断这些项已经合格，便于完成后核对。
+      placeholder: 例如：清单中的项均已落地，关键行为可复现检查。
       value: |
         - [ ]
     validations:

@@ -1,4 +1,4 @@
-"""L2 LLM 语义审核入口。
+"""L2 LLM审核入口。
 
 职责：定位算法包与包外变更 → 收集可读文本上下文（可选附带 L1 报告）→
 调用 OpenAI 兼容 Chat Completions → 写出结构化 l2-review.json。
@@ -33,6 +33,7 @@ from common import (
     discover_packages,
     iter_files,
     mid_has_entry_dirs,
+    path_is_under,
     read_text,
     repo_rel,
     resolve_path_arg,
@@ -87,25 +88,10 @@ SYSTEM_PROMPT = """你是算法仓库的 L2 代码审核助手（辅助人工，
 
 
 def _truncate(text: str, limit: int) -> str:
+    """超长文本截断，避免单文件撑满 LLM 上下文。"""
     if len(text) <= limit:
         return text
     return text[: limit - 20] + "\n\n...[truncated]...\n"
-
-
-def _is_under(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
-        return False
-
-
-def _path_covered_by_packages(repo: Path, path: Path, packages: list[PackageRef]) -> bool:
-    for pkg in packages:
-        for root in pkg.iter_scan_roots(repo):
-            if _is_under(path, root):
-                return True
-    return False
 
 
 def collect_changed_files_context(repo: Path, files: list[Path], *, title: str) -> str:
@@ -120,6 +106,7 @@ def collect_changed_files_context(repo: Path, files: list[Path], *, title: str) 
 
     def sort_key(p: Path) -> tuple[int, str]:
         rel = repo_rel(repo, p)
+        # 公共库优先，其次源码，再次文档，避免 60k 上限先吃掉无关文件
         if rel.startswith("NIMM/utils") or "/utils/" in f"/{rel}/":
             pri = 0
         elif p.suffix == ".py":
@@ -186,9 +173,10 @@ def collect_package_context(repo: Path, package: PackageRef) -> str:
 
     def sort_key(p: Path) -> tuple[int, str]:
         rel = repo_rel(repo, p)
-        if docs_dir.is_dir() and _is_under(p, docs_dir):
+        # 与规范一致：docs → 源码 → cli
+        if docs_dir.is_dir() and path_is_under(p, docs_dir):
             pri = 0
-        elif src_dir.is_dir() and _is_under(p, src_dir):
+        elif src_dir.is_dir() and path_is_under(p, src_dir):
             pri = 1
         else:
             pri = 2
@@ -218,6 +206,7 @@ def collect_package_context(repo: Path, package: PackageRef) -> str:
 
 
 def load_l1_summary(path: Path | None) -> str:
+    """把 l1-review.json 压成短摘要，附在 LLM user prompt 末尾供参考。"""
     if path is None or not path.is_file():
         return ""
     try:
@@ -241,18 +230,11 @@ def load_l1_summary(path: Path | None) -> str:
     return "\n".join(lines) + "\n"
 
 
-def build_user_prompt(contexts: list[str], l1_summary: str) -> str:
-    parts = ["请评审下列算法包内容，并按 system 要求输出 JSON。\n"]
-    if l1_summary:
-        parts.append(l1_summary)
-    parts.extend(contexts)
-    return "\n".join(parts)
-
-
 def _extract_json_object(text: str) -> dict[str, Any]:
     """从模型输出中取出 JSON 对象（容忍 Markdown 围栏与前后说明文字）。"""
     text = text.strip()
     blobs: list[str] = [text]
+    # 围栏内的片段优先（insert(0)），再退回整段原文
     for fence in re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", text):
         blobs.insert(0, fence.group(1).strip())
 
@@ -261,6 +243,7 @@ def _extract_json_object(text: str) -> dict[str, Any]:
         for i, ch in enumerate(blob):
             if ch != "{":
                 continue
+            # 从每个 `{` 做括号配对；字符串内的括号不计深度
             depth = 0
             in_str = False
             escape = False
@@ -298,6 +281,7 @@ def _extract_json_object(text: str) -> dict[str, Any]:
         if isinstance(data, dict):
             return data
 
+    # 配对失败时：从第一个 `{` 起用 raw_decode（允许后面还有说明文字）
     start = text.find("{")
     if start >= 0:
         try:
@@ -342,6 +326,7 @@ def call_chat_completions(
 
 
 def normalize_model_result(raw: dict[str, Any]) -> dict[str, Any]:
+    """校正模型 JSON：非法枚举落到默认值，findings 只保留约定字段。"""
     risk = str(raw.get("risk_level") or "low").lower()
     if risk not in {"low", "medium", "high"}:
         risk = "low"
@@ -373,15 +358,6 @@ def normalize_model_result(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def dry_run_result(packages: list[str]) -> dict[str, Any]:
-    return {
-        "risk_level": "low",
-        "overview": "dry-run：未调用 LLM，仅验证流水线与报告格式。",
-        "findings": [],
-        "packages_note": packages,
-    }
-
-
 def build_report(
     packages: list[str],
     *,
@@ -391,6 +367,7 @@ def build_report(
     result: dict[str, Any] | None,
     error: str | None = None,
 ) -> dict[str, Any]:
+    """组装 l2-review.json。"""
     result = result or {}
     findings = result.get("findings") or []
     return {
@@ -466,8 +443,12 @@ def main() -> int:
         abs_path = repo / rel if not rel.is_absolute() else rel
         if not abs_path.is_file():
             continue
-        if packages and _path_covered_by_packages(repo, abs_path, packages):
-            continue
+        if packages and any(
+            path_is_under(abs_path, root)
+            for pkg in packages
+            for root in pkg.iter_scan_roots(repo)
+        ):
+            continue  # 已在 collect_package_context 里，避免同一文件进两段 prompt
         orphan_files.append(abs_path)
 
     contexts: list[str] = []
@@ -500,7 +481,13 @@ def main() -> int:
         return 0
 
     if args.dry_run:
-        result = normalize_model_result(dry_run_result(package_strs or ["(changed-files)"]))
+        result = normalize_model_result(
+            {
+                "risk_level": "low",
+                "overview": "dry-run：未调用 LLM，仅验证流水线与报告格式。",
+                "findings": [],
+            }
+        )
         report = build_report(
             package_strs,
             model="dry-run",
@@ -531,7 +518,12 @@ def main() -> int:
         print(f"L2 跳过：无 API Key report={out}")
         return 1
 
-    user_prompt = build_user_prompt(contexts, load_l1_summary(l1_path))
+    parts = ["请评审下列算法包内容，并按 system 要求输出 JSON。\n"]
+    l1_summary = load_l1_summary(l1_path)
+    if l1_summary:
+        parts.append(l1_summary)
+    parts.extend(contexts)
+    user_prompt = "\n".join(parts)
 
     try:
         raw, _ = call_chat_completions(

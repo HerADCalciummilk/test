@@ -2,7 +2,7 @@
 
 职责：集中维护规则 ID、严重级别、说明文案，以及匹配用的常量/正则。
 检查逻辑在 l1_review.py；PR 评论渲染在 format_l1_comment.py。
-对外说明见 docs/L1_机器审核规范.md。
+对外说明见 docs/算法审核规范.md。
 
 严重级别：
 - blocker：检查失败，workflow 红灯，开发者需修复后再推。
@@ -198,6 +198,14 @@ SKIP_FILE_SUFFIXES = {".pyc", ".png", ".jpg", ".jpeg", ".gif", ".nc", ".grib", "
 # 过大文本不读入做内容匹配，避免拖慢 CI
 MAX_TEXT_FILE_BYTES = 1_000_000
 
-# PR 评论中的隐藏标记：用于统计「第 N 次」检查（每次追加新评论，不覆盖）
+# PR 评论：同一提交 SHA 一条审核评论（L1 先写，L2 写入同一条）
 COMMENT_MARKER_L1 = "<!-- nimm-l1-review -->"
 COMMENT_MARKER_L2 = "<!-- nimm-l2-review -->"
+COMMENT_MARKER_ROUND_PREFIX = "<!-- nimm-review-round:"
+L2_SLOT_START = "<!-- nimm-l2-slot -->"
+L2_SLOT_END = "<!-- /nimm-l2-slot -->"
+
+
+def review_round_marker(sha: str) -> str:
+    """一轮检查的隐藏标记；须与 workflow 里 `nimm-review-round:${sha}` 一致。"""
+    return f"{COMMENT_MARKER_ROUND_PREFIX}{sha} -->"
