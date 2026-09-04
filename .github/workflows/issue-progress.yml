@@ -32,14 +32,16 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch PR SHAs for diff
+        id: shas
         run: |
           git fetch --no-tags origin \
             "pull/${{ github.event.pull_request.number }}/head" \
-            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.base_ref }}" \
             "${{ github.event.pull_request.head.sha }}"
           if [ -n "${{ github.event.before }}" ]; then
             git fetch --no-tags origin "${{ github.event.before }}" || true
           fi
+          echo "base_tip=$(git rev-parse "origin/${{ github.base_ref }}")" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -70,6 +72,6 @@ jobs:
             --pr "${{ github.event.pull_request.number }}" \
             --action "${{ github.event.action }}" \
             --head "${{ github.event.pull_request.head.sha }}" \
-            --base "${{ github.event.pull_request.base.sha }}" \
+            --base "${{ steps.shas.outputs.base_tip }}" \
             --before "${{ github.event.before }}" \
             --body-file pr-body.txt

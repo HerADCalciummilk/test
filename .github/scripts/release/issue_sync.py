@@ -177,9 +177,10 @@ def changed_paths(before: str, after: str, cwd: Path) -> list[str]:
 
 
 def intersect_push_with_base(push_paths: list[str], vs_base_paths: list[str]) -> list[str]:
-    """再 push：只保留「这一推改过、且相对目标分支仍不同」的路径。
+    """再 push：只保留「这一推改过、且相对此刻目标分支尖仍不同」的路径。
 
-    合入 main 带进来的文件已与目标分支一致，从进展评论中去掉，避免把别人的需求写进本 Issue。
+    必须和现在的 main 尖比，不能和开 PR 时的 base.sha 比。
+    merge 带进来的别人的文件已经和当前 main 一样，第二份 diff 里没有它们。
     """
     keep = set(vs_base_paths)
     return [path for path in push_paths if path in keep]
