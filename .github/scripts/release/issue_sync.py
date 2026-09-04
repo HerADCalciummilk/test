@@ -19,7 +19,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -117,13 +117,16 @@ def fallback_summary(paths: list[str], hint: str) -> str:
     return f"修改了 {path_part}。"
 
 
+BEIJING = timezone(timedelta(hours=8))
+
+
 def format_progress_time(when: datetime | None = None) -> str:
-    """进展评论时间：UTC，形如 2026-09-03 03:56 UTC。"""
+    """进展评论时间：北京时间，形如 2026-09-03 11:56 +0800。"""
     stamp = when or datetime.now(timezone.utc)
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=timezone.utc)
-    stamp = stamp.astimezone(timezone.utc)
-    return stamp.strftime("%Y-%m-%d %H:%M UTC")
+    stamp = stamp.astimezone(BEIJING)
+    return stamp.strftime("%Y-%m-%d %H:%M +0800")
 
 
 def format_progress_comment(
