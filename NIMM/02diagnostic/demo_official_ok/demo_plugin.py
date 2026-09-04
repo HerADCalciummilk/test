@@ -14,5 +14,5 @@ class OfficialDemoPlugin(BasePlugin):
         super().__init__()
 
     def process(self, data):
-        # Issue #22：更新管理验证用占位说明，行为与原先一致
+        # Issue #26：合入后更新管理复测（草稿→转正→再 push）
         return {"kind": "02diagnostic", "echo": data}
