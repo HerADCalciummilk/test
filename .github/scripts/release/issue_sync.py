@@ -144,7 +144,7 @@ def sanitize_progress_title(raw: str) -> str:
     text = " ".join((raw or "").split()).strip("\"'«»“”")
     for prefix in ("本次修改：", "本次修改:", "标题：", "标题:"):
         if text.startswith(prefix):
-            text = text[len(prefix) :].strip()
+            text = text[len(prefix):].strip()
             break
     text = text.rstrip("。．.；;")
     if len(text) > MAX_TITLE_CHARS:
