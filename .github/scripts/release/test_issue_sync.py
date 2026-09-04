@@ -98,7 +98,7 @@ class CommentFormatTests(unittest.TestCase):
         self.assertNotIn("这一推", body)
         self.assertNotIn("相对 base", body)
         self.assertNotIn("人工勾选", body)
-        self.assertIn("- 时间：2026-09-03 03:56 UTC", body)
+        self.assertIn("- 时间：2026-09-03 11:56 +0800", body)
         self.assertTrue(already_synced([{"body": body}], "abc1234deadbeef", 8))
         self.assertFalse(already_synced([{"body": body}], "fff", 8))
 
