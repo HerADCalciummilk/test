@@ -42,12 +42,21 @@ _CLOSE_URL = re.compile(
     re.IGNORECASE,
 )
 
-PROGRESS_SYSTEM = """你为算法仓库的需求 Issue 写「这一次代码改了什么」，不是审核、不是发版 notes。
-根据 diff 用中文写 3～6 句：改了哪些与需求相关的点。
-可以提与「本次项」中哪一条相关，但不要宣称目标或验收已完成。
-不要评价代码质量，不要猜测 diff 中未出现的需求。
-不要使用 Markdown 标题。输出纯文本段落即可。
+PROGRESS_SYSTEM = """你为算法仓库的需求 Issue 写「这一次代码改了什么」，给读 Issue 的人扫一眼就能知道推了什么。
+不是审核、不是发版 notes、不是逐行 diff 解说。
+
+只输出一个 JSON 对象，不要 Markdown，不要代码围栏：
+{"title":"……","body":"……"}
+
+title：一句中文短标题，概括这一次改动的主题。不要句号、编号或「本次修改」前缀；不要评价质量；不要写已完成、已验收。
+
+body：说明这一次实际改了哪些与需求相关的点。上面已有标题承接主题，正文不必压成口号，该交代的行为、规则或文件要写明白；也不要铺成清单或审核报告。
+可以提到与「本次项」中哪一条相关，但不要宣称目标或验收已完成。
+不要评价代码质量，不要给修改建议，不要猜测 diff 中未出现的需求。
+一段或两三段都可以，句子完整，语言简洁，不要注水。
 """
+
+MAX_TITLE_CHARS = 40
 
 GQL_CLOSING = """
 query($owner:String!, $name:String!, $number:Int!) {
@@ -129,12 +138,57 @@ def format_progress_time(when: datetime | None = None) -> str:
     return stamp.strftime("%Y-%m-%d %H:%M +0800")
 
 
+def sanitize_progress_title(raw: str) -> str:
+    """LLM 短标题：单行、去掉模型可能重复的前缀。"""
+    text = " ".join((raw or "").split()).strip("\"'«»“”")
+    for prefix in ("本次修改：", "本次修改:", "标题：", "标题:"):
+        if text.startswith(prefix):
+            text = text[len(prefix) :].strip()
+            break
+    text = text.rstrip("。．.；;")
+    if len(text) > MAX_TITLE_CHARS:
+        text = text[:MAX_TITLE_CHARS].rstrip()
+    return text
+
+
+def format_progress_heading(title: str = "") -> str:
+    """成功为「本次修改：短标题」；失败或无标题则仅「本次修改：」。"""
+    cleaned = sanitize_progress_title(title)
+    if cleaned:
+        return f"### 本次修改：{cleaned}"
+    return "### 本次修改："
+
+
+def parse_progress_llm(content: str) -> tuple[str, str] | None:
+    """解析 LLM 输出为 (短标题, 正文)。无效则 None，走路径降级。"""
+    text = (content or "").strip()
+    if not text:
+        return None
+    fenced = re.match(r"^```(?:json)?\s*([\s\S]*?)\s*```$", text)
+    if fenced:
+        text = fenced.group(1).strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        if text.startswith("{") or text.startswith("["):
+            return None
+        return "", text
+    if not isinstance(data, dict):
+        return None
+    body = str(data.get("body") or data.get("summary") or "").strip()
+    if not body:
+        return None
+    title = sanitize_progress_title(str(data.get("title") or ""))
+    return title, body
+
+
 def format_progress_comment(
     *,
     pr_number: int,
     sha: str,
     paths: list[str],
     summary: str,
+    title: str = "",
     when: datetime | None = None,
 ) -> str:
     """Issue 进展评论正文；HTML 注释用于按 SHA 去重。"""
@@ -157,7 +211,7 @@ def format_progress_comment(
             "- 路径：",
             *bullets,
             "",
-            "### 改了什么",
+            format_progress_heading(title),
             summary.strip(),
             "",
         ]
@@ -406,8 +460,8 @@ def post_comment(owner: str, repo: str, token: str, issue_number: int, body: str
     )
 
 
-def summarize_with_llm(*, paths: list[str], diff: str, hint: str) -> str | None:
-    """有 OPENAI_API_KEY 时生成中文「改了什么」；失败返回 None 走降级。"""
+def summarize_with_llm(*, paths: list[str], diff: str, hint: str) -> tuple[str, str] | None:
+    """有 OPENAI_API_KEY 时生成 (短标题, 正文)；失败返回 None 走路径降级。"""
     api_key = os.environ.get("OPENAI_API_KEY") or ""
     if not api_key:
         return None
@@ -436,7 +490,10 @@ def summarize_with_llm(*, paths: list[str], diff: str, hint: str) -> str | None:
             timeout=90.0,
         )
         content = (response.choices[0].message.content or "").strip()
-        return content or None
+        parsed = parse_progress_llm(content)
+        if parsed is None:
+            print("LLM 摘要无法解析，降级", file=sys.stderr)
+        return parsed
     except Exception as exc:  # noqa: BLE001
         print(f"LLM 摘要失败，降级：{exc}", file=sys.stderr)
         return None
@@ -527,16 +584,21 @@ def cmd_sync(args: argparse.Namespace) -> int:
         return 0
 
     hint = args.title or os.environ.get("PR_TITLE") or commit_hint(start, after, cwd)
-    summary = summarize_with_llm(
+    parsed = summarize_with_llm(
         paths=paths,
         diff=unified_diff(start, after, cwd, paths=paths),
         hint=hint,
-    ) or fallback_summary(paths, hint)
+    )
+    if parsed is None:
+        title, summary = "", fallback_summary(paths, hint)
+    else:
+        title, summary = parsed
     comment = format_progress_comment(
         pr_number=pr_number,
         sha=after,
         paths=paths,
         summary=summary,
+        title=title,
     )
 
     posted = 0
