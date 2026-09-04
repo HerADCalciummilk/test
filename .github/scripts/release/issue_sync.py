@@ -45,18 +45,23 @@ _CLOSE_URL = re.compile(
 PROGRESS_SYSTEM = """你为算法仓库的需求 Issue 写「这一次代码改了什么」，给读 Issue 的人扫一眼就能知道推了什么。
 不是审核、不是发版 notes、不是逐行 diff 解说。
 
+用户消息里会提供：关联 Issue 的标题和正文（模板字段包括「本次项」「目标」「验收」）、提交说明/PR 标题、变更路径、diff。
+对照 Issue 正文理解这次改动和需求的关系；正文为空时只根据 diff 写，不要编造清单条目。
+
 只输出一个 JSON 对象，不要 Markdown，不要代码围栏：
 {"title":"……","body":"……"}
 
 title：一句中文短标题，概括这一次改动的主题。不要句号、编号或「本次修改」前缀；不要评价质量；不要写已完成、已验收。
 
 body：说明这一次实际改了哪些与需求相关的点。上面已有标题承接主题，正文不必压成口号，该交代的行为、规则或文件要写明白；也不要铺成清单或审核报告。
-可以提到与「本次项」中哪一条相关，但不要宣称目标或验收已完成。
-不要评价代码质量，不要给修改建议，不要猜测 diff 中未出现的需求。
+若 Issue 正文里有「本次项」，可以点明与其中哪一条相关，但只能依据正文和 diff 里实际出现的内容。
+不要宣称「目标」或「验收」已完成，不要勾选或改写 Issue。
+不要评价代码质量，不要给修改建议，不要把 Issue 里尚未出现在 diff 中的项写成已经做了。
 一段或两三段都可以，句子完整，语言简洁，不要注水。
 """
 
 MAX_TITLE_CHARS = 40
+MAX_ISSUE_CHARS = 12_000
 
 GQL_CLOSING = """
 query($owner:String!, $name:String!, $number:Int!) {
@@ -240,6 +245,14 @@ def intersect_push_with_base(push_paths: list[str], vs_base_paths: list[str]) ->
     return [path for path in push_paths if path in keep]
 
 
+def clip_text(text: str, limit: int) -> str:
+    """超长截断后再给 LLM。"""
+    blob = text or ""
+    if len(blob) <= limit:
+        return blob
+    return blob[: limit - 20] + "\n\n...[truncated]...\n"
+
+
 def unified_diff(before: str, after: str, cwd: Path, paths: list[str] | None = None) -> str:
     """before..after 的 unified diff，超长截断后给 LLM。可限定路径。"""
     args = ["diff", before, after]
@@ -248,10 +261,7 @@ def unified_diff(before: str, after: str, cwd: Path, paths: list[str] | None = N
     else:
         args.append("--")
     result = run_git(args, cwd)
-    text = result.stdout or ""
-    if len(text) > MAX_DIFF_CHARS:
-        return text[: MAX_DIFF_CHARS - 20] + "\n\n...[truncated]...\n"
-    return text
+    return clip_text(result.stdout or "", MAX_DIFF_CHARS)
 
 
 def commit_hint(before: str, after: str, cwd: Path) -> str:
@@ -460,7 +470,60 @@ def post_comment(owner: str, repo: str, token: str, issue_number: int, body: str
     )
 
 
-def summarize_with_llm(*, paths: list[str], diff: str, hint: str) -> tuple[str, str] | None:
+def issue_fields_from_payload(data: Any) -> tuple[str, str]:
+    """从 GitHub Issue JSON 取出标题和正文。"""
+    if not isinstance(data, dict):
+        return "", ""
+    return str(data.get("title") or "").strip(), str(data.get("body") or "").strip()
+
+
+def fetch_issue_fields(
+    owner: str, repo: str, token: str, issue_number: int
+) -> tuple[str, str]:
+    """拉取关联 Issue 的标题和正文；失败返回空字符串，摘要仍可只靠 diff。"""
+    try:
+        data = _api("GET", f"/repos/{owner}/{repo}/issues/{issue_number}", token)
+    except RuntimeError as exc:
+        print(f"读取 Issue #{issue_number} 失败：{exc}", file=sys.stderr)
+        return "", ""
+    return issue_fields_from_payload(data)
+
+
+def build_progress_user_message(
+    *,
+    paths: list[str],
+    diff: str,
+    hint: str,
+    issue_number: int | None = None,
+    issue_title: str = "",
+    issue_body: str = "",
+) -> str:
+    """拼给 LLM 的用户消息：Issue 正文 + 这一推的 diff。"""
+    if issue_number is None:
+        issue_head = "关联需求 Issue：（未指定）"
+    else:
+        title = (issue_title or "").strip() or "（无标题）"
+        issue_head = f"关联需求 Issue #{issue_number} 标题：{title}"
+    body = clip_text((issue_body or "").strip(), MAX_ISSUE_CHARS)
+    return (
+        f"{issue_head}\n"
+        f"Issue 正文（含「本次项」等字段，可能为空）：\n"
+        f"{body or '（无）'}\n\n"
+        f"提交说明/PR 标题（可能为空）：{hint or '（无）'}\n"
+        f"变更路径：\n" + "\n".join(paths[:80]) + "\n\n"
+        f"diff：\n{diff or '（无 diff）'}\n"
+    )
+
+
+def summarize_with_llm(
+    *,
+    paths: list[str],
+    diff: str,
+    hint: str,
+    issue_number: int | None = None,
+    issue_title: str = "",
+    issue_body: str = "",
+) -> tuple[str, str] | None:
     """有 OPENAI_API_KEY 时生成 (短标题, 正文)；失败返回 None 走路径降级。"""
     api_key = os.environ.get("OPENAI_API_KEY") or ""
     if not api_key:
@@ -473,10 +536,13 @@ def summarize_with_llm(*, paths: list[str], diff: str, hint: str) -> tuple[str, 
 
     model = os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
     base_url = os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1"
-    user = (
-        f"提交说明/PR 标题（可能为空）：{hint or '（无）'}\n"
-        f"变更路径：\n" + "\n".join(paths[:80]) + "\n\n"
-        f"diff：\n{diff or '（无 diff）'}\n"
+    user = build_progress_user_message(
+        paths=paths,
+        diff=diff,
+        hint=hint,
+        issue_number=issue_number,
+        issue_title=issue_title,
+        issue_body=issue_body,
     )
     try:
         client = OpenAI(api_key=api_key, base_url=base_url.rstrip("/"))
@@ -584,25 +650,30 @@ def cmd_sync(args: argparse.Namespace) -> int:
         return 0
 
     hint = args.title or os.environ.get("PR_TITLE") or commit_hint(start, after, cwd)
-    parsed = summarize_with_llm(
-        paths=paths,
-        diff=unified_diff(start, after, cwd, paths=paths),
-        hint=hint,
-    )
-    if parsed is None:
-        title, summary = "", fallback_summary(paths, hint)
-    else:
-        title, summary = parsed
-    comment = format_progress_comment(
-        pr_number=pr_number,
-        sha=after,
-        paths=paths,
-        summary=summary,
-        title=title,
-    )
+    diff_text = unified_diff(start, after, cwd, paths=paths)
 
     posted = 0
     for number in pending:
+        issue_title, issue_body = fetch_issue_fields(owner, repo, token, number)
+        parsed = summarize_with_llm(
+            paths=paths,
+            diff=diff_text,
+            hint=hint,
+            issue_number=number,
+            issue_title=issue_title,
+            issue_body=issue_body,
+        )
+        if parsed is None:
+            title, summary = "", fallback_summary(paths, hint)
+        else:
+            title, summary = parsed
+        comment = format_progress_comment(
+            pr_number=pr_number,
+            sha=after,
+            paths=paths,
+            summary=summary,
+            title=title,
+        )
         if args.dry_run:
             print(f"[dry-run] 将评论 Issue #{number}")
             posted += 1
