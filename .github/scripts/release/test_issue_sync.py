@@ -11,14 +11,19 @@ from unittest.mock import patch
 from issue_sync import (
     API_PER_PAGE,
     already_synced,
+    build_progress_user_message,
+    clip_text,
     fallback_summary,
     fetch_all_pages,
     format_progress_comment,
+    format_progress_heading,
     intersect_push_with_base,
     linked_from_timeline,
     linked_issue_numbers_from_timeline,
     parse_closing_issue_numbers,
+    parse_progress_llm,
     resolve_diff_range,
+    sanitize_progress_title,
 )
 
 
@@ -126,6 +131,8 @@ class CommentFormatTests(unittest.TestCase):
         self.assertNotIn("相对 base", body)
         self.assertNotIn("人工勾选", body)
         self.assertIn("- 时间：2026-09-03 11:56 +0800", body)
+        self.assertIn("### 本次修改：", body)
+        self.assertNotIn("### 改了什么", body)
         self.assertTrue(already_synced([{"body": body}], "abc1234deadbeef", 8))
         self.assertFalse(already_synced([{"body": body}], "fff", 8))
 
@@ -133,6 +140,85 @@ class CommentFormatTests(unittest.TestCase):
         text = fallback_summary(["a.py", "b.py"], "")
         self.assertIn("`a.py`", text)
         self.assertIn("`b.py`", text)
+
+    def test_heading_with_llm_title(self) -> None:
+        self.assertEqual(
+            format_progress_heading("更新 Issue #26 的复测说明"),
+            "### 本次修改：更新 Issue #26 的复测说明",
+        )
+
+    def test_heading_fallback_has_no_short_title(self) -> None:
+        self.assertEqual(format_progress_heading(""), "### 本次修改：")
+        self.assertEqual(format_progress_heading("   "), "### 本次修改：")
+
+    def test_comment_embeds_llm_title(self) -> None:
+        body = format_progress_comment(
+            pr_number=28,
+            sha="bdf8ff45ec4d",
+            paths=["a.py"],
+            summary="更新了复测步骤。",
+            title="更新 Issue #26 的复测说明",
+            when=datetime(2026, 9, 4, 2, 49, tzinfo=timezone.utc),
+        )
+        self.assertIn("### 本次修改：更新 Issue #26 的复测说明", body)
+        self.assertIn("更新了复测步骤。", body)
+
+
+class ProgressLlmParseTests(unittest.TestCase):
+    def test_json_title_and_body(self) -> None:
+        raw = '{"title":"更新复测说明","body":"改了 README 里的步骤。"}'
+        self.assertEqual(parse_progress_llm(raw), ("更新复测说明", "改了 README 里的步骤。"))
+
+    def test_fenced_json(self) -> None:
+        raw = '```json\n{"title":"修过滤","body":"去掉 merge 进来的路径。"}\n```'
+        self.assertEqual(parse_progress_llm(raw), ("修过滤", "去掉 merge 进来的路径。"))
+
+    def test_fenced_json_with_preamble(self) -> None:
+        raw = (
+            "如下：\n"
+            '```json\n{"title":"修过滤","body":"去掉 merge 进来的路径。"}\n```\n'
+            "以上。"
+        )
+        self.assertEqual(parse_progress_llm(raw), ("修过滤", "去掉 merge 进来的路径。"))
+
+    def test_raw_json_with_preamble(self) -> None:
+        raw = '好的。{"title":"修过滤","body":"去掉 merge 进来的路径。"}'
+        self.assertEqual(parse_progress_llm(raw), ("修过滤", "去掉 merge 进来的路径。"))
+
+    def test_invalid_fence_does_not_become_body(self) -> None:
+        self.assertIsNone(parse_progress_llm("如下：\n```json\n不是对象\n```"))
+
+    def test_empty_body_is_failure(self) -> None:
+        self.assertIsNone(parse_progress_llm('{"title":"只有标题","body":""}'))
+        self.assertIsNone(parse_progress_llm(""))
+
+    def test_prose_without_json_is_body_only(self) -> None:
+        self.assertEqual(parse_progress_llm("改了阈值。"), ("", "改了阈值。"))
+
+    def test_broken_json_is_failure(self) -> None:
+        self.assertIsNone(parse_progress_llm('{"title":'))
+
+    def test_strips_duplicated_prefix(self) -> None:
+        self.assertEqual(sanitize_progress_title("本次修改：更新复测说明。"), "更新复测说明")
+
+
+class ProgressUserMessageTests(unittest.TestCase):
+    def test_user_message_is_diff_only(self) -> None:
+        text = build_progress_user_message(
+            paths=["a.py"],
+            diff="diff --git a/a.py",
+            hint="调阈值",
+        )
+        self.assertIn("调阈值", text)
+        self.assertIn("a.py", text)
+        self.assertIn("diff --git a/a.py", text)
+        self.assertNotIn("本次项", text)
+        self.assertNotIn("Issue #", text)
+
+    def test_clip_text_truncates(self) -> None:
+        text = clip_text("x" * 50, 30)
+        self.assertLess(len(text), 50)
+        self.assertIn("[truncated]", text)
 
 
 class TimelineLinkTests(unittest.TestCase):
