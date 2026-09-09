@@ -529,6 +529,7 @@ def main() -> int:
 
     findings: list[Finding] = []
     packages: list[PackageRef] = []
+    changed: list[Path] = []
 
     # 包列表来源：--path 优先；否则用 --base 的变更推断；皆无则不做包级检查
     if args.path:
@@ -581,19 +582,27 @@ def main() -> int:
                         check_file_content(
                             repo, path, findings, plugin_source_root=src_root
                         )
-        elif args.base:
-            for rel in changed_paths(repo, args.base):
+
+        # 包外变更（或完全无包）：对本次变更文件做内容级检查
+        if args.base:
+            orphan_py: list[Path] = []
+            for rel in changed:
                 abs_path = repo / rel
-                if abs_path.is_file():
-                    scan_files.append(abs_path)
-                    check_python_syntax(repo, abs_path, findings)
-                    check_file_content(repo, abs_path, findings)
-            # 无算法包：对变更 .py 做弱插件形态检查（如 NIMM/utils）
-            check_plugins_on_files(
-                repo,
-                [p for p in scan_files if p.suffix == ".py"],
-                findings,
-            )
+                if not abs_path.is_file():
+                    continue
+                if packages and any(
+                    path_is_under(abs_path, root)
+                    for pkg in packages
+                    for root in pkg.iter_scan_roots(repo)
+                ):
+                    continue
+                scan_files.append(abs_path)
+                check_python_syntax(repo, abs_path, findings)
+                check_file_content(repo, abs_path, findings)
+                if abs_path.suffix == ".py":
+                    orphan_py.append(abs_path)
+            if orphan_py:
+                check_plugins_on_files(repo, orphan_py, findings)
 
     py_files = []
     for path in scan_files:
