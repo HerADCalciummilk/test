@@ -13,8 +13,9 @@
   OPENAI_BASE_URL  可选，默认 https://api.openai.com/v1
   OPENAI_MODEL     可选，默认 gpt-4o-mini
 
-退出码：0 正常（含跳过）；1 配置/调用失败（workflow 可选择是否红灯）。
+退出码：0 正常（含无审核输入但 API 探测成功）；1 配置/调用失败（workflow 可选择是否红灯）。
 L2 发现本身默认不阻断合并（advisory）。
+无审核输入（如手动 workflow_dispatch）时会做一次轻量 Chat Completions 探测，用于验证 Secrets 是否可用。
 """
 
 from __future__ import annotations
@@ -325,6 +326,33 @@ def call_chat_completions(
     return _extract_json_object(content), content
 
 
+def probe_llm_api(
+    *,
+    api_key: str,
+    base_url: str,
+    model: str,
+    timeout: float = 60.0,
+) -> str:
+    """轻量探测：能否用当前 Key/网关/模型完成一次 Chat Completions。"""
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError("缺少 openai 包，请 pip install openai") from exc
+
+    client = OpenAI(api_key=api_key, base_url=base_url.rstrip("/"))
+    response = client.chat.completions.create(
+        model=model,
+        temperature=0,
+        messages=[{"role": "user", "content": "Reply with exactly: OK"}],
+        max_tokens=8,
+        timeout=timeout,
+    )
+    content = (response.choices[0].message.content or "").strip()
+    if not content:
+        raise RuntimeError("API 探测返回空内容")
+    return content
+
+
 def normalize_model_result(raw: dict[str, Any]) -> dict[str, Any]:
     """校正模型 JSON：非法枚举落到默认值，findings 只保留约定字段。"""
     risk = str(raw.get("risk_level") or "low").lower()
@@ -465,20 +493,78 @@ def main() -> int:
     has_llm_input = bool(packages) or bool(orphan_files)
 
     if not has_llm_input:
-        report = build_report(
-            package_strs,
-            model=model,
-            skipped=True,
-            skip_reason="无算法包且无变更可读文件，跳过 LLM",
-            result={
-                "risk_level": "low",
-                "overview": "本次无算法包、也无可用变更文件，未调用 LLM。",
-                "findings": [],
-            },
-        )
-        out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"L2 跳过：无审核输入 report={out}")
-        return 0
+        # 无包/无变更：不跑语义审，但探测 API 是否可用（便于 Actions 手动验证 Secrets）
+        if args.dry_run:
+            report = build_report(
+                package_strs,
+                model="dry-run",
+                skipped=True,
+                skip_reason="无审核输入；dry-run 未探测 API",
+                result={
+                    "risk_level": "low",
+                    "overview": "无审核输入；dry-run 跳过 LLM 与 API 探测。",
+                    "findings": [],
+                },
+            )
+            out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"L2 dry-run：无审核输入，跳过 API 探测 report={out}")
+            return 0
+
+        if not api_key:
+            report = build_report(
+                package_strs,
+                model=model,
+                skipped=True,
+                skip_reason="无审核输入；未配置 OPENAI_API_KEY，API 探测失败",
+                result={
+                    "risk_level": "low",
+                    "overview": "无审核输入，且未配置 OPENAI_API_KEY，无法探测 LLM。",
+                    "findings": [],
+                },
+            )
+            out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"L2 失败：无审核输入且无 API Key report={out}")
+            return 1
+
+        try:
+            probe_reply = probe_llm_api(
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+            )
+            report = build_report(
+                package_strs,
+                model=model,
+                skipped=True,
+                skip_reason="无审核输入；已探测 API 可用",
+                result={
+                    "risk_level": "low",
+                    "overview": (
+                        f"本次无算法包、也无可用变更文件，未做语义审核。"
+                        f"LLM 配置探测成功（model={model}，reply={probe_reply[:40]!r}）。"
+                    ),
+                    "findings": [],
+                },
+            )
+            out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"L2：无审核输入，API 探测成功 report={out}")
+            return 0
+        except Exception as exc:  # noqa: BLE001
+            report = build_report(
+                package_strs,
+                model=model,
+                skipped=True,
+                skip_reason="无审核输入；API 探测失败",
+                result={
+                    "risk_level": "low",
+                    "overview": "无审核输入；LLM 配置探测失败，请检查 Secrets / 网关 / 模型名。",
+                    "findings": [],
+                },
+                error=str(exc),
+            )
+            out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"L2 失败：API 探测失败：{exc}", file=sys.stderr)
+            return 1
 
     if args.dry_run:
         result = normalize_model_result(
