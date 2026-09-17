@@ -1,0 +1,3 @@
+numpy>=1.26
+xarray>=2024.1.0
+meteva_base>=0.3.0

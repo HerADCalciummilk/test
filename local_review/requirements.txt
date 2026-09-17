@@ -1,0 +1,6 @@
+# 独立本地检查依赖（勿与 GitHub CI 的 .github/scripts/review/requirements.txt 混用）
+flake8>=7.0.0
+pep8-naming>=0.14.0
+openai>=1.40.0
+# 依赖版本冲突判定用；缺失时该项自动降级为不判冲突
+packaging>=23.0
