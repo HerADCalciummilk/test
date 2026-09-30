@@ -1,0 +1,10 @@
+[project]
+name = "wind_composite"
+version = "0.1.0"
+description = "由 u、v 分量合成风速与风向的诊断量算法"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "xarray>=2024.1.0",
+    "meteva_base>=0.3.0",
+]

@@ -1,0 +1,313 @@
+{
+  "package_id": "00temp/wind_composite",
+  "generated_at": "2026-09-16T18:34:31",
+  "sections": [
+    {
+      "name": "structure",
+      "findings": [],
+      "metrics": {},
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "syntax",
+      "findings": [],
+      "metrics": {},
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "plugins",
+      "findings": [],
+      "metrics": {
+        "concrete_plugin_count": 2
+      },
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "flake8",
+      "findings": [
+        {
+          "rule_id": "FLAKE8",
+          "severity": "warning",
+          "path": "00temp/wind_composite/cli/run_wind_composite.py",
+          "message": "W293 blank line contains whitespace",
+          "line": 35,
+          "evidence": ""
+        },
+        {
+          "rule_id": "FLAKE8",
+          "severity": "warning",
+          "path": "00temp/wind_composite/cli/run_wind_composite.py",
+          "message": "E266 too many leading '#' for block comment",
+          "line": 46,
+          "evidence": ""
+        },
+        {
+          "rule_id": "FLAKE8",
+          "severity": "warning",
+          "path": "00temp/wind_composite/cli/run_wind_composite.py",
+          "message": "E266 too many leading '#' for block comment",
+          "line": 50,
+          "evidence": ""
+        },
+        {
+          "rule_id": "FLAKE8",
+          "severity": "warning",
+          "path": "00temp/wind_composite/cli/run_wind_composite.py",
+          "message": "E262 inline comment should start with '# '",
+          "line": 54,
+          "evidence": ""
+        }
+      ],
+      "metrics": {},
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "docstrings",
+      "findings": [
+        {
+          "rule_id": "DOCSTRING_MISSING",
+          "severity": "warning",
+          "path": "00temp/wind_composite/src/wind_composite.py:gust_factor",
+          "message": "公开 function 缺少 docstring",
+          "line": 31,
+          "evidence": ""
+        }
+      ],
+      "metrics": {
+        "public_api_total": 14,
+        "missing_docstring": 1
+      },
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "dependencies",
+      "findings": [
+        {
+          "rule_id": "DEP_DUPLICATE_DECLARED",
+          "severity": "info",
+          "path": "00temp/wind_composite/requirements.txt",
+          "message": "以下依赖在多处声明，建议各自只保留一处：`meteva_base`（00temp/wind_composite/pyproject.toml、00temp/wind_composite/requirements.txt:3）；`numpy`（00temp/wind_composite/pyproject.toml、00temp/wind_composite/requirements.txt:1）；`xarray`（00temp/wind_composite/pyproject.toml、00temp/wind_composite/requirements.txt:2）",
+          "line": 3,
+          "evidence": ""
+        },
+        {
+          "rule_id": "DEP_UNDECLARED",
+          "severity": "warning",
+          "path": "00temp/wind_composite/cli/run_wind_composite.py",
+          "message": "运行时依赖 `netCDF4` 未在依赖清单中声明",
+          "line": 10,
+          "evidence": ""
+        }
+      ],
+      "metrics": {
+        "manifests": [
+          "00temp/wind_composite/requirements.txt",
+          "00temp/wind_composite/pyproject.toml"
+        ],
+        "declared_count": 3,
+        "unconstrained": false,
+        "python_requires": [
+          ">=3.10"
+        ],
+        "python_version_files": [],
+        "third_party_imports": [
+          "meteva_base",
+          "netCDF4",
+          "numpy",
+          "pytest",
+          "xarray"
+        ],
+        "repo_internal_imports": [],
+        "undeclared": [
+          "netCDF4"
+        ],
+        "undeclared_uncertain": false,
+        "unused_declared": [],
+        "conflicts": [],
+        "marker_splits": []
+      },
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "meb_grid",
+      "findings": [
+        {
+          "rule_id": "MEB_GRID_OPTIONAL_INPUT",
+          "severity": "info",
+          "path": "00temp/wind_composite/src/wind_composite.py",
+          "message": "入口同时接受裸数组等非 meb 类型（00temp/wind_composite/src/wind_composite.py:ComputeWindDirection.process）：并非强制 meb 数据格式，请确认是否符合规范",
+          "line": null,
+          "evidence": ""
+        },
+        {
+          "rule_id": "MEB_GRID_SIGNAL_OK",
+          "severity": "info",
+          "path": "00temp/wind_composite/src",
+          "message": "入参出参符合 meb 数据格式，看着是网格；依据：注解 ['DataArray']；接口 ['check_griddata', 'checkout_griddata', 'read_griddata_from_nc', 'rebuild_griddata']；导入 ['meb']；时空坐标 6/6；网格 attrs 6/6；源码根外证据来自 00temp/wind_composite/cli/run_wind_composite.py",
+          "line": null,
+          "evidence": "static heuristic"
+        }
+      ],
+      "metrics": {
+        "meb_grid_required": true,
+        "io_kind": "meb",
+        "shape_hint": "网格",
+        "meb_imports": [
+          "meb"
+        ],
+        "meb_apis_seen": [
+          "check_griddata",
+          "checkout_griddata",
+          "read_griddata_from_nc",
+          "rebuild_griddata"
+        ],
+        "grid_annotations": [
+          "DataArray"
+        ],
+        "station_annotations": [],
+        "grid_dim_hits": "6/6",
+        "grid_attr_hits": "6/6",
+        "station_column_hits": "5/6",
+        "name_hints": [],
+        "process_total": 2,
+        "process_entries": [
+          {
+            "where": "00temp/wind_composite/src/wind_composite.py:ComputeWindSpeed.process",
+            "verdict": "meb",
+            "reason": "入参/返回注解含 ['DataArray']",
+            "line": "42"
+          },
+          {
+            "where": "00temp/wind_composite/src/wind_composite.py:ComputeWindDirection.process",
+            "verdict": "meb",
+            "reason": "入参/返回注解含 ['DataArray']",
+            "line": "68"
+          }
+        ],
+        "accepts_plain_array": [
+          "00temp/wind_composite/src/wind_composite.py:ComputeWindDirection.process"
+        ],
+        "evidence_outside_src": [
+          "00temp/wind_composite/cli/run_wind_composite.py"
+        ]
+      },
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "execution",
+      "findings": [
+        {
+          "rule_id": "EXEC_PYTEST_OK",
+          "severity": "info",
+          "path": "00temp/wind_composite/test",
+          "message": "pytest 通过（1 个测试文件，5.3s）",
+          "line": null,
+          "evidence": ""
+        }
+      ],
+      "metrics": {
+        "runs": [
+          {
+            "kind": "pytest",
+            "command": [
+              "C:\\Users\\38144\\AppData\\Local\\Temp\\local-review-venv-4pftota8\\Scripts\\python.exe",
+              "-m",
+              "pytest",
+              "D:\\workspace\\test\\00temp\\wind_composite\\test",
+              "-q",
+              "--tb=short",
+              "-p",
+              "no:cacheprovider"
+            ],
+            "exit_code": 0,
+            "elapsed_sec": 5.31,
+            "log_tail": ":\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:224: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.\n    _MAPRESULT_RESULTMAPENTRY = _descriptor.Descriptor(\n\n..\\..\\..\\..\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:268\n  D:\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:268: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.\n    _descriptor.FieldDescriptor(\n\n..\\..\\..\\..\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:275\n  D:\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:275: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.\n    _descriptor.FieldDescriptor(\n\n..\\..\\..\\..\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:282\n  D:\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:282: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.\n    _descriptor.FieldDescriptor(\n\n..\\..\\..\\..\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:261\n  D:\\anaconda3\\Lib\\site-packages\\meteva_base\\io\\DataBlock_pb2.py:261: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.\n    _MAPRESULT = _descriptor.Descriptor(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n6 passed, 31 warnings in 3.96s\n"
+          }
+        ],
+        "venv": "C:\\Users\\38144\\AppData\\Local\\Temp\\local-review-venv-4pftota8",
+        "python": "C:\\Users\\38144\\AppData\\Local\\Temp\\local-review-venv-4pftota8\\Scripts\\python.exe",
+        "venv_reused": false,
+        "site_packages": "inherited",
+        "base_python": "D:\\anaconda3\\python.exe",
+        "requirements": "D:\\workspace\\test\\00temp\\wind_composite\\requirements.txt",
+        "required_libs": {
+          "pytest": "present",
+          "numpy": "present",
+          "meteva_base": "present"
+        },
+        "env": {
+          "python": "3.13.9",
+          "platform": "Windows-11-10.0.26200-SP0",
+          "pytest": "8.4.2",
+          "libs": {
+            "numpy": "2.3.5",
+            "meteva_base": "0.3.0.3",
+            "pandas": "2.3.3",
+            "xarray": "2025.10.1",
+            "scipy": "1.16.3",
+            "matplotlib": "3.10.6",
+            "netCDF4": "1.7.2"
+          }
+        },
+        "venv_removed": true,
+        "venv_disposition": "removed"
+      },
+      "skipped": false,
+      "skip_reason": ""
+    }
+  ],
+  "llm": {
+    "risk_level": "medium",
+    "overview": "算法核心逻辑正确，但 `ComputeWindDirection.process` 存在严重的格式合规性缺陷：它同时接受 meb 网格和裸 numpy 数组，且在接收裸数组时直接返回裸数组，导致输出不再是 meb 标准网格。这违反了 meb 数据格式的强制性要求，可能导致下游依赖该格式的程序崩溃或产生错误结果。此外，CLI 中缺少对 `netCDF4` 的依赖声明。",
+    "meb_verdict": {
+      "verdict": "partial",
+      "input": "入参符合 meb 规范。`ComputeWindSpeed` 强制校验 meb 格式；`ComputeWindDirection` 虽允许传入非 meb 类型（如 np.ndarray），但在内部通过 isinstance 判断处理，且静态检查确认其有 meb 输入路径。",
+      "output": "出参不符合 meb 规范。`ComputeWindSpeed` 正确返回 meb 网格；但 `ComputeWindDirection.process` 在接收到非 meb 输入（np.ndarray）时，直接返回计算后的 np.ndarray，未调用 `rebuild_griddata` 进行格式化，导致输出退化为裸数组。",
+      "issues": [
+        "`ComputeWindDirection.process` 兼容裸数组输入并直接返回裸数组，破坏了 meb 输出格式的一致性。当输入为 np.ndarray 时，返回值也是 np.ndarray，缺失 member、level 等维度信息及 units 等属性。"
+      ],
+      "basis": "src/wind_composite.py:68-82"
+    },
+    "findings": [
+      {
+        "severity": "high",
+        "category": "semantics",
+        "path": "00temp/wind_composite/src/wind_composite.py:ComputeWindDirection.process",
+        "title": "输出格式不一致：部分路径返回裸数组而非 meb 网格",
+        "detail": "根据 meb 规范，process 方法的返回值必须为标准 meb 网格数据（DataArray）。当前代码在 `ComputeWindDirection.process` 中，若检测到输入为 `xr.DataArray` 则正常处理并返回 meb 网格；但若输入为 `np.ndarray`（注释称兼容早期调用方），则直接返回 `wind_direction` 的计算结果（np.ndarray）。这导致同一接口的输出类型不固定，极易引发下游代码的类型错误或属性访问异常。",
+        "evidence": "src/wind_composite.py:79-81: `return wind_direction(np.asarray(u), np.asarray(v))` 直接返回 ndarray"
+      },
+      {
+        "severity": "medium",
+        "category": "other",
+        "path": "00temp/wind_composite/cli/run_wind_composite.py",
+        "title": "运行时依赖 netCDF4 未在清单中声明",
+        "detail": "CLI 脚本显式 import 了 `netCDF4` 模块用于打印版本信息，但该库未在 `requirements.txt` 或 `pyproject.toml` 中声明。虽然 pytest 环境可能因其他依赖间接安装了它，但这属于不规范做法，可能导致在新环境中运行 CLI 时报错。",
+        "evidence": "cli/run_wind_composite.py:10: `import netCDF4`; dependencies section shows undeclared: ['netCDF4']"
+      },
+      {
+        "severity": "low",
+        "category": "docs",
+        "path": "00temp/wind_composite/src/wind_composite.py:gust_factor",
+        "title": "公开函数缺少 docstring",
+        "detail": "静态检查指出 `gust_factor` 函数缺少文档字符串。虽然该函数目前看似未被主流程直接调用（仅作为辅助函数存在），但作为公开 API 的一部分，缺乏说明不利于维护。",
+        "evidence": "static docstrings check finding"
+      }
+    ],
+    "markdown_body": "## 改进建议\n\n### 1. 修复 `ComputeWindDirection` 的输出格式问题（关键）\n\n**问题**：`ComputeWindDirection.process` 为了兼容旧代码，允许传入 `np.ndarray` 并直接返回 `np.ndarray`。这违背了 meb 插件接口契约。\n\n**建议方案**：\n- **方案 A（推荐）**：移除对裸数组的兼容，强制要求所有调用方传入 meb 网格。如果确实需要支持裸数组，应在入口处将其包装为 meb 网格（例如赋予默认坐标和属性），或者明确抛出 TypeError 提示用户升级调用方式。\n- **方案 B**：如果必须保留兼容性，应确保无论输入何种格式，输出都必须是 meb 网格。对于裸数组输入，需构造一个临时的 meb 模板或使用 `rebuild_griddata` 的变体来生成带有基本属性的 DataArray，即使这些属性可能不完整，也不能直接返回裸数组。\n\n### 2. 补充依赖声明\n\n在 `requirements.txt` 或 `pyproject.toml` 中添加 `netCDF4`，以确保 CLI 环境的完整性。\n\n### 3. 完善文档\n\n为 `gust_factor` 函数添加 docstring，说明其用途及参数含义。",
+    "skipped": false,
+    "model": "qwen3.7-flash-2026-07-15",
+    "llm_config_path": "D:\\workspace\\test\\local_review\\local_review.llm.toml"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "warning_count": 6
+  }
+}

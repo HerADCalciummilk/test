@@ -2,6 +2,13 @@
 l1-review.json
 l1-review-comment.md
 l2-review.json
+local-review-report.md
+local-review-report.json
+local-review-artifacts/
+.local_review_venv/
+# LLM 配置含密钥；默认放 local_review/ 下，写成通配以防放到别处
+**/local_review.llm.toml
+**/.local_review.llm.toml
 l2-review-comment.md
 # 兼容旧文件名
 review.json
