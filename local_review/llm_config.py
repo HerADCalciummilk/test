@@ -9,8 +9,8 @@ from .package import read_text
 
 # 自动查找的文件名（只在本包目录下找，见 PACKAGE_CONFIG_DIR）
 DEFAULT_LLM_CONFIG_NAMES = (
-    "local_review.llm.toml",
-    ".local_review.llm.toml",
+    "llm.toml",
+    ".llm.toml",
 )
 # 配置与工具放在一起：仓库根文件多不便辨认，且本目录不再有其它 .toml
 PACKAGE_CONFIG_DIR = Path(__file__).resolve().parent

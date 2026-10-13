@@ -219,7 +219,7 @@ def run_llm_or_skip(
             "skipped": True,
             "skip_reason": (
                 "未配置 API Key（请设环境变量 OPENAI_API_KEY，"
-                "或在 local_review/ 下放置 local_review.llm.toml / 使用 --llm-config）"
+                "或在 local_review/ 下放置 llm.toml / 使用 --llm-config）"
             ),
             "model": "",
             "llm_config_path": cfg.get("config_path", ""),
