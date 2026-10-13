@@ -1,6 +1,7 @@
 # L1 / L2 本地报告与评论（勿提交）
 l1-review.json
 l1-review-comment.md
+l2-review-comment.md
 l2-review.json
 local-review-report.md
 local-review-report.json
@@ -10,7 +11,6 @@ local-review-artifacts/
 local_review/llm.toml
 local_review/.llm.toml
 **/llm.toml
-l2-review-comment.md
 # 兼容旧文件名
 review.json
 review-comment.md
@@ -18,5 +18,5 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
-# 分享用压缩包（勿提交）
+# 压缩包
 *.zip
