@@ -16,6 +16,13 @@ review-comment.md
 __pycache__/
 *.py[cod]
 .pytest_cache/
+<<<<<<< Updated upstream
 
 # 分享用压缩包（勿提交）
 local_review.zip
+=======
+# 压缩包
+*.zip
+# 配置文件
+**/llm.toml
+>>>>>>> Stashed changes
