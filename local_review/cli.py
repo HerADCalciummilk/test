@@ -101,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--llm-config",
         type=Path,
         default=None,
-        help="LLM 配置文件路径（默认查找仓库根 local_review.llm.toml）",
+        help="LLM 配置文件路径（默认查找 local_review/llm.toml）",
     )
     p.add_argument(
         "--fail-on-warning",

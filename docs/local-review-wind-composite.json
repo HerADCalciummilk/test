@@ -304,7 +304,7 @@
     "markdown_body": "## 改进建议\n\n### 1. 修复 `ComputeWindDirection` 的输出格式问题（关键）\n\n**问题**：`ComputeWindDirection.process` 为了兼容旧代码，允许传入 `np.ndarray` 并直接返回 `np.ndarray`。这违背了 meb 插件接口契约。\n\n**建议方案**：\n- **方案 A（推荐）**：移除对裸数组的兼容，强制要求所有调用方传入 meb 网格。如果确实需要支持裸数组，应在入口处将其包装为 meb 网格（例如赋予默认坐标和属性），或者明确抛出 TypeError 提示用户升级调用方式。\n- **方案 B**：如果必须保留兼容性，应确保无论输入何种格式，输出都必须是 meb 网格。对于裸数组输入，需构造一个临时的 meb 模板或使用 `rebuild_griddata` 的变体来生成带有基本属性的 DataArray，即使这些属性可能不完整，也不能直接返回裸数组。\n\n### 2. 补充依赖声明\n\n在 `requirements.txt` 或 `pyproject.toml` 中添加 `netCDF4`，以确保 CLI 环境的完整性。\n\n### 3. 完善文档\n\n为 `gust_factor` 函数添加 docstring，说明其用途及参数含义。",
     "skipped": false,
     "model": "qwen3.7-flash-2026-07-15",
-    "llm_config_path": "D:\\workspace\\test\\local_review\\local_review.llm.toml"
+    "llm_config_path": "D:\\workspace\\test\\local_review\\llm.toml"
   },
   "summary": {
     "blocker_count": 0,

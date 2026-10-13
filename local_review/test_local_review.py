@@ -260,11 +260,11 @@ class LocalReviewTests(unittest.TestCase):
             root = Path(tmp)
             pkg_dir = root / "pkgdir"
             pkg_dir.mkdir()
-            (pkg_dir / "local_review.llm.toml").write_text(
+            (pkg_dir / "llm.toml").write_text(
                 'api_key = "sk-pkg"\nmodel = "m-pkg"\n', encoding="utf-8"
             )
             # 仓库根也放一份，应被忽略
-            (root / "local_review.llm.toml").write_text(
+            (root / "llm.toml").write_text(
                 'api_key = "sk-root"\n', encoding="utf-8"
             )
             with mock.patch.object(llm_config, "PACKAGE_CONFIG_DIR", pkg_dir), \
@@ -281,7 +281,7 @@ class LocalReviewTests(unittest.TestCase):
             root = Path(tmp)
             pkg_dir = root / "pkgdir"
             pkg_dir.mkdir()
-            (pkg_dir / "local_review.llm.toml").write_text(
+            (pkg_dir / "llm.toml").write_text(
                 'api_key = "sk-pkg"\n', encoding="utf-8"
             )
             (root / "mine.toml").write_text('api_key = "sk-mine"\n', encoding="utf-8")

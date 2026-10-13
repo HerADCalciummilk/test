@@ -6,9 +6,9 @@ local-review-report.md
 local-review-report.json
 local-review-artifacts/
 .local_review_venv/
-# LLM 配置含密钥；默认放 local_review/ 下，写成通配以防放到别处
-**/local_review.llm.toml
-**/.local_review.llm.toml
+# LLM 配置含密钥；默认放 local_review/ 下
+local_review/llm.toml
+local_review/.llm.toml
 l2-review-comment.md
 # 兼容旧文件名
 review.json
@@ -16,3 +16,6 @@ review-comment.md
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# 分享用压缩包（勿提交）
+local_review.zip
