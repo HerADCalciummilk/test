@@ -38,11 +38,11 @@ cli|test|docs|nbs|resource/<kind>/<pkg>/   # 配套（与 NIMM 同级）
 
 ```text
 .github/scripts/review/     # L1 / L2（GitHub CI）
-local_review/               # 本地一键检查（独立，不复用上一行）
 .github/scripts/release/    # 需求 Issue 进展同步：issue_sync.py
 .github/ISSUE_TEMPLATE/     # 算法需求模板（须选 Milestone）
 .github/pull_request_template.md
 .cursor/skills/algo-release/  # 发版 Skill（人触发 gh release create）
+local_review/               # 本地一键检查（独立目录）
 ```
 
 ## 本地命令
