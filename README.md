@@ -17,7 +17,7 @@ Pull Request / 手动触发
        └─ 通过 → L2 LLM review（使用 L1 Artifact 中的 l1-review.json）
 ```
 
-分支保护在 GitHub **Settings → 分支规则** 里勾选必过的 Checks，不是脚本开关。建议勾 **`L1 machine review`**；**`L2 LLM review`** 依赖 API Key，一般不要勾成必过。
+GitHub 侧需配置 Actions Secrets 与分支保护规则，说明见 [算法审核规范 §1.1](docs/算法审核规范.md)。建议将 **`L1 machine review`** 设为合并前必过检查；**`L2 LLM review`** 依赖 API，通常不必列为必过。
 
 需求跟踪：先开 Issue（须选 Milestone，模板见 `.github/ISSUE_TEMPLATE/`），PR 描述写 `Fixes #`。合入不自动发版。
 
