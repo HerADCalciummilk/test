@@ -26,4 +26,4 @@ from orographic_temperature_downscaling.cli import main  # noqa: E402
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

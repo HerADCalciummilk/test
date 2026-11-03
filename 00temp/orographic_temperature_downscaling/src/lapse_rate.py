@@ -479,11 +479,10 @@ class LapseRate(BasePlugin):
             )
             land_mask_values = mask_template.values.astype(bool, copy=False)
             if temp_template is not None:
-                # 掩码静态，只校验空间坐标
                 if not meb.checkout_griddata_same_coords(
-                    [temp_template, mask_template], is_time_match=False
+                    [temp_template, mask_template], is_time_match=True
                 ):
-                    raise ValueError("陆地-海洋掩膜与温度场的空间坐标不一致")
+                    raise ValueError("陆地-海洋掩膜与温度场的空间/时效坐标不一致")
         else:
             land_mask_values = land_sea_mask.astype(bool, copy=False)
 

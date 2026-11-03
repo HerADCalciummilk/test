@@ -2,24 +2,57 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""应用层结递减率进行温度地形订正的 CLI 示例。"""
+"""应用层结递减率进行温度地形订正的命令行。
+
+在本包目录执行::
+
+    python -m cli apply-lapse --temperature-path PATH --lapse-rate-path PATH --source-orography-path PATH --target-orography-path PATH
+    python cli/anc_lapse_rate.py --temperature-path PATH --lapse-rate-path PATH --source-orography-path PATH --target-orography-path PATH
+
+Python::
+
+    from cli.anc_lapse_rate import AncLapseRateCli
+    AncLapseRateCli.call(
+        temperature_path="PATH",
+        lapse_rate_path="PATH",
+        source_orography_path="PATH",
+        target_orography_path="PATH",
+    )
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
+
+
+def _bootstrap_paths() -> None:
+    root = Path(__file__).resolve().parent.parent
+    parent = root.parent
+    root_s = str(root)
+    parent_s = str(parent)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+    if parent_s not in sys.path:
+        sys.path.append(parent_s)
+
+
+_bootstrap_paths()
 
 import numpy as np
 import xarray as xr
 import meteva_base as meb
+
+from utils.cli_base import CliBase
 
 def process(
     temperature_path: str,
     lapse_rate_path: str,
     source_orography_path: str,
     target_orography_path: str,
-    output_path: Optional[str] = None,
-) -> Union[xr.DataArray, np.ndarray]:
+    output_path: Optional[str] = None, config=None) -> Union[xr.DataArray, np.ndarray]:
     """将已计算的层结递减率应用到温度场。
 
     参数
@@ -74,25 +107,69 @@ def process(
     return result
 
 
-def main() -> None:
-    """定义输入/输出路径并调用 ``process``（默认 ``resource/`` 样例）。"""
-    import sys
+def _omit_none(kwargs):
+    return {key: value for key, value in kwargs.items() if value is not None}
 
-    _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-    repo_root = str(_PACKAGE_ROOT.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
 
-    input_dir = _PACKAGE_ROOT / "resource" / "cli_input"
-    output_dir = _PACKAGE_ROOT / "resource" / "cli_output"
-    process(
-        str(input_dir / "ukvx_temperature.nc"),
-        str(input_dir / "ukvx_lapse_rate.nc"),
-        str(input_dir / "anc_ukvx_orography.nc"),
-        str(input_dir / "highres_orog.nc"),
-        output_path=str(output_dir / "cli_apply_lapse_rate_result.nc"),
+_CONFIG_HELP = (
+    "运行配置文件，传给 process 的 config。"
+    "省略则为 None，process 使用各参数自身的默认值。"
+)
+
+
+class AncLapseRateCli(CliBase):
+    """应用层结递减率订正温度。``run`` 调用 ``process``。"""
+
+    prog = "python cli/anc_lapse_rate.py"
+    description = "将已计算的层结递减率应用到温度场。"
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python -m cli apply-lapse --help\n"
+        "  python -m cli apply-lapse --temperature-path PATH --lapse-rate-path PATH "
+        "--source-orography-path PATH --target-orography-path PATH --output-path PATH\n"
+        "  python cli/anc_lapse_rate.py --temperature-path PATH --lapse-rate-path PATH "
+        "--source-orography-path PATH --target-orography-path PATH\n"
     )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--temperature-path", required=True, metavar="PATH", help="输入温度场 nc。")
+        parser.add_argument("--lapse-rate-path", required=True, metavar="PATH", help="层结递减率场 nc，单位通常为 K m-1。")
+        parser.add_argument("--source-orography-path", required=True, metavar="PATH", help="源地形高度场 nc。")
+        parser.add_argument("--target-orography-path", required=True, metavar="PATH", help="目标地形高度场 nc。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="输出 nc。省略则不写文件。")
+        parser.add_argument("--config", default=None, metavar="PATH", help=_CONFIG_HELP)
+
+    def run(
+        self,
+        temperature_path,
+        lapse_rate_path,
+        source_orography_path,
+        target_orography_path,
+        output_path=None,
+        config=None,
+    ) -> int:
+        process(
+            **_omit_none(
+                dict(
+                    temperature_path=temperature_path,
+                    lapse_rate_path=lapse_rate_path,
+                    source_orography_path=source_orography_path,
+                    target_orography_path=target_orography_path,
+                    output_path=output_path,
+                    config=config,
+                )
+            )
+        )
+        return 0
+
+
+def anc_lapse_rate_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。``python -m cli apply-lapse`` 与直接运行本文件都进这里。"""
+    return AncLapseRateCli().main(argv)
+
+
+main = anc_lapse_rate_cli
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(anc_lapse_rate_cli())

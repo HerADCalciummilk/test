@@ -29,10 +29,10 @@ _COMMANDS: Mapping[str, Tuple[str, str]] = {
 
 def _usage() -> str:
     lines = [
-        "orographic_temperature_downscaling 含 CLI 示例，请指定子命令：",
+        "orographic_temperature_downscaling 命令行，请指定子命令：",
         "",
         "用法:",
-        "  python -m cli <subcommand>",
+        "  python -m cli <subcommand> [--help] [路径参数...]",
         "",
         "子命令:",
     ]
@@ -41,23 +41,33 @@ def _usage() -> str:
     lines.extend(
         [
             "",
-            "也可直接运行脚本（在脚本 main 中改路径）:",
-            *(f"  python cli/{mod}.py" for mod, _ in _COMMANDS.values()),
+            "路径在命令行传入。查看全部参数：",
+            "  python -m cli lapse-rate --help",
+            "  python -m cli apply-lapse --help",
+            "  python cli/dsc_temp_lapse_rate.py --help",
+            "  python cli/anc_lapse_rate.py --help",
+            "",
+            "示例:",
+            "  python -m cli lapse-rate --temperature-path PATH [--orography-path PATH] [--land-sea-mask-path PATH] [--output-path PATH]",
+            "  python -m cli apply-lapse --temperature-path PATH --lapse-rate-path PATH --source-orography-path PATH --target-orography-path PATH [--output-path PATH] [--config PATH]",
+            "  python cli/anc_lapse_rate.py --temperature-path PATH --lapse-rate-path PATH --source-orography-path PATH --target-orography-path PATH",
         ]
     )
     return "\n".join(lines)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:
-    """按子命令转发到对应脚本的 ``main``；无参时打印用法。"""
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """按子命令把后续参数转给对应入口；无参时打印用法。"""
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in ("-h", "--help"):
-        raise SystemExit(_usage())
+        print(_usage())
+        return 0
 
     cmd = args[0]
     if cmd not in _COMMANDS:
-        raise SystemExit(f"未知子命令: {cmd}\n\n{_usage()}")
+        print(f"未知子命令: {cmd}\n\n{_usage()}", file=sys.stderr)
+        return 2
 
     mod_name, _ = _COMMANDS[cmd]
     module = importlib.import_module(f".{mod_name}", __package__)
-    module.main()
+    return module.main(args[1:])

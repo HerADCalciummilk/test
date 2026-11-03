@@ -10,11 +10,14 @@
 
 1. 降水低于有雨阈值的格点不改，避免把干点加成雨。
 2. 先对增强差做公里尺度平滑，削弱 1 km 地形带来的细碎斑点。
-3. 仅当平滑后增强差足够大、且粗格块内增强差与降水相关足够高时才调整。
-4. 在预报降水尺度的粗格块内，只对入选格点减去块内平均，使块内调整量之和为 0。
-5. 若相加后出现负降水，截到 0，并把多出来的水量从该块内仍可调的格点按当前降水量比例扣回。
+3. 在预报降水尺度的粗格块内，只对有雨格点减去块内平均，使块内调整量之和为 0。
+4. 若相加后出现负降水，截到 0，并把多出来的水量从该块内仍有雨的格点按当前降水量比例扣回。
 
 因此每个粗格块内有限值格点的降水之和与调整前一致。
+
+效果说明（当前个例检验）
+----------------
+相对「先减后加」空报膨胀更轻，但仍是**负订正**：订正后 RMSE 高于订正前。
 """
 
 from __future__ import annotations
@@ -42,6 +45,8 @@ _MEB_DIMS = ("member", "level", "time", "dtime", "lat", "lon")
 class RedistributeOrographicEnhancement(BasePlugin):
     """用增强场之差重分配已有降水，按粗格块保持总量。
 
+    当前为负订正方案：可抑制干区加雨，但订正后 RMSE 仍常高于订正前。
+
     参数
     ----------
     wet_threshold_mmh : float, 默认 0.1
@@ -55,11 +60,6 @@ class RedistributeOrographicEnhancement(BasePlugin):
         网格距，单位 km。缺省时由降水坐标估算；无坐标的数组按 1 km。
     clip_iterations : int, 默认 2
         负降水截断后按比例扣回的次数。
-    min_delta_mmh : float, 默认 0.05
-        平滑后增强差绝对值下限，单位 mm/h。低于该值的格点不调。``0`` 表示关闭。
-    min_block_corr : float or None, 默认 0.2
-        粗格块内平滑增强差与降水的相关系数下限。块内样本过少或标准差为 0 时不调。
-        ``None`` 表示关闭相关门槛。
     window_km : float, optional
         兼容旧参数名，等同 ``smooth_km``。二者同时给出时以 ``smooth_km`` 为准。
     """
@@ -71,8 +71,6 @@ class RedistributeOrographicEnhancement(BasePlugin):
         block_deg: float = 0.1,
         grid_spacing_km: Optional[float] = None,
         clip_iterations: int = 2,
-        min_delta_mmh: float = 0.05,
-        min_block_corr: Optional[float] = 0.2,
         window_km: Optional[float] = None,
     ) -> None:
         if wet_threshold_mmh < 0:
@@ -90,18 +88,12 @@ class RedistributeOrographicEnhancement(BasePlugin):
             raise ValueError(f"grid_spacing_km 须为正，收到 {grid_spacing_km}")
         if clip_iterations < 0:
             raise ValueError(f"clip_iterations 须非负，收到 {clip_iterations}")
-        if min_delta_mmh < 0:
-            raise ValueError(f"min_delta_mmh 须非负，收到 {min_delta_mmh}")
-        if min_block_corr is not None and not (-1.0 <= float(min_block_corr) <= 1.0):
-            raise ValueError(f"min_block_corr 须在 [-1, 1] 或为 None，收到 {min_block_corr}")
         self.wet_threshold_mmh = float(wet_threshold_mmh)
         self.smooth_km = float(smooth_km)
         self.window_km = self.smooth_km
         self.block_deg = float(block_deg)
         self.grid_spacing_km = None if grid_spacing_km is None else float(grid_spacing_km)
         self.clip_iterations = int(clip_iterations)
-        self.min_delta_mmh = float(min_delta_mmh)
-        self.min_block_corr = None if min_block_corr is None else float(min_block_corr)
 
     def __repr__(self) -> str:
         return (
@@ -110,9 +102,7 @@ class RedistributeOrographicEnhancement(BasePlugin):
             f"smooth_km={self.smooth_km}, "
             f"block_deg={self.block_deg}, "
             f"grid_spacing_km={self.grid_spacing_km}, "
-            f"clip_iterations={self.clip_iterations}, "
-            f"min_delta_mmh={self.min_delta_mmh}, "
-            f"min_block_corr={self.min_block_corr}>"
+            f"clip_iterations={self.clip_iterations}>"
         )
 
     def process(
@@ -155,7 +145,6 @@ class RedistributeOrographicEnhancement(BasePlugin):
         high_values = _values_in_precip_units(oe_high, high_values, precip_units)
         model_values = _values_in_precip_units(oe_model, model_values, precip_units)
         threshold = _threshold_in_units(precip_units, self.wet_threshold_mmh)
-        min_delta = _threshold_in_units(precip_units, self.min_delta_mmh)
         spacing_km = self.grid_spacing_km
         if spacing_km is None:
             spacing_km = _spacing_km(precip_plane)
@@ -168,8 +157,6 @@ class RedistributeOrographicEnhancement(BasePlugin):
             block_deg=self.block_deg,
             grid_spacing_km=spacing_km,
             clip_iterations=self.clip_iterations,
-            min_delta=min_delta,
-            min_block_corr=self.min_block_corr,
             precip_plane=precip_plane,
         )
         return _restore_like_precip(precip, corrected, precip_units)
@@ -185,35 +172,24 @@ def redistribute_precipitation(
     block_deg: float,
     grid_spacing_km: float,
     clip_iterations: int,
-    min_delta: float = 0.0,
-    min_block_corr: Optional[float] = None,
     precip_plane: Optional[xr.DataArray] = None,
 ) -> np.ndarray:
     """对二维降水场按粗格块做零和调整，返回 float32 结果。"""
     precip64 = np.asarray(precip, dtype=np.float64)
     difference = np.asarray(oe_high, dtype=np.float64) - np.asarray(oe_model, dtype=np.float64)
     finite = np.isfinite(precip64)
-    wet = finite & (precip64 >= wet_threshold) & np.isfinite(difference)
-    adjustable = np.zeros(precip64.shape, dtype=bool)
+    adjustable = finite & (precip64 >= wet_threshold) & np.isfinite(difference)
     adjustment = np.zeros(precip64.shape, dtype=np.float64)
-    if np.any(wet):
+    if np.any(adjustable):
         radius = int(round(smooth_km / grid_spacing_km))
         if radius >= 1:
             smoothed = _masked_local_mean(difference, np.isfinite(difference), radius)
         else:
             smoothed = np.array(difference, dtype=np.float64, copy=True)
         block_id = _coarse_block_id(precip64.shape, block_deg, grid_spacing_km, precip_plane)
-        candidate = wet & np.isfinite(smoothed)
-        if min_delta > 0:
-            candidate &= np.abs(smoothed) >= min_delta
-        if min_block_corr is not None:
-            corr_ok = _block_corr_ok(
-                smoothed, precip64, block_id, wet & np.isfinite(smoothed), min_block_corr
-            )
-            candidate &= corr_ok[block_id]
-        adjustable = candidate
-        if np.any(adjustable):
-            adjustment[adjustable] = _block_demean(smoothed[adjustable], block_id[adjustable])
+        usable = adjustable & np.isfinite(smoothed)
+        adjustment[usable] = _block_demean(smoothed[usable], block_id[usable])
+        adjustable = usable
 
     updated = np.where(finite, precip64 + adjustment, np.nan)
     if np.any(adjustable):
@@ -264,50 +240,6 @@ def _block_demean(values: np.ndarray, block_id: np.ndarray) -> np.ndarray:
     means = np.zeros(n_blocks, dtype=np.float64)
     np.divide(sums, counts, out=means, where=counts > 0)
     return values - means[block_id]
-
-
-def _block_corr_ok(
-    delta: np.ndarray,
-    precip: np.ndarray,
-    block_id: np.ndarray,
-    mask: np.ndarray,
-    min_corr: float,
-    min_count: int = 5,
-) -> np.ndarray:
-    """返回长度为块数的布尔数组：块内 delta 与降水相关是否达到门槛。"""
-    n_blocks = int(block_id.max()) + 1
-    ok = np.zeros(n_blocks, dtype=bool)
-    if not np.any(mask):
-        return ok
-    ids = block_id[mask]
-    dv = np.asarray(delta[mask], dtype=np.float64)
-    pv = np.asarray(precip[mask], dtype=np.float64)
-    count = np.bincount(ids, minlength=n_blocks)
-    sum_d = np.bincount(ids, weights=dv, minlength=n_blocks)
-    sum_p = np.bincount(ids, weights=pv, minlength=n_blocks)
-    sum_dd = np.bincount(ids, weights=dv * dv, minlength=n_blocks)
-    sum_pp = np.bincount(ids, weights=pv * pv, minlength=n_blocks)
-    sum_dp = np.bincount(ids, weights=dv * pv, minlength=n_blocks)
-    enough = count >= min_count
-    mean_d = np.zeros(n_blocks, dtype=np.float64)
-    mean_p = np.zeros(n_blocks, dtype=np.float64)
-    np.divide(sum_d, count, out=mean_d, where=enough)
-    np.divide(sum_p, count, out=mean_p, where=enough)
-    cov = np.zeros(n_blocks, dtype=np.float64)
-    var_d = np.zeros(n_blocks, dtype=np.float64)
-    var_p = np.zeros(n_blocks, dtype=np.float64)
-    np.divide(sum_dp, count, out=cov, where=enough)
-    cov -= mean_d * mean_p
-    np.divide(sum_dd, count, out=var_d, where=enough)
-    var_d -= mean_d * mean_d
-    np.divide(sum_pp, count, out=var_p, where=enough)
-    var_p -= mean_p * mean_p
-    denom = np.sqrt(np.maximum(var_d, 0.0) * np.maximum(var_p, 0.0))
-    valid = enough & (denom > 0.0)
-    corr = np.full(n_blocks, np.nan, dtype=np.float64)
-    corr[valid] = cov[valid] / denom[valid]
-    ok[valid] = corr[valid] >= min_corr
-    return ok
 
 
 def _masked_local_mean(values: np.ndarray, mask: np.ndarray, radius: int) -> np.ndarray:

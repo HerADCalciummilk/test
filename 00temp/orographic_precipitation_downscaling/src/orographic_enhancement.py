@@ -544,10 +544,19 @@ class OrographicEnhancement(BasePlugin):
     ) -> Tuple[np.ndarray, np.ndarray]:
         """把块内回溯距离换成上游格点索引，并限制在全域范围内。"""
         _, n_chunk, _ = distance.shape
-        xpos, ypos = np.meshgrid(np.arange(n_cols), np.arange(y0, y0 + n_chunk))
+        xpos, ypos = np.meshgrid(
+            np.arange(n_cols, dtype=np.float32),
+            np.arange(y0, y0 + n_chunk, dtype=np.float32),
+        )
+        sin_b = np.broadcast_to(np.asarray(sin_wind_dir, dtype=np.float32), distance.shape)
+        cos_b = np.broadcast_to(np.asarray(cos_wind_dir, dtype=np.float32), distance.shape)
+        x_float = np.asarray(xpos - distance * sin_b, dtype=np.float32)
+        y_float = np.asarray(ypos - distance * cos_b, dtype=np.float32)
         finite = np.isfinite(distance)
-        x_source = np.around(np.where(finite, xpos - distance * sin_wind_dir, xpos)).astype(np.int32)
-        y_source = np.around(np.where(finite, ypos - distance * cos_wind_dir, ypos)).astype(np.int32)
+        x_float = np.where(finite, x_float, xpos)
+        y_float = np.where(finite, y_float, ypos)
+        x_source = np.rint(x_float).astype(np.int32)
+        y_source = np.rint(y_float).astype(np.int32)
         np.clip(x_source, 0, n_cols - 1, out=x_source)
         np.clip(y_source, 0, n_rows - 1, out=y_source)
         return x_source, y_source
@@ -602,10 +611,11 @@ class OrographicEnhancement(BasePlugin):
             value_weight = np.where(
                 finite & (var > 0),
                 np.exp((-0.5 * np.square(dist)) / var),
-                0.0,
-            )
+                np.float32(0.0),
+            ).astype(np.float32, copy=False)
             sum_of_weights[y0:y1] = np.sum(value_weight, axis=0)
-            weighted_values[y0:y1] = np.sum(source_values * value_weight, axis=0).astype(np.float32)
+            weighted_values[y0:y1] = np.sum(source_values * value_weight, axis=0)
+            del dist, x_source, y_source, source_values, value_weight, finite
         valid_mask = moving_mask & (sum_of_weights > 0)
         weighted_values[valid_mask] = self.efficiency_factor * (weighted_values[valid_mask] / sum_of_weights[valid_mask])
         return weighted_values.astype(np.float32)

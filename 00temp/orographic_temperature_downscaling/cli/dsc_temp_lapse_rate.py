@@ -2,16 +2,44 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""计算层结递减率的 CLI 示例。"""
+"""计算层结递减率的命令行。
+
+在本包目录执行::
+
+    python -m cli lapse-rate --temperature-path PATH
+    python cli/dsc_temp_lapse_rate.py --temperature-path PATH
+
+Python::
+
+    from cli.dsc_temp_lapse_rate import DscTempLapseRateCli
+    DscTempLapseRateCli.call(temperature_path="PATH", dry_adiabatic=True)
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
+
+def _bootstrap_paths() -> None:
+    root = Path(__file__).resolve().parent.parent
+    parent = root.parent
+    root_s = str(root)
+    parent_s = str(parent)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+    if parent_s not in sys.path:
+        sys.path.append(parent_s)
+
+
+_bootstrap_paths()
 
 import numpy as np
 import xarray as xr
 import meteva_base as meb
+
+from utils.cli_base import CliBase
 
 DALR = -0.0098  # # 干绝热递减率
 
@@ -44,8 +72,7 @@ def process(
     nbhood_radius: int = 7,
     max_lapse_rate: float = -3 * DALR,
     min_lapse_rate: float = DALR,
-    dry_adiabatic: bool = False,
-) -> xr.DataArray:
+    dry_adiabatic: bool = False, config=None) -> xr.DataArray:
     """计算温度层结递减率（K m-1）。
 
     参数
@@ -105,9 +132,8 @@ def process(
 
         if not meb.checkout_griddata_same_coords([temperature, orography], is_time_match=False):
             raise ValueError("地形高度场与温度场的坐标不一致")
-        # 海陆掩码为静态场，只校验空间坐标（不要求 time/dtime 与气温一致）
-        if not meb.checkout_griddata_same_coords([temperature, land_sea_mask], is_time_match=False):
-            raise ValueError("海陆掩码与温度场的空间坐标不一致")
+        if not meb.checkout_griddata_same_coords([temperature, land_sea_mask], is_time_match=True):
+            raise ValueError("海陆掩码与温度场的空间/时效坐标不一致")
 
         plugin = LapseRate(
             max_height_diff=max_height_diff,
@@ -129,24 +155,108 @@ def process(
     return result
 
 
-def main() -> None:
-    """定义输入/输出路径并调用 ``process``（默认 ``resource/`` 样例）。"""
-    import sys
+def _omit_none(kwargs):
+    return {key: value for key, value in kwargs.items() if value is not None}
 
-    _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-    repo_root = str(_PACKAGE_ROOT.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
 
-    input_dir = _PACKAGE_ROOT / "resource" / "cli_input"
-    output_dir = _PACKAGE_ROOT / "resource" / "cli_output"
-    process(
-        str(input_dir / "temperature_at_screen_level.nc"),
-        orography_path=str(input_dir / "ukvx_orography.nc"),
-        land_sea_mask_path=str(input_dir / "ukvx_landmask.nc"),
-        output_path=str(output_dir / "cli_lapse_rate_result.nc"),
+_CONFIG_HELP = (
+    "运行配置文件，传给 process 的 config。"
+    "省略则为 None，process 使用各参数自身的默认值。"
+)
+
+
+class DscTempLapseRateCli(CliBase):
+    """计算温度层结递减率。``run`` 调用 ``process``。"""
+
+    prog = "python cli/dsc_temp_lapse_rate.py"
+    description = (
+        "计算温度层结递减率（K m-1）。\n"
+        "未在命令行给出的可选项保持 process 的默认值。"
     )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python -m cli lapse-rate --help\n"
+        "  python -m cli lapse-rate --temperature-path PATH --orography-path PATH "
+        "--land-sea-mask-path PATH --output-path PATH\n"
+        "  python cli/dsc_temp_lapse_rate.py --temperature-path PATH --dry-adiabatic\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--temperature-path", required=True, metavar="PATH", help="气温输入场 nc。")
+        parser.add_argument("--orography-path", default=None, metavar="PATH", help="地形高度场 nc。省略则为 None。")
+        parser.add_argument("--land-sea-mask-path", default=None, metavar="PATH", help="海陆掩码 nc。省略则为 None。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="输出 nc。省略则不写文件。")
+        parser.add_argument(
+            "--max-height-diff",
+            type=float,
+            default=None,
+            help="邻域回归允许的最大高度差（m）。省略则使用 process 默认值 35。",
+        )
+        parser.add_argument(
+            "--nbhood-radius",
+            type=int,
+            default=None,
+            help="邻域半径（格点数）。省略则使用 process 默认值 7。",
+        )
+        parser.add_argument(
+            "--max-lapse-rate",
+            type=float,
+            default=None,
+            help="层结递减率上限（K m-1）。省略则使用 process 默认值 -3*DALR。",
+        )
+        parser.add_argument(
+            "--min-lapse-rate",
+            type=float,
+            default=None,
+            help="层结递减率下限（K m-1）。省略则使用 process 默认值 DALR。",
+        )
+        CliBase.add_optional_bool(
+            parser,
+            "--dry-adiabatic",
+            help_true="直接返回干绝热递减率场。",
+            help_false="按地形和海陆掩码估计真实递减率。省略则使用 process 默认值。",
+        )
+        parser.add_argument("--config", default=None, metavar="PATH", help=_CONFIG_HELP)
+
+    def run(
+        self,
+        temperature_path,
+        orography_path=None,
+        land_sea_mask_path=None,
+        output_path=None,
+        max_height_diff=None,
+        nbhood_radius=None,
+        max_lapse_rate=None,
+        min_lapse_rate=None,
+        dry_adiabatic=None,
+        config=None,
+    ) -> int:
+        process(
+            **_omit_none(
+                dict(
+                    temperature_path=temperature_path,
+                    orography_path=orography_path,
+                    land_sea_mask_path=land_sea_mask_path,
+                    output_path=output_path,
+                    max_height_diff=max_height_diff,
+                    nbhood_radius=nbhood_radius,
+                    max_lapse_rate=max_lapse_rate,
+                    min_lapse_rate=min_lapse_rate,
+                    dry_adiabatic=dry_adiabatic,
+                    config=config,
+                )
+            )
+        )
+        return 0
+
+
+def dsc_temp_lapse_rate_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。``python -m cli lapse-rate`` 与直接运行本文件都进这里。"""
+    return DscTempLapseRateCli().main(argv)
+
+
+main = dsc_temp_lapse_rate_cli
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(dsc_temp_lapse_rate_cli())
