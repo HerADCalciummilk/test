@@ -39,6 +39,7 @@ from utils.util_env import (
     build_glon_glat,
     get_cressman_params,
     get_resolved_paths,
+    set_main_ini,
 )
 
 
@@ -115,12 +116,68 @@ def process(
     glon=None,
     glat=None,
     domain=None,
+    log_file: str = None,
+    sta_type: str = None,
+    background_type: str = None,
+    grid_template_type: str = None,
+    config=None,
+):
+    """Cressman 插值入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
+    kwargs = dict(
+        sta_path=sta_path,
+        output_path=output_path,
+        background_path=background_path,
+        grid_template_path=grid_template_path,
+        r_list=r_list,
+        nearNum=nearNum,
+        outer_value=outer_value,
+        glon=glon,
+        glat=glat,
+        domain=domain,
+        log_file=log_file,
+        sta_type=sta_type,
+        background_type=background_type,
+        grid_template_type=grid_template_type,
+    )
+    if not config:
+        return _process_impl(**kwargs)
+    set_main_ini(config)
+    try:
+        return _process_impl(**kwargs)
+    finally:
+        set_main_ini(None)
+
+
+def _process_impl(
+    sta_path: str = None,
+    output_path: str = None,
+    background_path: str = None,
+    grid_template_path: str = None,
+    r_list=None,
+    nearNum: int = None,
+    outer_value=None,
+    glon=None,
+    glat=None,
+    domain=None,
+    log_file: str = None,
+    sta_type: str = None,
+    background_type: str = None,
+    grid_template_type: str = None,
 ):
     """
-    Cressman 插值可调度入口。未传参数从 ``resource/interp_sg_cressman.ini`` 读取。
+    Cressman 插值可调度入口。未传参数从 ``resource/conf.ini`` 读取。
     """
     paths = get_resolved_paths()
     params = get_cressman_params()
+
+    if log_file is not None:
+        paths["log_file_template"] = log_file
+    if sta_type is not None:
+        params["sta_type"] = sta_type
+    if background_type is not None:
+        params["background_type"] = background_type
+    if grid_template_type is not None:
+        params["grid_template_type"] = grid_template_type
 
     sta_path = sta_path or paths["sta_path"]
     output_path = output_path or paths["output_path"]

@@ -11,18 +11,22 @@ class ScdFusionPlugin:
 
     def __init__(self, config_path: str | Path | None = None) -> None:
         self.config_path = Path(config_path) if config_path else (
-            Path(__file__).resolve().parents[1] / "resource" / "scd_pair_fusion_config.ini"
+            Path(__file__).resolve().parents[1] / "resource" / "conf.ini"
         )
 
     def __call__(self, history_range: Sequence[str] | None = None) -> None:
         return self.process(history_range=history_range)
 
-    def process(self, history_range: Sequence[str] | None = None) -> None:
-        """Run realtime mode or a two-value UTC history range."""
+    def process(self, history_range: Sequence[str] | None = None, config=None) -> None:
+        """Run realtime mode or a two-value UTC history range.
+
+        ``config`` 给出时本次改读该 ini，不改构造时的默认路径。
+        """
         import linear_scd_multi_time_fusion.src.pair_fusion_workflow as pair_fusion_workflow
 
         history = list(history_range or [])
-        config = pair_fusion_workflow.read_config(self.config_path)
+        config_path = Path(config) if config else self.config_path
+        config = pair_fusion_workflow.read_config(config_path)
         positional_history = len(history) == 2
         mode = "history" if positional_history else "realtime"
         history_start_utc = history[0] if positional_history else None

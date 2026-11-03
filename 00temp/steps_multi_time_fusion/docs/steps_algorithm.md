@@ -42,27 +42,31 @@ from steps_multi_time_fusion.src import StepsNoisePlugin, ClimatologicalSkillPlu
 | `src/steps_blending.py` | STEPS cascade 融合核心算法。 |
 | `src/*_plugin.py` | 对外公开插件类。 |
 | `cli/` | 参数化命令行入口。 |
+| `resource/steps.ini` | 统一 CLI 的运行配置。`--module` 选择模块；未显式传入的参数先读此文件，再没有则用预设。 |
+| `utils/util_env.py` | 按「显式参数 > ini > 预设」补齐参数。 |
 | `test/` | 最小单元测试。 |
 | `docs/` | 中文说明文档。 |
 
 ## 4. 命令行入口
 
+在本包目录下执行 `python -m cli`，用 `--module` 选择模块。没写的参数先读 `resource/steps.ini` 对应节，节里也没有再用代码预设。
+
 生成 AR(2) 噪声：
 
 ```bash
-python -m steps_multi_time_fusion.cli.noise generate --output-dir output_noise --issue-time 202508191600
+python -m cli --module noise --output-dir output_noise --issue-time 202508191600
 ```
 
 汇总 climatological skill：
 
 ```bash
-python -m steps_multi_time_fusion.cli.climatological_skill --input-dir clim_skill_data --output clim_skill_data/climatological_skill.npy
+python -m cli --module climatological_skill --input-dir clim_skill_data --output clim_skill.npy
 ```
 
 对两个二维 `.npy` 文件进行 STEPS 融合：
 
 ```bash
-python -m steps_multi_time_fusion.cli.blending --nowcast nowcast.npy --nwp nwp.npy --output blended.npy
+python -m cli --module blending --nowcast nowcast.npy --nwp nwp.npy --output blended.npy
 ```
 
 ## 5. 注意事项

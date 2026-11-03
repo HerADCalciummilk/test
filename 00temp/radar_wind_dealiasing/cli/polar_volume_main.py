@@ -2,16 +2,57 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""极坐标体扫输入的转换与校验调度。"""
+"""极坐标体扫转换命令行。
+
+在本包目录执行::
+
+    python cli/polar_volume_main.py --radar-path PATH --field-name velocity [--output-path PATH]
+    python -m cli.polar_volume_main --radar-path PATH --field-name velocity
+
+Python::
+
+    from cli.polar_volume_main import PolarVolumeMainCli
+    PolarVolumeMainCli.call(radar_path="PATH", field_name="velocity")
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import numpy as np
 import xarray as xr
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
+
+
+def _float_or_floats(text: str):
+    parts = [item.strip() for item in str(text).split(",") if item.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("需要数值，多个值用逗号分隔")
+    values = [float(item) for item in parts]
+    if len(values) == 1:
+        return values[0]
+    return values
 
 
 POLAR_VOLUME_DIMS = ("member", "level", "time", "dtime", "lat", "lon")
@@ -325,8 +366,7 @@ def process(
     time_value=None,
     dtime_value: int = 0,
     nyquist_velocity: float | Sequence[float] | None = None,
-    require_geolocation: bool = False,
-) -> xr.DataArray:
+    require_geolocation: bool = False, config=None) -> xr.DataArray:
     """读取 Py-ART 雷达文件，转换并校验指定字段。
 
     参数
@@ -349,6 +389,17 @@ def process(
     xr.DataArray
         转换并校验通过的极坐标体扫。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "output_path": (output_path, "str"),
+        "data_name": (data_name, "str"),
+        "time_value": (time_value, "str"),
+        "nyquist_velocity": (nyquist_velocity, "float_list"),
+    })
+    output_path = _over['output_path']
+    data_name = _over['data_name']
+    time_value = _over['time_value']
+    nyquist_velocity = _over['nyquist_velocity']
     try:
         import pyart
     except ImportError as exc:
@@ -595,48 +646,47 @@ def _validate_optional_coordinate(volume, name, dims, size):
         )
 
 
+class PolarVolumeMainCli(CliBase):
+    """``polar_volume_main`` 的命令行。``run`` 转调 ``process``。"""
+
+    prog = "python cli/polar_volume_main.py"
+    description = (
+        "读取 Py-ART 雷达文件并转换为六维极坐标体扫。\n"
+        "必填路径与字段名由命令行传入。省略的可选项保持函数默认值；"
+        "仍为 None 的项可从 --config 或 resource/conf.ini 填补。"
+    )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/polar_volume_main.py --help\n"
+        "  python cli/polar_volume_main.py --radar-path PATH --field-name velocity --output-path OUT.nc\n"
+        "  python -m cli.polar_volume_main --radar-path PATH --field-name velocity --config resource/conf.ini\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--radar-path", required=True, metavar="PATH", help="Py-ART 可读的雷达文件。必填。")
+        parser.add_argument("--field-name", required=True, help="需要转换的 Radar 字段名。必填。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="输出 NetCDF。省略则只返回内存结果。")
+        parser.add_argument("--data-name", default=None, help="输出 DataArray 名称。")
+        parser.add_argument("--member-name", default=None, help="member 坐标名。省略则用 radar。")
+        parser.add_argument("--level-value", dest="level_value", type=float, default=None, help="level 坐标值。省略则用 0。")
+        parser.add_argument("--time-value", default=None, help="time 坐标值。")
+        parser.add_argument("--dtime-value", dest="dtime_value", type=int, default=None, help="dtime 坐标值。省略则用 0。")
+        parser.add_argument("--nyquist-velocity", dest="nyquist_velocity", type=_float_or_floats, default=None, help="Nyquist 速度。单值或逗号分隔的逐 sweep 值。省略则从 Radar 读取。")
+        self.add_optional_bool(parser, "--require-geolocation", help_true="要求输出具备地理后处理元数据。", help_false="不要求地理元数据。省略则用函数默认值 false。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        process(**{key: value for key, value in params.items() if value is not None})
+        return 0
+
+
+def polar_volume_main_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.polar_volume_main`` 都进这里。"""
+    return PolarVolumeMainCli().main(argv)
+
+
+main = polar_volume_main_cli
+
+
 if __name__ == "__main__":
-    import sys
-
-    import pyart
-
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    from radar_wind_dealiasing.cli.polar_volume_main import (
-        pyart_radar_to_polar_volume,
-        validate_polar_volume,
-    )
-
-    # 与 notebook 对齐：固定 CfRadial → 仅写出单个扫描层样例（控制仓库体积）
-    data_dir = (
-        Path(__file__).resolve().parents[1]
-        / "test_data"
-        / "region_dealias"
-    )
-    cli_input_dir = data_dir / "cli_input"
-    cli_input_dir.mkdir(parents=True, exist_ok=True)
-
-    mdv_file = data_dir / "095636.mdv"
-    cfradial_file = cli_input_dir / "radar_fixed.cfradial.nc"
-    sweep_index = 0
-    velocity_file = cli_input_dir / f"velocity_sweep{sweep_index}.nc"
-
-    if not cfradial_file.exists():
-        radar_mdv = pyart.io.read_mdv(str(mdv_file))
-        pyart.io.write_cfradial(str(cfradial_file), radar_mdv)
-
-    radar = pyart.io.read_cfradial(str(cfradial_file))
-    radar_sweep = radar.extract_sweeps([sweep_index])
-    volume = pyart_radar_to_polar_volume(radar_sweep, "velocity")
-    validate_polar_volume(volume, require_geolocation=True)
-
-    # 落盘方式与 notebook 的 save_griddata 保持一致
-    var_name = volume.name or "velocity"
-    volume.to_dataset(name=var_name).to_netcdf(
-        velocity_file,
-        encoding={
-            var_name: {"dtype": "float32", "zlib": True, "complevel": 1},
-        },
-    )
+    raise SystemExit(polar_volume_main_cli())

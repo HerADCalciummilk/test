@@ -12,6 +12,11 @@ from typing import Iterable
 UTC = dt.timezone.utc
 BJT = dt.timezone(dt.timedelta(hours=8))
 
+try:
+    from .conf_overrides import CONF_KEYS, apply_conf_overrides
+except ImportError:
+    from conf_overrides import CONF_KEYS, apply_conf_overrides
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="对 SCD 融合结果进行前后时段补齐。")
@@ -19,7 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "resource" / "scd_pair_fusion_config.ini",
+        default=Path(__file__).resolve().parents[1] / "resource" / "conf.ini",
         help="SCD 融合配置文件路径。",
     )
     args = parser.parse_args()
@@ -170,18 +175,53 @@ def cycle_list(config: configparser.ConfigParser, args: argparse.Namespace, step
     return [latest_output_cycle(Path(config.get("paths", "output_dir")))]
 
 
-def main() -> None:
-    args = parse_args()
-    config = read_config(args.config)
-    if not config.getboolean("padding", "enabled", fallback=True):
+def process(
+    history_range=None,
+    config=None,
+    allowed_realtime_minutes=None,
+    history_step_minutes=None,
+    dry_run=None,
+    max_files=None,
+    source1_dir=None,
+    source2_dir=None,
+    truth_dir=None,
+    output_dir=None,
+    enabled=None,
+    time_step_minutes=None,
+    overwrite=None,
+    blending_type=None,
+    keyframe_weights=None,
+    lon_min=None,
+    lon_max=None,
+    lat_min=None,
+    lat_max=None,
+    output_var=None,
+    output_source=None,
+) -> None:
+    """融合结果补齐入口。``config`` 为空时读 ``resource/conf.ini``。
+
+    其余参数对应 conf.ini。``None`` 不覆盖；空字符串会写入空值。
+    """
+    passed = locals()
+    conf_options = {key: passed[key] for key in CONF_KEYS}
+    config_path = Path(config) if config else Path(__file__).resolve().parents[1] / "resource" / "conf.ini"
+    args = argparse.Namespace(history_range=list(history_range or []), config=config_path)
+    loaded = read_config(config_path)
+    apply_conf_overrides(loaded, **conf_options)
+    if not loaded.getboolean("padding", "enabled", fallback=True):
         print("[skip] padding.enabled is false")
         return
-    step_minutes = config.getint("padding", "time_step_minutes", fallback=10)
-    overwrite = config.getboolean("padding", "overwrite", fallback=False)
-    for cycle in cycle_list(config, args, step_minutes):
+    step_minutes = loaded.getint("padding", "time_step_minutes", fallback=10)
+    overwrite = loaded.getboolean("padding", "overwrite", fallback=False)
+    for cycle in cycle_list(loaded, args, step_minutes):
         print(f"[cycle] {cycle}")
-        pad_before_cycle(config, cycle, step_minutes, overwrite)
-        pad_after_cycle(config, cycle, step_minutes, overwrite)
+        pad_before_cycle(loaded, cycle, step_minutes, overwrite)
+        pad_after_cycle(loaded, cycle, step_minutes, overwrite)
+
+
+def main() -> None:
+    args = parse_args()
+    process(history_range=args.history_range, config=args.config)
 
 
 if __name__ == "__main__":

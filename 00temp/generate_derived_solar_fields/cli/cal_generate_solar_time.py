@@ -2,30 +2,67 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""地方太阳时计算 CLI 示例。
+"""地方太阳时计算 CLI。
 
-约定（无 Improver ``cli`` 装饰器）::
+在本包目录执行::
 
-    - ``process`` 接收文件路径，在函数内完成读入、计算与可选写出；
-    - ``main`` 中定义路径等参数，再直接调用 ``process``。
+    python -m cli.cal_generate_solar_time --target-grid-path grid.nc --time 2022060700 --output-path out.nc
+    python cli/cal_generate_solar_time.py --target-grid-path grid.nc --time 2022060700 --output-path out.nc
 
-包根目录执行::
+Python::
 
-    python -m cli solar-time
-    python cli/cal_generate_solar_time.py
+    from cli.cal_generate_solar_time import CalGenerateSolarTimeCli
+    CalGenerateSolarTimeCli.call(
+        target_grid_path="grid.nc",
+        time="2022060700",
+        output_path="out.nc",
+    )
 """
-
 from __future__ import annotations
 
+import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import meteva_base as meb
 import xarray as xr
 
-_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+
+def _bootstrap_paths() -> None:
+    package_root = Path(__file__).resolve().parents[1]
+    parent = str(package_root.parent)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+
+
+def _parse_datetime(text: str) -> datetime:
+    value = str(text).strip()
+    formats = (
+        "%Y%m%d%H%M%S",
+        "%Y%m%d%H%M",
+        "%Y%m%d%H",
+        "%Y%m%d",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    )
+    for fmt in formats:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    raise argparse.ArgumentTypeError(
+        "时间格式应为 YYYYMMDDHH、YYYYMMDDHHMM 或 YYYY-MM-DDTHH:MM:SS"
+    )
 
 
 def process(
@@ -33,6 +70,7 @@ def process(
     time: datetime,
     new_title: Optional[str] = None,
     output_path: Optional[str] = None,
+    config=None,
 ) -> xr.DataArray:
     """读取目标网格并计算地方太阳时。
 
@@ -47,13 +85,17 @@ def process(
         可选，写出前覆盖 ``attrs["title"]``。
     output_path :
         可选输出 nc 路径；为 ``None`` 时不写文件。
+    config :
+        命令行 ``--config`` 传入。本模块无 ini 读取器，不覆盖已给路径。
 
     返回
     -------
     xr.DataArray
         地方太阳时场（``local_solar_time``，单位 hours，范围 0–24）。
     """
-    from generate_derived_solar_fields.src.generate_derived_solar_fields import GenerateSolarTime
+    from generate_derived_solar_fields.src.generate_derived_solar_fields import (
+        GenerateSolarTime,
+    )
 
     if not isinstance(time, datetime):
         raise TypeError("time 必须是 datetime。")
@@ -70,29 +112,90 @@ def process(
     return result
 
 
-def main() -> None:
-    """定义输入/输出路径并调用 ``process``。
+class CalGenerateSolarTimeCli(CliBase):
+    """在目标网格上计算地方太阳时。"""
 
-    默认复用 ``resource/cli_input/input_surface_altitude_meb.nc`` 作为目标网格
-    （与 clearsky 示例共用同一份经纬 meb 样例）；业务使用时在此修改路径即可。
-    """
-    repo_root = str(_PACKAGE_ROOT.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
-
-    input_dir = _PACKAGE_ROOT / "resource" / "cli_input"
-    output_dir = _PACKAGE_ROOT / "resource" / "cli_output"
-
-    # 仅需网格几何；与 clearsky 共用 surface_altitude 样例即可
-    target_grid_path = str(input_dir / "input_surface_altitude_meb.nc")
-    output_path = str(output_dir / "cal_solar_time_result.nc")
-
-    process(
-        target_grid_path=target_grid_path,
-        time=datetime(2022, 6, 7, 0, 0),
-        output_path=output_path,
+    prog = "python -m cli.cal_generate_solar_time"
+    description = "读取目标网格，按给定时刻计算地方太阳时（0–24 小时）。"
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python -m cli.cal_generate_solar_time --help\n"
+        "  python -m cli.cal_generate_solar_time "
+        "--target-grid-path grid.nc --time 2022060700 --output-path out.nc\n"
+        "  python cli/cal_generate_solar_time.py "
+        "--target-grid-path grid.nc --time 2022-06-07T00:00:00 --output-path out.nc\n"
+        "\n"
+        "说明:\n"
+        "  - --config 传给 process；本模块无 ini 读取器，省略则不改路径\n"
     )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--target-grid-path",
+            dest="target_grid_path",
+            required=True,
+            metavar="PATH",
+            help="目标网格 meb 六维 nc。投影输入须含 grid_mapping_attrs。",
+        )
+        parser.add_argument(
+            "--time",
+            dest="time",
+            type=_parse_datetime,
+            required=True,
+            metavar="TIME",
+            help="计算时刻，如 2022060700 或 2022-06-07T00:00:00。",
+        )
+        parser.add_argument(
+            "--new-title",
+            dest="new_title",
+            default=None,
+            metavar="TEXT",
+            help='写出前覆盖 attrs["title"]。',
+        )
+        parser.add_argument(
+            "--output-path",
+            dest="output_path",
+            default=None,
+            metavar="PATH",
+            help="输出 nc。省略则只返回、不写文件。",
+        )
+        parser.add_argument(
+            "--config",
+            dest="config",
+            default=None,
+            metavar="PATH",
+            help=(
+                "运行配置文件，传给 process 的 config。"
+                "相对路径按项目根解析。"
+                "本模块无 ini 读取器，省略则不改路径。"
+            ),
+        )
+
+    def run(
+        self,
+        target_grid_path=None,
+        time=None,
+        new_title=None,
+        output_path=None,
+        config=None,
+    ) -> int:
+        process(
+            target_grid_path=target_grid_path,
+            time=time,
+            new_title=new_title,
+            output_path=output_path,
+            config=config,
+        )
+        return 0
+
+
+def cal_generate_solar_time_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。``python -m cli.cal_generate_solar_time`` 与直接运行本文件都进这里。"""
+    return CalGenerateSolarTimeCli().main(argv)
+
+
+main = cal_generate_solar_time_cli
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(cal_generate_solar_time_cli())

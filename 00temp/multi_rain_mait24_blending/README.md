@@ -10,7 +10,7 @@ Python自适应集成降水算法24h说明
 
 
 项目文件结构:
-    - mait_24_cli.py(主程序)
+    - mait_24h.py(主程序)
     - mait_24_plugin_new.py
         - [数据类相关]
     - mait_24_plugin_util.py
@@ -43,44 +43,44 @@ Python自适应集成降水算法24h说明
 
 示例用法:
     
-1. 导入nimm库以及程序处理类，如mait_24_cli
+1. 导入nimm库以及程序处理类，如mait_24h
 
         import sys
-        sys.path.insert(0,'.../nimm')
-        from nimm.mait import mait_24_cli
+        sys.path.insert(0,'.../multi_rain_mait24_blending/src')
+        import mait_24h
    
 2. 运行Process：
 
        1. 过往时刻抓取：程序会抓取输入时刻作为运行时刻
-       mait_24_cli.process(time_input='202401010800')
+       mait_24h.process(time_input='202401010800')
 
        2. 分区域做评分与权重计算融合（示例：2*2=4个区域）
-       mait_24_cli.process(split_lat=2, split_lon=2)
+       mait_24h.process(split_lat=2, split_lon=2)
 
        3. para文件路径配置，若无则选取对应时间的/para/para_x.ini
-       mait_24_cli.process(time_input='202401010800',para_path='xxx/xxxx/para.ini')
+       mait_24h.process(time_input='202401010800',para_path='xxx/xxxx/para.ini')
 
        4. beta输出目录配置，生成对应YYYYMMDDHH/x.info文件，若无则输出至mait根目录下
-       mait_24_cli.process(time_input='202401010800',beta_path='xxx/xxxx/')
+       mait_24h.process(time_input='202401010800',beta_path='xxx/xxxx/')
 
        5. 实况数据世界时和北京时可选项,is_obs_bjt(默认False)
-       mait_24_cli.process(time_input='202401010800',is_obs_bjt=True)
+       mait_24h.process(time_input='202401010800',is_obs_bjt=True)
 
        6. 生成的格点数据是否插值的可选性,is_interp(默认False)
-       mait_24_cli.process(time_input='202401010800',is_interp=True)
+       mait_24h.process(time_input='202401010800',is_interp=True)
 
        7. 生成的数据裁剪的范围和分辨率的可选性,clip_coords(默认不裁切)
-       mait_24_cli.process(time_input='202401010800',clip_coords=[70.0, 140.0, 0.0, 60.0, 0.1, 0.1])
+       mait_24h.process(time_input='202401010800',clip_coords=[70.0, 140.0, 0.0, 60.0, 0.1, 0.1])
 
        8. 程序分几个进程来运行,pro_count(默认为3个进程)
-       mait_24_cli.process(time_input='202401010800',pro_count=3)
+       mait_24h.process(time_input='202401010800',pro_count=3)
 
 3. 调用实例
         
     ~~~python
     # -*- coding: UTF-8 -*-
     import pandas as pd
-    import mait_24h_cli
+    import mait_24h
 
     time_start_str, time_end_str = '20250715000000','20250901000000'
     date_str_list = pd.date_range(time_start_str, time_end_str, freq='D').strftime('%Y%m%d').to_list()
@@ -106,7 +106,7 @@ Python自适应集成降水算法24h说明
                 "split_lat" : split_lat,  # 分区个数
                 "split_lon" : split_lon   # 分区个数
             }
-            mait_24h_cli.process(**keyword)
+            mait_24h.process(**keyword)
     ~~~
 
 贡献者:

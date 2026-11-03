@@ -9,12 +9,10 @@ from .orographic_enhancement import (
     ResolveWindComponents,
 )
 from .apply_orographic_enhancement import ApplyOrographicEnhancement
-from .redistribute_orographic_enhancement import RedistributeOrographicEnhancement
 
 __all__ = [
     "MetaOrographicEnhancement",
     "OrographicEnhancement",
     "ResolveWindComponents",
     "ApplyOrographicEnhancement",
-    "RedistributeOrographicEnhancement",
 ]

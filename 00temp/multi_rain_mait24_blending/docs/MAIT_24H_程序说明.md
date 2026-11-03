@@ -15,7 +15,7 @@
 ## 2. 应用场景
 
 | 场景 | 说明 |
-|------|------|
+| ------ | ------ |
 | **业务模式集成** | 对多个数值模式 24h 降水预报进行融合，得到单套「集成+订正」后的站点与网格产品。 |
 | **时效序列批处理** | 对多个起报时次、多个预报时效（如 36–252 h、步长 24 h）循环处理，适用于业务化日/旬滚动。 |
 | **分区权重** | 通过 `split_lat`、`split_lon` 将区域划分为若干子块，每块独立做评分与权重，缓解大范围单一权重带来的空间失配。 |
@@ -62,10 +62,10 @@ flowchart TB
 
 ### 3.2 运行上下文（RunContext）
 
-`RunContext`（`utils/mai_24_plugin_context.py`）在配置准备阶段组装，贯穿时效循环向下游传递。`build_run_context` 不执行文件读取，仅将已解析参数装箱为四层结构：
+`RunContext`（`src/utils/util_context.py`）在配置准备阶段组装，贯穿时效循环向下游传递。`build_run_context` 不执行文件读取，仅将已解析参数装箱为四层结构：
 
 | 层级 | 字段 | 含义 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `ctx.paths` | `beta_path_template`, `fact_path`, `output_sample_path`, `model_path`, `background_templates` | 路径模板 |
 | `ctx.models` | `model_name` | 模式键名序列，与 `para_24.ini` 一致 |
 | `ctx.grid` | `clip_coords`, `split_lat`, `split_lon`, `area_scale`, `predict_type` | 空间分区与算法标量 |
@@ -80,11 +80,11 @@ flowchart TB
 ### 3.4 目录与核心文件
 
 | 路径 | 作用 |
-|------|------|
-| `src/mait_24h_cli.py` | 主入口：`RunProcess`、`process`/`process_single`/`process_multi` |
+| ------ | ------ |
+| `src/mait_24h.py` | 主入口：`RunProcess`、`process`/`process_single`/`process_multi` |
 | `src/mait_24_plugin.py` | `AnalysisTsWeightProcess`、`StationDataInterp2GridDataProcess` |
 | `src/mait_24_plugin_util.py` | 模式与实况读取：`_read_history_source_micaps3`、`_read_now_source_micaps3_micaps4`、`_analysis_background_ini`（`para_24_background.ini`） |
-| `utils/mai_24_plugin_context.py` | `RunContext` 分层上下文与 `build_run_context` |
+| `src/utils/util_context.py` | `RunContext` 分层上下文与 `build_run_context` |
 | `utils/base_plugin.py` | 后处理插件基类 `PostProcessingPlugin` |
 | `utils/multipro_plugin.py` | `SimpleParallelTool` 多进程封装 |
 | `utils/util_new.py` | INI 解析、掩码读取、Micaps 写出、beta 路径与读写、格点/站点工具类 |
@@ -92,11 +92,10 @@ flowchart TB
 | `utils/util_mask_file.py` | 辅助：矢量边界（如 GeoJSON）栅格化为掩码 NC/DAT（与主线可衔接） |
 | `utils/data_prepare_plugin.py` | 数据准备插件（扩展，非主流程必需） |
 | `utils/data_distribute_pulgin.py` | 数据分发插件（扩展） |
-| `cli/`（`python -m cli`） | 薄封装：转调 `src/mait_24h_cli.py` 命令行入口 |
-| `src/mait_24h_cli.py` | 主入口与 Clize 命令行：`process` / `main` / `python src/mait_24h_cli.py` |
+| `cli/__main__.py`（`python -m cli`） | Clize 命令行，转调 `mait_24h.process` |
 | `requirements-cli.txt` | 命令行额外依赖：**clize**（≥5） |
 
-运行期约定：`src` 为工作目录（程序内 `os.chdir` 到 `mait_24h_cli.py` 所在目录），并需能将 `utils` 作为包导入。除使用下文 **7.4 节命令行** 外，**建议将项目根目录与 `src` 均加入 `PYTHONPATH`（或直接 `import` 前等价设置）**。
+运行期约定：`src` 为工作目录（程序内 `os.chdir` 到 `mait_24h.py` 所在目录），并需能将 `utils` 作为包导入。除使用下文 **7.4 节命令行** 外，**建议将项目根目录与 `src` 均加入 `PYTHONPATH`（或直接 `import` 前等价设置）**。
 
 ---
 
@@ -107,22 +106,22 @@ flowchart TB
 ### 4.1 阶段 0：任务派发
 
 | 项目 | 说明 |
-|------|------|
-| **入口** | `mait_24h_cli.process` |
+| ------ | ------ |
+| **入口** | `mait_24h.process` |
 | **输入** | `time_inputs` 及运行参数；缺省项由 `utils/util_env.get_default_*` 从 `resource/mait_24.ini` 补齐 |
 | **原理** | 每个起报时刻对应一个 `RunProcess` 实例；`is_multi=True` 时由 `SimpleParallelTool` 将 `time_inputs` 分发至多个 worker 并行执行 |
-| **实现** | `src/mait_24h_cli.py`：`process` / `process_single` / `process_multi`；`utils/multipro_plugin.py` |
+| **实现** | `src/mait_24h.py`：`process` / `process_single` / `process_multi`；`utils/multipro_plugin.py` |
 
 ### 4.2 阶段 1：配置准备（`_setup_context`）
 
 | 步骤 | 原理 | 实现 |
-|------|------|------|
+| ------ | ------ | ------ |
 | 工作目录 | 切换至 `src`，保证 `para_24.ini` 中相对路径按业务约定展开 | `os.chdir` |
 | 路径解析 | 读取 `mait_24.ini`，将相对路径展开为绝对路径 | `utils/util_env.get_resolved_paths` |
 | 站点表 | 解析 `time_input` 为 `dt_now`；读取 Micaps3 站点表并初始化降水列为 0 | `utils/util_new._prepare` |
 | 模式配置 | 按 GBK 固定行序解析 `para_24.ini`：`modelNum`、N 行模式路径、`fact`、`staoutputPath` | `utils/util_new._analysis_para_ini` |
 | 背景模板 | 解析 `para_24_background.ini` 为 `模式键名 → MICAPS4 路径模板` 字典 | `mait_24_plugin_util._analysis_background_ini` |
-| 上下文装箱 | 将上述结果与运行参数写入 `RunContext` | `mai_24_plugin_context.build_run_context` |
+| 上下文装箱 | 将上述结果与运行参数写入 `RunContext` | `util_context.build_run_context` |
 
 ### 4.3 阶段 2-A：时效循环——资料读取
 
@@ -135,7 +134,7 @@ flowchart TB
 **`_analysis_time1(dt_now)`** — 模式世界时起报时刻
 
 | 条件 | `md_current_datetime` | `num3` |
-|------|----------------------|--------|
+| ------ | ---------------------- | -------- |
 | `hour > 12` 且 `hour ≤ 23` | 当日 00 UTC | 0 |
 | 其余时刻 | 前一日 12 UTC | 12 |
 
@@ -166,7 +165,7 @@ flowchart TB
 #### 4.3.3 当前资料读取（`_read_now_source_micaps3_micaps4`）
 
 | 数据 | 说明 |
-|------|------|
+| ------ | ------ |
 | 当前模式站点 `sd_current_model` | 起报 `dt_model_current`、时效 `predict_valid` 的 Micaps3 |
 | 标志 `sta_current_flg` | 同上，按模式记录可用性 |
 | 背景格点 `gd_back_ground` | 遍历模式，取首份存在的 MICAPS4 作为网格范围模板 |
@@ -183,12 +182,12 @@ MICAPS4 路径优先取 `ctx.paths.background_templates[model_name]`；缺键时
 - `np.any(sta_before_flg)`：至少一个历史模式可用，否则终止
 - `np.any(sta_current_flg)`：至少一个当前模式可用，否则终止
 
-**实现**：`src/mait_24h_cli.py` → `_process_single`
+**实现**：`src/mait_24h.py` → `_process_single`
 
 ### 4.4 阶段 2-B：beta 评分记忆
 
 | 步骤 | 原理 | 实现 |
-|------|------|------|
+| ------ | ------ | ------ |
 | 路径生成 | 按 `grid_base` 经纬范围与 `split_lat/split_lon` 划分子区 `(i,j)`，拼接 `beta_path_template` 与 `%02d_%02d_TTT.npy` | `get_now_beta_file_path_npy`、`get_his_beta_file_path_npy` |
 | 历史评分读取 | 向前逐日检索至多 9 天，取最近存在的 npy 文件；解析为各模式 `score_before` 向量 | `read_his_beta_npy` |
 | 本轮写出 | TS 计算完成后，将 `score_last` 写入对应子区 npy 文件 | `write_beta_npy` |
@@ -269,7 +268,7 @@ w_n = \frac{\text{sta\_current\_flg}_n \cdot \text{score\_last}_n}{\sum_k \text{
 ### 4.6 阶段 2-D：站点产品写出
 
 | 步骤 | 说明 | 实现 |
-|------|------|------|
+| ------ | ------ | ------ |
 | 子区合并 | 将各 `(i,j)` 子区 `sd_output` 拼接为完整站点 DataFrame | `_process_single` 中 `pd.concat` |
 | beta 更新 | 逐子区写入 `score_last` 至 npy | `write_beta_npy` |
 | Micaps3 | 按 `output_sample_path` 模板写出集成站点场，`predict_type=24` | `_data_write_to_micaps3` |
@@ -279,7 +278,7 @@ w_n = \frac{\text{sta\_current\_flg}_n \cdot \text{score\_last}_n}{\sum_k \text{
 掩码文件在时效循环外读取一次（`read_grid_mask_nc`）。
 
 | 步骤 | 原理 |
-|------|------|
+| ------ | ------ |
 | 外圈约束点 | 掩码值 `<0` 处按 5×5 稀疏采样背景场格点，作为中国区外约束 |
 | 观测序列构造 | 外圈点与集成站点合并为 `StationDataArray` |
 | Cressman 插值 | 四半径逐步订正（8/6/4/2 倍格距），参数 `(1.0, 0.001, 2.0, 0.01)` |
@@ -303,13 +302,13 @@ w_n = \frac{\text{sta\_current\_flg}_n \cdot \text{score\_last}_n}{\sum_k \text{
 ## 5. 代码索引
 
 | 内容 | 位置 |
-|------|------|
-| 主循环：准备 ctx、时效遍历、读数、融合、写 Micaps3/4 | `src/mait_24h_cli.py` → `_setup_context` / `_process_single` |
-| 运行上下文组装（无文件 IO） | `utils/mai_24_plugin_context.py` → `build_run_context` |
+| ------ | ------ |
+| 主循环：准备 ctx、时效遍历、读数、融合、写 Micaps3/4 | `src/mait_24h.py` → `_setup_context` / `_process_single` |
+| 运行上下文组装（无文件 IO） | `src/utils/util_context.py` → `build_run_context` |
 | 时间换算 | `src/mait_24_plugin_util.py` → `_analysis_time1/2/3` |
 | TS 权重、集成、站点频率匹配 | `src/mait_24_plugin.py` → `AnalysisTsWeightProcess._analysis_ts_weight` |
 | 历史/当前 Micaps 读取 | `src/mait_24_plugin_util.py` |
-| 数据可用性检查 | `src/mait_24h_cli.py` |
+| 数据可用性检查 | `src/mait_24h.py` |
 | Cressman 插值与网格频率匹配 | `src/mait_24_plugin.py` → `StationDataInterp2GridDataProcess` |
 | INI 解析、Micaps 写出、beta、掩码、日志 | `utils/util_new.py` |
 | 全局路径与运行默认值 | `utils/util_env.py` |
@@ -345,8 +344,8 @@ staoutputPath=/path/.../YYYYMMDD/YYYYMMDDHH.VVV
 各模式 **MICAPS4 格点**路径单独配置，与 `para_24.ini` 中 MICAPS3 站点模板解耦，便于目录或命名不完全一致时维护。
 
 | 项 | 说明 |
-|------|------|
-| **默认路径** | `<仓库>/resource/para_24_background.ini`；由 `resource/mait_24.ini` 中 ``background_ini`` 配置；缺键时回退为该路径。|
+| ------ | ------ |
+| **默认路径** | `<仓库>/resource/para_24_background.ini`；由 `resource/mait_24.ini` 中 ``background_ini`` 配置；缺键时回退为该路径。 |
 | **配置文件** | 见 ``resource/mait_24.ini``；``get_resolved_paths()["background_ini"]``。 |
 | **编码与格式** | **GBK**；无 `modelNum` 头；每行 `模式键名=MICAPS4路径模板`。`#` 开头行为注释。键名须与 `para_24.ini` 中对应模式键名一致。 |
 | **占位符** | 须与 `meteva_base.get_path` 一致（如 `YYYYMMDD`、`YYYYMMDDHH`、`TTT` 等），由运行期起报时刻与预报时效展开。 |
@@ -359,12 +358,12 @@ staoutputPath=/path/.../YYYYMMDD/YYYYMMDDHH.VVV
 
 ## 7. 运行参数说明
 
-### 7.1 主函数 `mait_24h_cli.process`
+### 7.1 主函数 `mait_24h.process`
 
-定义见 `src/mait_24h_cli.py`。调用前请保证 **`time_inputs` 为非空列表**（当前实现未对 `None` 做默认处理）。
+定义见 `src/mait_24h.py`。调用前请保证 **`time_inputs` 为非空列表**（当前实现未对 `None` 做默认处理）。
 
 | 参数 | 类型 | 含义 | 默认/备注 |
-|------|------|------|-----------|
+| ------ | ------ | ------ | ----------- |
 | `time_inputs` | `list[str]` | 起报时刻列表，如 `'202507010800'`（与业务约定一致，多为世界时，见 `is_obs_bjt`） | 必传（业务上） |
 | `predict_valid_list` | `list[int]` | 预报时效（小时），如 `[36,60,...,252]` | 默认 `36..252` 步长 24 |
 | `para_path` | `str \| None` | `para_24.ini` 路径 | `None` 时用 `resource/mait_24.ini` 的 `para_ini` |
@@ -379,17 +378,17 @@ staoutputPath=/path/.../YYYYMMDD/YYYYMMDDHH.VVV
 ### 7.2 运行期固定约定（代码内写死或可改）
 
 | 项 | 当前实现 |
-|----|----------|
+| ---- | ---------- |
 | 预报类型 `predict_type` | **24**（`build_run_context` 默认） |
 | `area_scale` | **0.5**（`build_run_context` 默认） |
 | 掩码文件 | `resource/mait_24.ini` → `mask_nc`（默认 `resource/mask010.nc`） |
 | 站点信息 | `resource/mait_24.ini` → `station_info` |
 | 日志 | `resource/mait_24.ini` → `log_file`；单进程 `log/YYYYMMDD_{time_input}.txt`；多进程子进程另含 `_pid` |
 
-### 7.2.1 RunContext 字段（`utils/mai_24_plugin_context.py`）
+### 7.2.1 RunContext 字段（`src/utils/util_context.py`）
 
 | 子对象 | 主要字段 | 来源 |
-|--------|----------|------|
+| -------- | ---------- | ------ |
 | `ctx.paths` | `beta_path_template`, `fact_path`, `output_sample_path`, `model_path`, `background_templates` | `mait_24.ini` + `para_24.ini` + `para_24_background.ini` |
 | `ctx.models` | `model_name` | `para_24.ini` |
 | `ctx.grid` | `clip_coords`, `split_lat/lon`, `area_scale`, `predict_type` | CLI/`mait_24.ini` + 代码默认 |
@@ -400,9 +399,9 @@ staoutputPath=/path/.../YYYYMMDD/YYYYMMDDHH.VVV
 批处理脚本见 `test/test_mait_24h.py`。最小调用示例：
 
 ```python
-import mait_24h_cli
+import mait_24h
 
-mait_24h_cli.process(
+mait_24h.process(
     time_inputs=["202507010800", "202507012000"],
     predict_valid_list=[36, 60, 84, 108, 132, 156, 180, 204, 228, 252],
     para_path=None,   # 省略时使用 resource/mait_24.ini → para_ini
@@ -426,10 +425,9 @@ mait_24h_cli.process(
 
 ```text
 python -m cli [选项...]
-python src/mait_24h_cli.py [选项...]
 ```
 
-二者等价；命令行参数解析均在 `src/mait_24h_cli.py` 内实现（Clize）。
+命令行参数解析在 `cli/__main__.py`（Clize），再调用 `mait_24h.process`。`python src/mait_24h.py` 运行的是该文件 `__main__` 里写好的传参，不解析上述选项。
 
 查看自动生成的参数说明：
 
@@ -440,7 +438,7 @@ python -m cli --help
 **命令行参数与 `process` 的对应关系（Clize 将 Python 形参转为 `--kebab-case`）：**
 
 | 命令行选项 | 类型 | 对应 `process` 形参 | 含义 | 默认 / 省略时 |
-|------------|------|---------------------|------|----------------|
+| ------------ | ------ | --------------------- | ------ | ---------------- |
 | `--time-inputs` | 逗号分隔字符串 | `time_inputs` | 起报时刻列表，如 `202507010800,202507012000` | **必选**；不可为空（与 7.1 节一致） |
 | `--predict-valid-list` | 逗号分隔整数 | `predict_valid_list` | 预报时效（小时），如 `36,60,84,...,252` | 省略则 `36..252`、步长 **24** |
 | `--para-path` | 字符串 | `para_path` | `para_24.ini` 路径（相对/绝对均可） | 省略为 `None` → `resource/mait_24.ini` 的 `para_ini` |
@@ -455,7 +453,7 @@ python -m cli --help
 **说明：**
 
 - 列表在命令行中为**逗号分隔**，不要带方括号；路径含空格时请按所用 shell 规则加引号或转义。
-- CLI 在导入前会把 **`src`** 与**项目根目录**加入 `sys.path`（`mait_24h_cli._bootstrap_paths`），一般**无需**再设 `PYTHONPATH`。
+- CLI 在导入前会把 **`src`** 与**项目根目录**加入 `sys.path`（`mait_24h._bootstrap_paths`），一般**无需**再设 `PYTHONPATH`。
 
 **全参数示例（与 7.3 节取值一致，一行可复制）：**
 
@@ -491,7 +489,7 @@ python -m cli --time-inputs=202507010800
 不依赖完整 Micaps 数据栈的测试位于 `test/`：
 
 | 文件 | 覆盖内容 |
-|------|----------|
+| ------ | ---------- |
 | `test/test_conftest.py` | 将 `src` 与项目根加入 `sys.path`、`meteva` 桩（由 `conftest.py` 导入） |
 | `test/test_run_context.py` | `build_run_context`、`_analysis_para_ini`、`_analysis_background_ini`、`util_env` |
 | `test/test_mait_24h_cli_flow.py` | `_setup_context`（mock 读站）、`init_run_log` 多进程分文件 |
@@ -511,14 +509,14 @@ python -m pytest test/ -v
 - **网格产品**：Micaps4（`write_grid_to_micaps4`），受掩码与 `clip_coords` 影响。
 - **beta**：按分区写出来的评分文件，供下一时次 `read_his_beta_npy` 使用。
 
-仓库内 `src/mait_24_verify.py` 等脚本可用于与 **meteva** 检验流程结合（依赖完整数据与环境）。
+仓库内 `cli/verify.py` 的 `get_ts` 可用于与 **meteva** 检验流程结合（依赖完整数据与环境）。
 
 ---
 
 ## 11. 修订记录
 
 | 日期 | 说明 |
-|------|------|
+| ------ | ------ |
 | 2026-05-07 | 初版：应用场景、算法、实现索引、INI/`process` 参数、目录约定与依赖 |
 | 2026-05-09 | 增补：`para_24_background.ini`、`_read_now_source_micaps3_micaps4` 与文档 6.1 节 |
 | 2026-05-26 | 全局默认路径与运行项统一改由 `resource/mait_24.ini` 提供（见 `utils/util_env.py`） |

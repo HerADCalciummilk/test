@@ -823,8 +823,7 @@ class RoughnessCorrection(PostProcessingPlugin):
         # - DataArray 输入时，可从投影米制或真经纬坐标推断 ppres（始终为米）；
         # - ndarray 输入时，要求外部显式提供 ppres。
         if isinstance(pporo, xr.DataArray):
-            # 地形、风速可超出 meteva 默认 [-1000, 1000]，不能把高山改成缺测。
-            pporo = meb.checkout_griddata(pporo, valid_val=(-np.inf, np.inf, np.nan))
+            pporo = meb.checkout_griddata(pporo)
             if ppres is None:
                 ppres = self.infer_grid_resolution_from_coords(pporo)
             self.pporo = np.asarray(pporo.values, dtype=np.float32).squeeze()
@@ -849,9 +848,7 @@ class RoughnessCorrection(PostProcessingPlugin):
     ) -> np.ndarray:
         """将辅助场统一为二维 `(lat, lon)` 数组。"""
         if isinstance(field, xr.DataArray):
-            normalized = meb.checkout_griddata(
-                field, is_single=True, valid_val=(-np.inf, np.inf, np.nan)
-            )
+            normalized = meb.checkout_griddata(field, is_single=True)
             values = np.asarray(normalized.values.squeeze(), dtype=np.float32)
         else:
             values = np.asarray(field, dtype=np.float32)
@@ -1050,9 +1047,7 @@ class RoughnessCorrection(PostProcessingPlugin):
 
         # 处理输入数据类型
         if isinstance(wind_speed, xr.DataArray):
-            template_da = meb.checkout_griddata(
-                wind_speed, valid_val=(-np.inf, np.inf, np.nan)
-            )
+            template_da = meb.checkout_griddata(wind_speed)
 
             # 从DataArray中获取高度网格（如果未提供）
             if height_grid is None:

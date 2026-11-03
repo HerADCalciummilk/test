@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nimm-g-interp"
+version = "0.1.0"
+description = "NIMM fast refined interpolation algorithm package"
+requires-python = ">=3.9"
+

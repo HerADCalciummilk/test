@@ -2,18 +2,48 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""风速降尺度 CLI 示例。"""
+"""地形风速降尺度命令行。
+
+在本包目录执行::
+
+    python cli/dsc_wind_downscaling.py --wind-speed-path PATH --sigma-path PATH --target-orography-path PATH --standard-orography-path PATH --silhouette-roughness-path PATH --model-resolution 1500
+    python -m cli.dsc_wind_downscaling --wind-speed-path PATH --sigma-path PATH --target-orography-path PATH --standard-orography-path PATH --silhouette-roughness-path PATH --model-resolution 1500
+
+Python::
+
+    from cli.dsc_wind_downscaling import DscWindDownscalingCli
+    DscWindDownscalingCli.call(wind_speed_path="PATH", sigma_path="PATH", target_orography_path="PATH", standard_orography_path="PATH", silhouette_roughness_path="PATH", model_resolution=1500)
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import numpy as np
 import xarray as xr
-from cf_units import Unit
 import meteva_base as meb
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
 
 def process(
     wind_speed_path: str,
@@ -26,8 +56,7 @@ def process(
     output_path: Optional[str] = None,
     *,
     output_height_level: Optional[float] = None,
-    output_height_level_units: str = "m",
-) -> xr.DataArray:
+    output_height_level_units: str = "m", config=None) -> xr.DataArray:
     """风速降尺度处理流程。
 
     参数
@@ -58,6 +87,15 @@ def process(
     xr.DataArray
         订正后的风速场。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "vegetative_roughness_path": (vegetative_roughness_path, "str"),
+        "output_path": (output_path, "str"),
+        "output_height_level": (output_height_level, "float"),
+    })
+    vegetative_roughness_path = _over['vegetative_roughness_path']
+    output_path = _over['output_path']
+    output_height_level = _over['output_height_level']
     from orographic_wind_downscaling.src.wind_downscaling import RoughnessCorrection
         
     _unbounded = (-np.inf, np.inf, np.nan)
@@ -135,6 +173,8 @@ def _extract_height_level(
     target_level = float(output_height_level)
 
     if output_height_level_units and output_height_level_units != coord_units:
+        from cf_units import Unit
+
         target_level = float(
             Unit(output_height_level_units).convert(target_level, Unit(coord_units))
         )
@@ -170,67 +210,51 @@ def _write_result_netcdf_float32(data: xr.DataArray, output_path: str) -> None:
     )
 
 
+class DscWindDownscalingCli(CliBase):
+    """``dsc_wind_downscaling`` 的命令行。``run`` 转调 ``process``。"""
+
+    prog = "python cli/dsc_wind_downscaling.py"
+    description = (
+        "地形风速降尺度。\n"
+        "输入路径与模式分辨率必填。省略的可选项保持函数默认值；"
+        "仍为 None 的项可从 --config 或 resource/conf.ini 填补。"
+    )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/dsc_wind_downscaling.py --help\n"
+        "  python cli/dsc_wind_downscaling.py --wind-speed-path PATH --sigma-path PATH "
+        "--target-orography-path PATH --standard-orography-path PATH "
+        "--silhouette-roughness-path PATH --model-resolution 1500 --output-path OUT.nc\n"
+        "  python -m cli.dsc_wind_downscaling --wind-speed-path PATH --sigma-path PATH "
+        "--target-orography-path PATH --standard-orography-path PATH "
+        "--silhouette-roughness-path PATH --model-resolution 1500 --config resource/conf.ini\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--wind-speed-path", required=True, metavar="PATH", help="待订正风速场 NetCDF。必填。")
+        parser.add_argument("--sigma-path", required=True, metavar="PATH", help="网格高度标准差场 NetCDF。必填。")
+        parser.add_argument("--target-orography-path", required=True, metavar="PATH", help="目标网格地形高度场 NetCDF。必填。")
+        parser.add_argument("--standard-orography-path", required=True, metavar="PATH", help="标准网格地形高度场 NetCDF。必填。")
+        parser.add_argument("--silhouette-roughness-path", required=True, metavar="PATH", help="地形轮廓粗糙度场 NetCDF。必填。")
+        parser.add_argument("--model-resolution", required=True, type=float, help="原始模式分辨率（米）。必填。")
+        parser.add_argument("--vegetative-roughness-path", default=None, metavar="PATH", help="植被粗糙度长度场 NetCDF。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="输出 NetCDF。省略则不写文件。")
+        parser.add_argument("--output-height-level", dest="output_height_level", type=float, default=None, help="若指定，则从结果中提取该高度层。")
+        parser.add_argument("--output-height-level-units", dest="output_height_level_units", default=None, help="output_height_level 的单位。省略则用 m。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        process(**{key: value for key, value in params.items() if value is not None})
+        return 0
+
+
+def dsc_wind_downscaling_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.dsc_wind_downscaling`` 都进这里。"""
+    return DscWindDownscalingCli().main(argv)
+
+
+main = dsc_wind_downscaling_cli
+
+
 if __name__ == "__main__":
-    import sys
-
-    #添加项目根目录到系统路径,可直接运行示例脚本
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    #测试数据路径
-    data_dir = (
-        Path(__file__).resolve().parent.parent
-        / "test_data"
-        / "wind_calculations_data"
-        / "cli_input"
-    )
-    cli_output_dir = (
-        Path(__file__).resolve().parent.parent
-        / "test_data"
-        / "wind_calculations_data"
-        / "cli_output"
-    )
-
-    #各输入文件的路径映射
-    wind_speed_path = str(data_dir / "input.nc")   #待订正风速场nc文件路径
-    sigma_path = str(data_dir / "sigma.nc")   #网格高度标准差场nc文件路径
-    target_orography_path = str(data_dir / "highres_orog.nc")   #目标网格地形高度场nc文件路径
-    standard_orography_path = str(data_dir / "standard_orog.nc")   #标准网格地形高度场nc文件路径
-    silhouette_roughness_path = str(data_dir / "a_over_s.nc")   #地形轮廓粗糙度场nc文件路径
-    vegetative_roughness_path = str(data_dir / "veg.nc")   #植被粗糙度长度场nc文件路径
-    output_path = str(cli_output_dir / "cli_result.nc")   #输出nc文件路径
-
-    model_resolution = 1500.0   #模式原始分辨率（米）
-    output_height_level = None   #若指定，则从结果中提取该高度层
-    output_height_level_units = "m"   #output_height_level的单位
-
-    required_inputs = [
-        Path(wind_speed_path),
-        Path(sigma_path),
-        Path(target_orography_path),
-        Path(standard_orography_path),
-        Path(silhouette_roughness_path),
-        Path(vegetative_roughness_path),
-    ]
-    missing = [str(path) for path in required_inputs if not path.is_file()]
-    if missing:
-        print(
-            "示例输入不存在：\n  "
-            + "\n  ".join(missing)
-            + "\n请补齐 test_data 或先运行 cli/preprocess_test_data.py，"
-            "也可在此处改为自己的输入/输出路径。"
-        )
-    else:
-        result = process(
-            wind_speed_path,
-            sigma_path,
-            target_orography_path,
-            standard_orography_path,
-            silhouette_roughness_path,
-            model_resolution,
-            vegetative_roughness_path=vegetative_roughness_path,
-            output_path=output_path,
-            output_height_level=output_height_level,
-            output_height_level_units=output_height_level_units,
-        )
+    raise SystemExit(dsc_wind_downscaling_cli())

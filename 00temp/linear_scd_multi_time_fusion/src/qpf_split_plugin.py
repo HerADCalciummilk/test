@@ -18,14 +18,18 @@ class QpfSplitPlugin:
     def __call__(self, history_range: Sequence[str] | None = None) -> None:
         return self.process(history_range=history_range)
 
-    def process(self, history_range: Sequence[str] | None = None) -> None:
-        """Run realtime mode or a two-value UTC history range."""
+    def process(self, history_range: Sequence[str] | None = None, config=None) -> None:
+        """Run realtime mode or a two-value UTC history range.
+
+        ``config`` 给出时本次改读该 ini。省略时仍用构造时的拆分配置。
+        """
         import linear_scd_multi_time_fusion.src.split_workflow as split_workflow
 
+        config_path = Path(config) if config else self.config_path
         args = argparse.Namespace(
             history_range=list(history_range or []),
-            config=self.config_path,
+            config=config_path,
             daemon=False,
         )
-        cfg = split_workflow.load_config(self.config_path)
+        cfg = split_workflow.load_config(config_path)
         split_workflow.run_once(cfg, args)

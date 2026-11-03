@@ -18,12 +18,11 @@
 | `src/kalman_fix_plugin.py` | `KalmanFix` 插件，用于基于误差场订正预报场。 |
 | `src/data_transfer.py` | `SWVL/STL` 源数据复制流程。 |
 | `utils/grid_utils.py` | `meteva_base` 网格数据校验、坐标匹配和 Kalman 数值计算工具。 |
-| `cli/kalman_data.py` | 替代原 `kalman_data.sh` 的 Python CLI 入口。 |
-| `cli/trans_data.py` | 替代原 `trans_data.sh` 的 Python CLI 入口。 |
+| `cli/` | 在本包目录执行 `python -m cli`，用 `--module` 选择订正或拷贝。 |
+| `resource/kalman.ini` | 未显式传入的参数先读此文件，再没有则用预设。 |
 | `test/` | 非文件 I/O 部分的最小单元测试。 |
 | `docs/` | 算法说明文档。 |
-| `resource/` | 资源文件目录，目前无必须内置资源。 |
-| `nbs/` | notebook 示例目录，目前仅保留目录说明。 |
+| `nbs/` | notebook 示例。 |
 
 ## 3. 算法插件清单
 
@@ -51,60 +50,47 @@ member, level, time, dtime, lat, lon
 
 ## 5. 运行方式
 
-运行前一天的 Kalman 订正：
+在本包目录下执行 `python -m cli`。`--module kalman` 做订正，`--module trans` 拷贝源数据。没写的参数先读 `resource/kalman.ini`，再没有则用预设。日期留空时处理前一天。
+
+订正指定日期范围：
 
 ```bash
-python -m kalman_element_forecast_correction.cli.kalman_data
+python -m cli --module kalman --start-date 20260401 --end-date 20260405
 ```
 
-运行指定日期范围：
+只订正某一个变量：
 
 ```bash
-python -m kalman_element_forecast_correction.cli.kalman_data 20260401 20260405
-```
-
-只运行某一个变量：
-
-```bash
-python -m kalman_element_forecast_correction.cli.kalman_data 20260401 20260401 --variables SWVL
-python -m kalman_element_forecast_correction.cli.kalman_data 20260401 20260401 --variables STL
-```
-
-复制前一天源数据：
-
-```bash
-python -m kalman_element_forecast_correction.cli.trans_data
+python -m cli --module kalman --start-date 20260401 --end-date 20260401 --variables SWVL
 ```
 
 复制指定日期源数据：
 
 ```bash
-python -m kalman_element_forecast_correction.cli.trans_data 20260401
+python -m cli --module trans --date 20260401
 ```
 
-也可以继续使用包装脚本：
-
-```bash
-bash kalman_data.sh
-bash trans_data.sh
-```
+也可以继续使用包装脚本 `kalman_data.sh`、`trans_data.sh`。
 
 ## 6. 默认路径
 
-默认路径保留原脚本的生产路径，可通过 CLI 参数覆盖。
+默认路径写在 `resource/kalman.ini`，与原脚本的生产路径一致。命令行显式传入时覆盖 ini。
 
-| 配置项 | 默认值 |
+| 配置项 | 预设 |
 | --- | --- |
 | Kalman 根目录 | `/data234/GUO_data/Kalman_data` |
 | 实况根目录 | `/data234/DataPool/01CLDAS/00HRCLDAS/Hourly` |
 | SWVL 源数据目录 | `/data/mnt/model_RT/globalECMWF_D1D/SWVL` |
 | STL 源数据目录 | `/data/mnt/model_RT/globalECMWF_D1D/STL` |
+| 误差更新系数 `alpha` | `0.15` |
+| 回溯天数 `back_days` | `5` |
+| 变量 | `SWVL,STL` |
 
 示例：
 
 ```bash
-python -m kalman_element_forecast_correction.cli.kalman_data --base-dir /data234/GUO_data/Kalman_data
-python -m kalman_element_forecast_correction.cli.trans_data --target-base /data234/GUO_data/Kalman_data/process_data
+python -m cli --module kalman --base-dir /data234/GUO_data/Kalman_data
+python -m cli --module trans --target-base /data234/GUO_data/Kalman_data/process_data
 ```
 
 ## 7. 主要处理逻辑

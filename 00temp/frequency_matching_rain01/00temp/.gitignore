@@ -1,0 +1,6 @@
+# 保留目录结构与 README，忽略中间数据大文件
+*
+!.gitignore
+!README.md
+!*/
+!**/.gitkeep

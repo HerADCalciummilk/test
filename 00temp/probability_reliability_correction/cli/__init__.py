@@ -39,10 +39,10 @@ _COMMANDS: Mapping[str, Tuple[str, str]] = {
 
 def _usage() -> str:
     lines = [
-        "probability_reliability_correction 含 CLI 示例，请指定子命令：",
+        "probability_reliability_correction 命令行，请指定子命令：",
         "",
         "用法:",
-        "  python -m cli <subcommand>",
+        "  python -m cli <subcommand> [--help] [路径参数...]",
         "",
         "子命令:",
     ]
@@ -51,23 +51,33 @@ def _usage() -> str:
     lines.extend(
         [
             "",
-            "也可直接运行脚本（在脚本 main 中改路径）:",
-            *(f"  python cli/{mod}.py" for mod, _ in _COMMANDS.values()),
+            "路径在命令行传入。查看全部参数：",
+            "  python -m cli construct --help",
+            "  python cli/prb_construct_reliability_tables.py --help",
+            "",
+            "示例:",
+            "  python -m cli construct --forecast-path PATH --truth-path PATH [--output-path PATH] [--config PATH]",
+            "  python -m cli aggregate --reliability-table-paths PATH [PATH ...] [--output-path PATH]",
+            "  python -m cli manipulate --reliability-table-path PATH [--output-path PATH]",
+            "  python -m cli apply --forecast-path PATH [--reliability-table-paths PATH ...] [--output-path PATH]",
+            "  python cli/prb_apply_reliability_calibration.py --forecast-path PATH --help",
         ]
     )
     return "\n".join(lines)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:
-    """按子命令转发到对应脚本的 ``main``；无参时打印用法。"""
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """按子命令把后续参数转给对应入口；无参时打印用法。"""
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in ("-h", "--help"):
-        raise SystemExit(_usage())
+        print(_usage())
+        return 0
 
     cmd = args[0]
     if cmd not in _COMMANDS:
-        raise SystemExit(f"未知子命令: {cmd}\n\n{_usage()}")
+        print(f"未知子命令: {cmd}\n\n{_usage()}", file=sys.stderr)
+        return 2
 
     mod_name, _ = _COMMANDS[cmd]
     module = importlib.import_module(f".{mod_name}", __package__)
-    module.main()
+    return module.main(args[1:])

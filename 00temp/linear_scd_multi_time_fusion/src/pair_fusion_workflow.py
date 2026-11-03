@@ -12,6 +12,7 @@ where LLL is lead minutes, and each NetCDF file contains:
 The script processes files one by one, so it can handle large 0.01-degree
 national grids without stacking all lead times in memory.
 """
+from __future__ import annotations
 
 from configparser import ConfigParser
 from dataclasses import dataclass
@@ -27,6 +28,11 @@ import xarray as xr
 
 
 from linear_scd_multi_time_fusion.src.linear_blending import linear_blending_forecast
+
+try:
+    from .conf_overrides import CONF_KEYS, apply_conf_overrides
+except ImportError:
+    from conf_overrides import CONF_KEYS, apply_conf_overrides
 
 
 UTC = dt.timezone.utc
@@ -47,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "resource" / "scd_pair_fusion_config.ini",
+        default=Path(__file__).resolve().parents[1] / "resource" / "conf.ini",
         help="SCD 融合配置文件路径。",
     )
     args = parser.parse_args()
@@ -325,14 +331,45 @@ def fuse_one_pair(pair: PairFile, config: ConfigParser, keyframes: Dict[int, flo
         ds2.close()
 
 
-def main() -> None:
-    args = parse_args()
-    config_path = args.config
+def process(
+    history_range=None,
+    config=None,
+    allowed_realtime_minutes=None,
+    history_step_minutes=None,
+    dry_run=None,
+    max_files=None,
+    source1_dir=None,
+    source2_dir=None,
+    truth_dir=None,
+    output_dir=None,
+    enabled=None,
+    time_step_minutes=None,
+    overwrite=None,
+    blending_type=None,
+    keyframe_weights=None,
+    lon_min=None,
+    lon_max=None,
+    lat_min=None,
+    lat_max=None,
+    output_var=None,
+    output_source=None,
+) -> None:
+    """SCD 双源配对融合入口。``config`` 为空时读 ``resource/conf.ini``。
+
+    其余参数对应 conf.ini。``None`` 不覆盖；空字符串会写入空值。
+    """
+    passed = locals()
+    conf_options = {key: passed[key] for key in CONF_KEYS}
+    history = list(history_range or [])
+    if len(history) not in (0, 2):
+        raise ValueError("history range must be omitted or contain exactly START_UTC END_UTC.")
+    config_path = Path(config) if config else Path(__file__).resolve().parents[1] / "resource" / "conf.ini"
     config = read_config(config_path)
-    positional_history = len(args.history_range) == 2
+    apply_conf_overrides(config, **conf_options)
+    positional_history = len(history) == 2
     mode = "history" if positional_history else "realtime"
     if positional_history:
-        history_start_utc, history_end_utc = args.history_range
+        history_start_utc, history_end_utc = history
     else:
         history_start_utc = None
         history_end_utc = None
@@ -366,6 +403,11 @@ def main() -> None:
         fuse_one_pair(pair, config, keyframes)
 
     print("Fusion completed.")
+
+
+def main() -> None:
+    args = parse_args()
+    process(history_range=args.history_range, config=args.config)
 
 
 if __name__ == "__main__":

@@ -2,18 +2,44 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""估计站点高差订正因子（EstimateDzRescaling）示例脚本。
+"""估计站点高差订正因子命令行。
 
-用法：在仓库根目录修改下方路径后执行::
+在本包目录执行::
 
-    python station_height_difference_correction/cli/dsc_estimate_dz_rescaling.py
+    python cli/dsc_estimate_dz_rescaling.py --forecast-path PATH --truth-path PATH --neighbour-path PATH --forecast-period 6 --forecast-data-name wind_speed
+    python -m cli.dsc_estimate_dz_rescaling --forecast-path PATH --truth-path PATH --neighbour-path PATH --forecast-period 6 --forecast-data-name wind_speed
+
+Python::
+
+    from cli.dsc_estimate_dz_rescaling import DscEstimateDzRescalingCli
+    DscEstimateDzRescalingCli.call(forecast_path="PATH", truth_path="PATH", neighbour_path="PATH", forecast_period=6, forecast_data_name="wind_speed")
 """
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import pandas as pd
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
 
 
 def process(
@@ -28,14 +54,24 @@ def process(
     dz_lower_bound: Optional[float] = None,
     dz_upper_bound: Optional[float] = None,
     land_constraint: bool = False,
-    similar_altitude: bool = False,
-) -> pd.DataFrame:
+    similar_altitude: bool = False, config=None) -> pd.DataFrame:
     """从 CSV 读入站点表，估计 scaled_vertical_displacement 并可选写出。
 
     使用 ``read_stadata_from_csv`` 读入（兼容普通 CSV 与 attrs 头 CSV）；
     ``drop_same_id=False`` 保留同站多时效/百分位行。
     写出使用 ``write_stadata_to_csv``（meb 标准 attrs 头格式）。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "truth_data_name": (truth_data_name, "str"),
+        "output_path": (output_path, "str"),
+        "dz_lower_bound": (dz_lower_bound, "float"),
+        "dz_upper_bound": (dz_upper_bound, "float"),
+    })
+    truth_data_name = _over['truth_data_name']
+    output_path = _over['output_path']
+    dz_lower_bound = _over['dz_lower_bound']
+    dz_upper_bound = _over['dz_upper_bound']
     from meteva_base import read_stadata_from_csv, write_stadata_to_csv
 
     from station_height_difference_correction.src.dz_rescaling import EstimateDzRescaling
@@ -68,37 +104,52 @@ def process(
     return result
 
 
-if __name__ == "__main__":
-    import sys
+class DscEstimateDzRescalingCli(CliBase):
+    """``dsc_estimate_dz_rescaling`` 的命令行。``run`` 转调 ``process``。"""
 
-    # 添加仓库根目录到 sys.path，保证可直接运行示例脚本
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    data_root = (
-        Path(__file__).resolve().parent.parent / "test_data" / "estimate-dz-rescaling"
+    prog = "python cli/dsc_estimate_dz_rescaling.py"
+    description = (
+        "估计站点高差订正因子。\n"
+        "三份站点表、预报时效和预报字段名必填。省略的可选项保持函数默认值；"
+        "仍为 None 的项可从 --config 或 resource/conf.ini 填补。"
     )
-    forecast_file = data_root / "cli_input" / "T1200Z_forecast.csv"
-    truth_file = data_root / "cli_input" / "T1200Z_truth.csv"
-    neighbour_file = data_root / "cli_input" / "neighbour.csv"
-    output_path = data_root / "cli_output" / "scaled_vertical_displacement_T1200Z.csv"
-    if not (
-        forecast_file.is_file() and truth_file.is_file() and neighbour_file.is_file()
-    ):
-        print(
-            f"示例输入不存在：{data_root / 'cli_input'}\n"
-            "请补齐 test_data 后再试，或在此处改成你自己的站点表路径。"
-        )
-    else:
-        process(
-            forecast_file,
-            truth_file,
-            neighbour_file,
-            forecast_period=6,
-            forecast_data_name="wind_speed",
-            dz_lower_bound=-550,
-            dz_upper_bound=550,
-            land_constraint=True,
-            output_path=output_path,
-        )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/dsc_estimate_dz_rescaling.py --help\n"
+        "  python cli/dsc_estimate_dz_rescaling.py --forecast-path PATH --truth-path PATH "
+        "--neighbour-path PATH --forecast-period 6 --forecast-data-name wind_speed "
+        "--output-path OUT.csv\n"
+        "  python -m cli.dsc_estimate_dz_rescaling --forecast-path PATH --truth-path PATH "
+        "--neighbour-path PATH --forecast-period 6 --forecast-data-name wind_speed "
+        "--config resource/conf.ini\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--forecast-path", required=True, metavar="PATH", help="预报站点表 CSV。必填。")
+        parser.add_argument("--truth-path", required=True, metavar="PATH", help="实况站点表 CSV。必填。")
+        parser.add_argument("--neighbour-path", required=True, metavar="PATH", help="邻近站表 CSV。必填。")
+        parser.add_argument("--forecast-period", required=True, type=float, help="预报时效。必填。")
+        parser.add_argument("--forecast-data-name", required=True, help="预报字段名。必填。")
+        parser.add_argument("--truth-data-name", default=None, help="实况字段名。省略则由算法默认。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="订正因子 CSV。省略则不写文件。")
+        parser.add_argument("--dz-lower-bound", dest="dz_lower_bound", type=float, default=None, help="高差下限。")
+        parser.add_argument("--dz-upper-bound", dest="dz_upper_bound", type=float, default=None, help="高差上限。")
+        self.add_optional_bool(parser, "--land-constraint", help_true="启用陆地约束。", help_false="不启用陆地约束。省略则用函数默认值 false。")
+        self.add_optional_bool(parser, "--similar-altitude", help_true="只使用相近海拔的邻近站。", help_false="不限制邻近站海拔。省略则用函数默认值 false。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        process(**{key: value for key, value in params.items() if value is not None})
+        return 0
+
+
+def dsc_estimate_dz_rescaling_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.dsc_estimate_dz_rescaling`` 都进这里。"""
+    return DscEstimateDzRescalingCli().main(argv)
+
+
+main = dsc_estimate_dz_rescaling_cli
+
+
+if __name__ == "__main__":
+    raise SystemExit(dsc_estimate_dz_rescaling_cli())

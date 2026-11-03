@@ -43,7 +43,7 @@ def _bootstrap_paths() -> None:
 
 _bootstrap_paths()
 
-from utils.util_env import get_repo_root, get_resolved_paths, get_run_params  # noqa: E402
+from utils.util_env import get_repo_root, get_resolved_paths, get_run_params, set_main_ini  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -366,10 +366,52 @@ def process(
     show_png: Optional[bool] = None,
     ws_path: Optional[str] = None,
     png_path: Optional[str] = None,
+    log_file: Optional[str] = None,
+    config: Optional[str] = None,
+) -> Dict:
+    """阵风系数入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
+    kwargs = dict(
+        mode=mode,
+        station_csv_dir=station_csv_dir,
+        fore_hours=fore_hours,
+        factor_path=factor_path,
+        u_path=u_path,
+        v_path=v_path,
+        fore_hour=fore_hour,
+        output_path=output_path,
+        make_png=make_png,
+        show_png=show_png,
+        ws_path=ws_path,
+        png_path=png_path,
+        log_file=log_file,
+    )
+    if not config:
+        return _process_impl(**kwargs)
+    set_main_ini(config)
+    try:
+        return _process_impl(**kwargs)
+    finally:
+        set_main_ini(None)
+
+
+def _process_impl(
+    mode: Optional[str] = None,
+    station_csv_dir: Optional[str] = None,
+    fore_hours: Optional[Union[Sequence[int], str]] = None,
+    factor_path: Optional[str] = None,
+    u_path: Optional[str] = None,
+    v_path: Optional[str] = None,
+    fore_hour: Optional[int] = None,
+    output_path: Optional[str] = None,
+    make_png: Optional[bool] = None,
+    show_png: Optional[bool] = None,
+    ws_path: Optional[str] = None,
+    png_path: Optional[str] = None,
+    log_file: Optional[str] = None,
 ) -> Dict:
     """阵风系数 / 订正可调度入口。
 
-    未传参数从 ``resource/gust_factor.ini`` 读取。
+    未传参数从 ``resource/conf.ini`` 读取。
 
     Parameters
     ----------
@@ -397,6 +439,9 @@ def process(
     """
     paths = get_resolved_paths()
     params = get_run_params()
+
+    if log_file is not None:
+        paths["log_file_template"] = log_file
 
     mode = (mode or params["mode"] or "all").strip().lower()
     station_csv_dir = station_csv_dir or paths["station_csv_dir"]

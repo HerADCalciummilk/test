@@ -1,31 +1,45 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""海陆掩码二值化 CLI 示例。
+"""海陆掩码二值化 CLI。
 
-约定（无 Improver ``cli`` 装饰器）::
+在本包目录执行::
 
-    - ``process`` 接收文件路径，在函数内完成读入、计算与可选写出；
-    - ``main`` 中定义路径等参数，再直接调用 ``process``。
+    python -m cli.anc_generate_landmask_ancillary --landmask-path land.nc --output-path out.nc
+    python cli/anc_generate_landmask_ancillary.py --landmask-path land.nc --output-path out.nc
 
-包根目录执行::
+Python::
 
-    python -m cli landmask
-    python cli/anc_generate_landmask_ancillary.py
+    from cli.anc_generate_landmask_ancillary import AncGenerateLandmaskAncillaryCli
+    AncGenerateLandmaskAncillaryCli.call(landmask_path="land.nc", output_path="out.nc")
 """
-
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import meteva_base as meb
 import xarray as xr
 
-_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+
+def _bootstrap_paths() -> None:
+    package_root = Path(__file__).resolve().parents[1]
+    parent = str(package_root.parent)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
 
 
-def process(landmask_path: str, output_path: Optional[str] = None) -> xr.DataArray:
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+
+
+def process(
+    landmask_path: str,
+    output_path: Optional[str] = None,
+    config=None,
+) -> xr.DataArray:
     """读取海陆掩码并输出 0/1 二值化结果。
 
     功能逻辑：
@@ -44,6 +58,8 @@ def process(landmask_path: str, output_path: Optional[str] = None) -> xr.DataArr
         输入海陆掩码 nc 文件路径。
     output_path : str, optional
         输出 nc 文件路径。为空时仅返回结果，不写盘。
+    config :
+        命令行 ``--config`` 传入。本模块无 ini 读取器，不覆盖已给路径。
 
     返回
     -------
@@ -61,23 +77,62 @@ def process(landmask_path: str, output_path: Optional[str] = None) -> xr.DataArr
     return result
 
 
-def main() -> None:
-    """定义输入/输出路径并调用 ``process``。
+class AncGenerateLandmaskAncillaryCli(CliBase):
+    """以 0.5 为阈值把海陆掩码二值化为 0/1。"""
 
-    默认使用 ``resource/cli_input`` 下经纬 meb 六维样例；业务使用时在此修改路径即可。
-    """
-    repo_root = str(_PACKAGE_ROOT.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
+    prog = "python -m cli.anc_generate_landmask_ancillary"
+    description = "读取海陆掩码 nc，以 0.5 为阈值输出 0/1 二值场。"
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python -m cli.anc_generate_landmask_ancillary --help\n"
+        "  python -m cli.anc_generate_landmask_ancillary "
+        "--landmask-path land.nc --output-path out.nc\n"
+        "  python cli/anc_generate_landmask_ancillary.py "
+        "--landmask-path land.nc --output-path out.nc\n"
+        "\n"
+        "说明:\n"
+        "  - --config 传给 process；本模块无 ini 读取器，省略则不改路径\n"
+    )
 
-    input_dir = _PACKAGE_ROOT / "resource" / "cli_input"
-    output_dir = _PACKAGE_ROOT / "resource" / "cli_output"
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--landmask-path",
+            dest="landmask_path",
+            required=True,
+            metavar="PATH",
+            help="输入海陆掩码 nc。",
+        )
+        parser.add_argument(
+            "--output-path",
+            dest="output_path",
+            default=None,
+            metavar="PATH",
+            help="输出 nc。省略则只返回、不写文件。",
+        )
+        parser.add_argument(
+            "--config",
+            dest="config",
+            default=None,
+            metavar="PATH",
+            help=(
+                "运行配置文件，传给 process 的 config。"
+                "相对路径按项目根解析。"
+                "本模块无 ini 读取器，省略则不改路径。"
+            ),
+        )
 
-    landmask_path = str(input_dir / "input_landmask_meb.nc")
-    output_path = str(output_dir / "cli_landmask_result.nc")
+    def run(self, landmask_path=None, output_path=None, config=None) -> int:
+        process(landmask_path=landmask_path, output_path=output_path, config=config)
+        return 0
 
-    process(landmask_path=landmask_path, output_path=output_path)
+
+def anc_generate_landmask_ancillary_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。``python -m cli.anc_generate_landmask_ancillary`` 与直接运行本文件都进这里。"""
+    return AncGenerateLandmaskAncillaryCli().main(argv)
+
+
+main = anc_generate_landmask_ancillary_cli
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(anc_generate_landmask_ancillary_cli())

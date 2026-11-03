@@ -2,24 +2,24 @@
 """
 MAIT 24H 运行参数（``src/utils/util_env.py``，经 ``utils`` 包统一导入）
 
-**统一从仓库内** ``resource/mait_24.ini`` **读取**路径与默认运行项；Windows 与 Linux 使用同一文件、同一相对路径规则（相对路径均相对**仓库根目录**展开为绝对路径）。
+**统一从仓库内** ``resource/conf.ini`` **读取**路径与默认运行项；Windows 与 Linux 使用同一文件、同一相对路径规则（相对路径均相对**仓库根目录**展开为绝对路径）。
 
 ``mait_24.ini`` 常用键（``key=value``，每行一条，``#`` / ``;`` 开头为注释）：
 
 - ``log_file`` — 日志路径模板（如 ``log/YYYYMMDD.txt``）
-- ``para_ini`` — ``para_24.ini``
+- ``para_path`` — ``para_24.ini``（兼容旧键 ``para_ini``）；解析结果仍放在 ``para_ini``
 - ``background_ini`` — ``para_24_background.ini``（格点 MICAPS4 背景路径模板）
-- ``bate_file`` — beta 目录模板（沿用历史拼写 ``bate_file``）；亦接受 ``beta_path_template``
+- ``beta_path`` — beta 目录模板（兼容旧键 ``bate_file``、``beta_path_template``、``beta_file``）
 - ``station_info``、``mask_nc``
 - ``clip_coords`` — 六个浮点逗号分隔
 - ``predict_valid_list`` — 预报时效（小时）逗号分隔
-- ``is_obs_bj`` — 实况是否北京时间（兼容 ``is_obs_bjt``）
+- ``is_obs_bjt`` — 实况是否北京时间（兼容 ``is_obs_bj``）
 - ``is_multi``、``pro_count``、``split_lat``
-- ``split_lon`` — 亦可写 ``split_lin``（与现有配置一致，对应 ``process`` 的 ``split_lon``）
+- ``split_lon`` — 亦可写 ``split_lin``（对应 ``process`` 的 ``split_lon``）
 
-若 ``resource/mait_24.ini`` 不存在或某键缺失，则使用该键在代码内的硬编码默认值（与同目录下示例 ini 一致）。
+若 ``resource/conf.ini`` 不存在或某键缺失，则使用该键在代码内的硬编码默认值（与同目录下示例 ini 一致）。
 
-``get_resolved_paths`` / 各 ``get_default_*`` 在首次调用时读取并缓存 ini；修改 ini 后需重新启动进程生效。
+``get_resolved_paths`` / 各 ``get_default_*`` 在首次调用时读取并缓存 ini。``set_main_ini`` 会清空缓存。
 """
 from __future__ import annotations
 
@@ -29,13 +29,15 @@ from typing import Any, Dict, List, Optional
 _UTIL_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(os.path.dirname(_UTIL_DIR))
 
-_MAIN_INI_REL = os.path.join("resource", "mait_24.ini")
+_MAIN_INI_REL = os.path.join("resource", "conf.ini")
 
 _DEFAULT_CLIP_COORDS = (70.0, 140.0, 0.0, 60.0, 0.1, 0.1)
 _DEFAULT_PREDICT_VALID = tuple(range(36, 252 + 24, 24))
 
 # 首次读取后缓存；键为小写 canonical 便于查找
 _RAW_INI_CACHE: Optional[Dict[str, str]] = None
+_CONFIG_OVERRIDE: Optional[str] = None
+_CONFIG_ENV = "NIMM_MULTI_RAIN_MAIT24_BLENDING_INI"
 
 
 def _abspath(p: str) -> str:
@@ -53,8 +55,39 @@ def _expand_path_maybe_relative_to_repo(p: str) -> str:
     return _abspath(os.path.join(_REPO_ROOT, os.path.normpath(exp)))
 
 
-def _main_ini_abs_path() -> str:
+def _default_ini_abs_path() -> str:
     return _abspath(os.path.join(_REPO_ROOT, os.path.normpath(_MAIN_INI_REL)))
+
+
+def _main_ini_abs_path() -> str:
+    if _CONFIG_OVERRIDE:
+        return _CONFIG_OVERRIDE
+    env_path = os.environ.get(_CONFIG_ENV, "").strip()
+    if env_path:
+        return env_path
+    return _default_ini_abs_path()
+
+
+def set_main_ini(path: Optional[str] = None) -> str:
+    """切换运行配置 ini，并清空缓存。
+
+    ``path`` 为空时回到 ``resource/conf.ini``。
+    相对路径按项目根目录解析。文件不存在时抛出 FileNotFoundError。
+    同时写入环境变量，供多进程子进程继承同一 ini。
+    """
+    global _CONFIG_OVERRIDE, _RAW_INI_CACHE
+    if path is None or not str(path).strip():
+        _CONFIG_OVERRIDE = None
+        os.environ.pop(_CONFIG_ENV, None)
+        chosen = _default_ini_abs_path()
+    else:
+        chosen = _expand_path_maybe_relative_to_repo(str(path))
+        if not os.path.isfile(chosen):
+            raise FileNotFoundError(f"配置文件不存在: {chosen}")
+        _CONFIG_OVERRIDE = chosen
+        os.environ[_CONFIG_ENV] = chosen
+    _RAW_INI_CACHE = None
+    return chosen
 
 
 def _parse_kv_ini(path: str) -> Dict[str, str]:
@@ -89,7 +122,7 @@ def _get_raw_ini() -> Dict[str, str]:
 
 
 def _defaults_paths_resolved() -> Dict[str, str]:
-    """与示例 ``resource/mait_24.ini`` 一致的默认路径（均为绝对路径）。"""
+    """与示例 ``resource/conf.ini`` 一致的默认路径（均为绝对路径）。"""
     return {
         "log_file_template": _expand_path_maybe_relative_to_repo("log/YYYYMMDD.txt"),
         "para_ini": _expand_path_maybe_relative_to_repo("resource/para_24.ini"),
@@ -141,7 +174,7 @@ def get_resolved_paths() -> Dict[str, Any]:
     if lf:
         base["log_file_template"] = _expand_path_maybe_relative_to_repo(lf)
 
-    pi = _raw_path("para_ini")
+    pi = _raw_path("para_path") or _raw_path("para_ini")
     if pi:
         base["para_ini"] = _expand_path_maybe_relative_to_repo(pi)
 
@@ -149,7 +182,12 @@ def get_resolved_paths() -> Dict[str, Any]:
     if bg:
         base["background_ini"] = _expand_path_maybe_relative_to_repo(bg)
 
-    beta = _raw_path("bate_file") or _raw_path("beta_path_template") or _raw_path("beta_file")
+    beta = (
+        _raw_path("beta_path")
+        or _raw_path("bate_file")
+        or _raw_path("beta_path_template")
+        or _raw_path("beta_file")
+    )
     if beta:
         base["beta_path_template"] = _expand_path_maybe_relative_to_repo(beta)
 

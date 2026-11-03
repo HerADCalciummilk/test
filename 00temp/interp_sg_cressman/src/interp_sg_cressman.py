@@ -8,12 +8,14 @@
 函数入口：``interp_sg_cressman``
 插件入口：``InterpSGCressmanPlugin``（可调用，``plugin(sta, grid)``）
 
-依赖：``utils.interp_gg_pulgin.interp_gg_linear``（背景场对齐）。
+依赖：子模块 ``interp_gg_linear``（背景场对齐）、``utils.base_plugin``。
 """
 
 from __future__ import annotations
 
 import copy
+import os
+import sys
 from typing import Optional, Sequence
 
 import meteva
@@ -22,7 +24,22 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from utils.base_plugin import BasePlugin
-from utils.interp_gg_pulgin import interp_gg_linear
+
+
+def _ensure_interp_gg_linear_on_path() -> None:
+    """将同级子模块 ``interp_gg_linear`` 的根与 ``src`` 追加到 sys.path。"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    temp_root = os.path.normpath(os.path.join(here, "..", ".."))
+    gg_root = os.path.join(temp_root, "interp_gg_linear")
+    gg_src = os.path.join(gg_root, "src")
+    for p in (gg_root, gg_src):
+        if os.path.isdir(p) and p not in sys.path:
+            sys.path.append(p)
+
+
+_ensure_interp_gg_linear_on_path()
+
+from interp_gg_linear import interp_gg_linear  # noqa: E402
 
 
 def interp_sg_cressman(sta0, grid, r_list, background=None, nearNum=100, outer_value=None):

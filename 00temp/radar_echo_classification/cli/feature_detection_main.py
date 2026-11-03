@@ -2,15 +2,46 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""特征识别 CLI 示例脚本。"""
+"""特征识别命令行。
+
+在本包目录执行::
+
+    python cli/feature_detection_main.py --field-data-path PATH [--output-path PATH]
+    python -m cli.feature_detection_main --field-data-path PATH
+
+Python::
+
+    from cli.feature_detection_main import FeatureDetectionMainCli
+    FeatureDetectionMainCli.call(field_data_path="PATH")
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import meteva_base as meb
 import xarray as xr
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
 
 
 def process(
@@ -45,8 +76,7 @@ def process(
     estimate_flag: bool = True,
     estimate_offset: float = 5,
     result_key: str = None,
-    output_path: Optional[str] = None,
-) -> xr.DataArray | xr.Dataset:
+    output_path: Optional[str] = None, config=None) -> xr.DataArray | xr.Dataset:
     """使用自适应阈值方法识别雷达回波中的核心与特征区域。
 
     参数
@@ -91,6 +121,23 @@ def process(
         ``feature_detection``，以及可选 ``feature_under``、
         ``feature_over`` 的数据集。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "overest_field_path": (overest_field_path, "str"),
+        "underest_field_path": (underest_field_path, "str"),
+        "dx": (dx, "float"),
+        "dy": (dy, "float"),
+        "level_m": (level_m, "float"),
+        "result_key": (result_key, "str"),
+        "output_path": (output_path, "str"),
+    })
+    overest_field_path = _over['overest_field_path']
+    underest_field_path = _over['underest_field_path']
+    dx = _over['dx']
+    dy = _over['dy']
+    level_m = _over['level_m']
+    result_key = _over['result_key']
+    output_path = _over['output_path']
     from radar_echo_classification.src.echo_class import FeatureDetectionPlugin
 
     field_data = meb.read_griddata_from_nc(field_data_path)
@@ -140,20 +187,68 @@ def process(
     return result
 
 
-if __name__ == "__main__":
-    import sys
+class FeatureDetectionMainCli(CliBase):
+    """``feature_detection_main`` 的命令行。``run`` 转调 ``process``。"""
 
-    # 添加项目根目录到 Python 路径
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    data_dir = Path(__file__).resolve().parents[1] / "test_data" / "echo_class" / "cli_input"
-    output_dir = Path(__file__).resolve().parents[1] / "test_data" / "echo_class" / "cli_output"
-
-    process(
-        str(data_dir / "ACHN_CREF000_20240612_070000_small.nc"),
-        level_m=0.0,
-        result_key="feature_detection",
-        output_path=str(output_dir / "achn_feature_cli.nc"),
+    prog = "python cli/feature_detection_main.py"
+    description = (
+        "自适应阈值特征识别。\n"
+        "必填路径由命令行传入。省略的可选项保持函数默认值；"
+        "仍为 None 的项可从 --config 或 resource/conf.ini 填补。"
     )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/feature_detection_main.py --help\n"
+        "  python cli/feature_detection_main.py --field-data-path PATH --output-path OUT.nc\n"
+        "  python -m cli.feature_detection_main --field-data-path PATH --config resource/conf.ini\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--field-data-path", required=True, metavar="PATH", help="主输入网格 NetCDF，通常为反射率。必填。")
+        parser.add_argument("--overest-field-path", default=None, metavar="PATH", help="显式高估场。省略则按 estimate_offset 构造。")
+        parser.add_argument("--underest-field-path", default=None, metavar="PATH", help="显式低估场。省略则按 estimate_offset 构造。")
+        parser.add_argument("--dx", type=float, default=None, help="水平分辨率（米）。省略则自动估算。")
+        parser.add_argument("--dy", type=float, default=None, help="水平分辨率（米）。省略则自动估算。")
+        parser.add_argument("--level-m", dest="level_m", type=float, default=None, help="参与分类的高度（米）。省略则用第一层。")
+        parser.add_argument("--always-core-thres", dest="always_core_thres", type=float, default=None, help="始终判为核心的阈值。省略则用 42。")
+        parser.add_argument("--bkg-rad-km", dest="bkg_rad_km", type=float, default=None, help="背景半径（千米）。省略则用 11。")
+        self.add_optional_bool(parser, "--use-cosine", help_true="使用余弦阈值关系。", help_false="不使用余弦阈值关系。省略则用函数默认值 true。")
+        parser.add_argument("--max-diff", dest="max_diff", type=float, default=None, help="阈值关系 max_diff。省略则用 5。")
+        parser.add_argument("--zero-diff-cos-val", dest="zero_diff_cos_val", type=float, default=None, help="zero_diff_cos_val。省略则用 55。")
+        parser.add_argument("--scalar-diff", dest="scalar_diff", type=float, default=None, help="scalar_diff。省略则用 1.5。")
+        self.add_optional_bool(parser, "--use-addition", help_true="使用加法形式的阈值关系。", help_false="不使用加法形式。省略则用函数默认值 true。")
+        parser.add_argument("--calc-thres", dest="calc_thres", type=float, default=None, help="calc_thres。省略则用 0.75。")
+        parser.add_argument("--weak-echo-thres", dest="weak_echo_thres", type=float, default=None, help="弱回波阈值。省略则用 5。")
+        parser.add_argument("--min-val-used", dest="min_val_used", type=float, default=None, help="最小参与计算场值。省略则用 5。")
+        self.add_optional_bool(parser, "--db-averaging", dest="dB_averaging", help_true="背景场按 dB 平均。", help_false="背景场不做 dB 平均。省略则用函数默认值 true。")
+        self.add_optional_bool(parser, "--remove-small-objects", help_true="移除小目标。", help_false="保留小目标。省略则用函数默认值 true。")
+        parser.add_argument("--min-km2-size", dest="min_km2_size", type=float, default=None, help="小目标面积阈值（平方千米）。省略则用 10。")
+        self.add_optional_bool(parser, "--binary-close", help_true="做二值闭运算。", help_false="不做二值闭运算。省略则用函数默认值 false。")
+        parser.add_argument("--val-for-max-rad", dest="val_for_max_rad", type=float, default=None, help="最大影响半径对应的场值。省略则用 30。")
+        parser.add_argument("--max-rad-km", dest="max_rad_km", type=float, default=None, help="最大影响半径（千米）。省略则用 5。")
+        parser.add_argument("--core-val", dest="core_val", type=int, default=None, help="核心类别编码。省略则用 3。")
+        parser.add_argument("--nosfcecho", type=int, default=None, help="无回波类别编码。省略则用 0。")
+        parser.add_argument("--weakecho", type=int, default=None, help="弱回波类别编码。省略则用 3。")
+        parser.add_argument("--bkgd-val", dest="bkgd_val", type=int, default=None, help="背景类别编码。省略则用 1。")
+        parser.add_argument("--feat-val", dest="feat_val", type=int, default=None, help="特征类别编码。省略则用 2。")
+        self.add_optional_bool(parser, "--estimate-flag", help_true="计算高估/低估敏感性结果。", help_false="不计算敏感性结果。省略则用函数默认值 true。")
+        parser.add_argument("--estimate-offset", dest="estimate_offset", type=float, default=None, help="构造高估/低估场的偏移。省略则用 5。")
+        parser.add_argument("--result-key", default=None, help="只返回该字段，例如 feature_detection。省略则返回全部字段。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="结果 NetCDF。省略则只返回内存结果。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        process(**{key: value for key, value in params.items() if value is not None})
+        return 0
+
+
+def feature_detection_main_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.feature_detection_main`` 都进这里。"""
+    return FeatureDetectionMainCli().main(argv)
+
+
+main = feature_detection_main_cli
+
+
+if __name__ == "__main__":
+    raise SystemExit(feature_detection_main_cli())

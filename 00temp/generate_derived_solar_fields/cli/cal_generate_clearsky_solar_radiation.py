@@ -2,30 +2,72 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""晴空太阳辐射累计计算 CLI 示例。
+"""晴空太阳辐射累计计算 CLI。
 
-约定（无 Improver ``cli`` 装饰器）::
+在本包目录执行::
 
-    - ``process`` 接收文件路径，在函数内完成读入、计算与可选写出；
-    - ``main`` 中定义路径等参数，再直接调用 ``process``。
+    python -m cli.cal_generate_clearsky_solar_radiation --target-grid-path grid.nc --time 2022050600 --accumulation-period 24 --output-path out.nc
+    python cli/cal_generate_clearsky_solar_radiation.py --target-grid-path grid.nc --time 2022050600 --accumulation-period 24 --output-path out.nc
 
-包根目录执行::
+Python::
 
-    python -m cli clearsky
-    python cli/cal_generate_clearsky_solar_radiation.py
+    from cli.cal_generate_clearsky_solar_radiation import CalGenerateClearskySolarRadiationCli
+    CalGenerateClearskySolarRadiationCli.call(
+        target_grid_path="grid.nc",
+        time="2022050600",
+        accumulation_period=24,
+        output_path="out.nc",
+    )
 """
-
 from __future__ import annotations
 
+import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import meteva_base as meb
 import xarray as xr
 
-_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+
+def _bootstrap_paths() -> None:
+    package_root = Path(__file__).resolve().parents[1]
+    parent = str(package_root.parent)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+
+
+def _parse_datetime(text: str) -> datetime:
+    value = str(text).strip()
+    formats = (
+        "%Y%m%d%H%M%S",
+        "%Y%m%d%H%M",
+        "%Y%m%d%H",
+        "%Y%m%d",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    )
+    for fmt in formats:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    raise argparse.ArgumentTypeError(
+        "时间格式应为 YYYYMMDDHH、YYYYMMDDHHMM 或 YYYY-MM-DDTHH:MM:SS"
+    )
+
+
+def _set_kwargs(**kwargs):
+    return {key: value for key, value in kwargs.items() if value is not None}
 
 
 def process(
@@ -37,6 +79,7 @@ def process(
     temporal_spacing: int = 30,
     new_title: Optional[str] = None,
     output_path: Optional[str] = None,
+    config=None,
 ) -> xr.DataArray:
     """读取输入并计算指定时段内的累计晴空太阳辐射。
 
@@ -58,6 +101,8 @@ def process(
         可选，写出前覆盖 ``attrs["title"]``。
     output_path :
         可选输出 nc 路径；为 ``None`` 时不写文件。
+    config :
+        命令行 ``--config`` 传入。本模块无 ini 读取器，不覆盖已给路径。
 
     返回
     -------
@@ -98,32 +143,137 @@ def process(
     return result
 
 
-def main() -> None:
-    """定义输入/输出路径并调用 ``process``。
+class CalGenerateClearskySolarRadiationCli(CliBase):
+    """计算指定时段内的累计晴空太阳辐射。"""
 
-    默认使用 ``resource/cli_input`` 下经纬 meb 六维样例；业务使用时在此修改路径即可。
-    """
-    repo_root = str(_PACKAGE_ROOT.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
-
-    input_dir = _PACKAGE_ROOT / "resource" / "cli_input"
-    output_dir = _PACKAGE_ROOT / "resource" / "cli_output"
-
-    surface_altitude_path = str(input_dir / "input_surface_altitude_meb.nc")
-    target_grid_path = surface_altitude_path
-    linke_turbidity_path = str(input_dir / "input_linke_turbidity_meb.nc")
-    output_path = str(output_dir / "cal_clearsky_solar_radiation_result.nc")
-
-    process(
-        target_grid_path=target_grid_path,
-        time=datetime(2022, 5, 6, 0, 0),
-        accumulation_period=24,
-        surface_altitude_path=surface_altitude_path,
-        linke_turbidity_path=linke_turbidity_path,
-        output_path=output_path,
+    prog = "python -m cli.cal_generate_clearsky_solar_radiation"
+    description = (
+        "在目标网格上积分累计晴空太阳辐射。\n"
+        "地表海拔与 Linke 浑浊度可省略，省略时插件使用默认场。"
     )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python -m cli.cal_generate_clearsky_solar_radiation --help\n"
+        "  python -m cli.cal_generate_clearsky_solar_radiation "
+        "--target-grid-path grid.nc --time 2022050600 "
+        "--accumulation-period 24 --output-path out.nc\n"
+        "  python cli/cal_generate_clearsky_solar_radiation.py "
+        "--target-grid-path grid.nc --time 2022-05-06T00:00:00 "
+        "--accumulation-period 24 --surface-altitude-path alt.nc "
+        "--output-path out.nc\n"
+        "\n"
+        "说明:\n"
+        "  - 省略 --temporal-spacing 时 process 默认 30 分钟\n"
+        "  - --config 传给 process；本模块无 ini 读取器，省略则不改路径\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--target-grid-path",
+            dest="target_grid_path",
+            required=True,
+            metavar="PATH",
+            help="目标网格 meb 六维 nc。",
+        )
+        parser.add_argument(
+            "--time",
+            dest="time",
+            type=_parse_datetime,
+            required=True,
+            metavar="TIME",
+            help="累积结束时刻，如 2022050600 或 2022-05-06T00:00:00。",
+        )
+        parser.add_argument(
+            "--accumulation-period",
+            dest="accumulation_period",
+            type=int,
+            required=True,
+            metavar="HOURS",
+            help="累积时长（小时），如 24 表示过去 24 小时积分。",
+        )
+        parser.add_argument(
+            "--surface-altitude-path",
+            dest="surface_altitude_path",
+            default=None,
+            metavar="PATH",
+            help="地表海拔 meb nc（米）。省略则插件使用默认海拔场。",
+        )
+        parser.add_argument(
+            "--linke-turbidity-path",
+            dest="linke_turbidity_path",
+            default=None,
+            metavar="PATH",
+            help="Linke 浑浊度 meb nc。省略则插件使用默认浑浊度场。",
+        )
+        parser.add_argument(
+            "--temporal-spacing",
+            dest="temporal_spacing",
+            type=int,
+            default=None,
+            metavar="MINUTES",
+            help="时间积分步长（分钟）。省略则使用 30。",
+        )
+        parser.add_argument(
+            "--new-title",
+            dest="new_title",
+            default=None,
+            metavar="TEXT",
+            help='写出前覆盖 attrs["title"]。',
+        )
+        parser.add_argument(
+            "--output-path",
+            dest="output_path",
+            default=None,
+            metavar="PATH",
+            help="输出 nc。省略则只返回、不写文件。",
+        )
+        parser.add_argument(
+            "--config",
+            dest="config",
+            default=None,
+            metavar="PATH",
+            help=(
+                "运行配置文件，传给 process 的 config。"
+                "相对路径按项目根解析。"
+                "本模块无 ini 读取器，省略则不改路径。"
+            ),
+        )
+
+    def run(
+        self,
+        target_grid_path=None,
+        time=None,
+        accumulation_period=None,
+        surface_altitude_path=None,
+        linke_turbidity_path=None,
+        temporal_spacing=None,
+        new_title=None,
+        output_path=None,
+        config=None,
+    ) -> int:
+        process(
+            target_grid_path=target_grid_path,
+            time=time,
+            accumulation_period=accumulation_period,
+            surface_altitude_path=surface_altitude_path,
+            linke_turbidity_path=linke_turbidity_path,
+            new_title=new_title,
+            output_path=output_path,
+            config=config,
+            **_set_kwargs(temporal_spacing=temporal_spacing),
+        )
+        return 0
+
+
+def cal_generate_clearsky_solar_radiation_cli(
+    argv: Optional[Sequence[str]] = None,
+) -> int:
+    """命令行入口。``python -m cli.cal_generate_clearsky_solar_radiation`` 与直接运行本文件都进这里。"""
+    return CalGenerateClearskySolarRadiationCli().main(argv)
+
+
+main = cal_generate_clearsky_solar_radiation_cli
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(cal_generate_clearsky_solar_radiation_cli())

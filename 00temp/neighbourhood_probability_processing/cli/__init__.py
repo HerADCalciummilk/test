@@ -7,22 +7,23 @@
 from typing import Optional, Sequence
 
 
-_CLI_SCRIPTS = (
-    "neighbourhood_probability_processing/cli/ens_nbhood.py",
-    "neighbourhood_probability_processing/cli/ens_nbhood_iterate_with_mask.py",
-    "neighbourhood_probability_processing/cli/ens_nbhood_land_and_sea.py",
-    "neighbourhood_probability_processing/cli/preprocess_test_data.py",
-)
-
-
 def main(argv: Optional[Sequence[str]] = None):
-    """列出可直接运行的 CLI 示例脚本。"""
+    """列出带路径参数的命令行。"""
+    del argv
     lines = [
-        "neighbourhood_probability_processing 模块 CLI 已改为示例脚本，请直接运行：",
-        *(f"  python {script}" for script in _CLI_SCRIPTS),
+        "邻域概率命令行参数由 flags 传入，先看 --help：",
+        "  python cli/ens_nbhood.py --help",
+        "  python cli/ens_nbhood.py --input-data-path PATH --neighbourhood-output probabilities --radii 20000 [--output-path PATH] [--config PATH]",
+        "  python -m cli.ens_nbhood --help",
+        "  python cli/ens_nbhood_land_and_sea.py --help",
+        "  python cli/ens_nbhood_land_and_sea.py --input-data-path PATH --mask-path PATH --radii 20000 [--output-path PATH] [--config PATH]",
+        "  python -m cli.ens_nbhood_land_and_sea --help",
+        "  python cli/ens_nbhood_iterate_with_mask.py --help",
+        "  python cli/ens_nbhood_iterate_with_mask.py --input-data-path PATH --mask-path PATH --coord-for-masking level --radii 10000 [--output-path PATH] [--config PATH]",
+        "  python -m cli.ens_nbhood_iterate_with_mask --help",
         "",
-        "官方样例预处理（nbhood + use_nbhood，threshold→level）：",
-        "  python neighbourhood_probability_processing/cli/preprocess_test_data.py",
-        "在脚本底部的 if __name__ == '__main__' 中修改路径与参数后执行。",
+        "官方样例预处理仍直接运行：",
+        "  python cli/preprocess_test_data.py",
     ]
-    raise SystemExit("\n".join(lines))
+    print("\n".join(lines))
+    return 0

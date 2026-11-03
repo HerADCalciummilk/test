@@ -13,10 +13,6 @@ import numpy as np
 import xarray as xr
 
 
-_CLI_SCRIPTS = (
-    "radar_wind_dealiasing/cli/region_dealias.py",
-)
-
 # netCDF 库对 float32 的默认填充值（NC_FILL_FLOAT），与 netCDF4.default_fillvals['f4'] 相同。
 _CF_NETCDF_FILL = np.float32(9.969209968386869e36)
 
@@ -130,11 +126,16 @@ def _write_griddata_to_nc(
 
 
 def main(argv: Optional[Sequence[str]] = None):
-    """列出可直接运行的 CLI 示例脚本。"""
+    """列出带路径参数的命令行。"""
+    del argv
     lines = [
-        "region_dealias CLI 已改为示例脚本，请直接运行：",
-        *(f"  python {script}" for script in _CLI_SCRIPTS),
-        "",
-        "在脚本底部的 if __name__ == '__main__' 中修改路径与参数后执行。",
+        "radar_wind_dealiasing 命令行参数由 flags 传入，先看 --help：",
+        "  python cli/region_dealias.py --help",
+        "  python cli/region_dealias.py --velocity-path PATH [--gatefilter-path PATH] [--output-path PATH] [--config PATH]",
+        "  python -m cli.region_dealias --help",
+        "  python cli/polar_volume_main.py --help",
+        "  python cli/polar_volume_main.py --radar-path PATH --field-name velocity [--output-path PATH] [--config PATH]",
+        "  python -m cli.polar_volume_main --help",
     ]
-    raise SystemExit("\n".join(lines))
+    print("\n".join(lines))
+    return 0

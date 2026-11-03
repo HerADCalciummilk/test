@@ -1,7 +1,7 @@
-"""Executable entry for python -m kalman_element_forecast_correction.cli."""
+"""在本包目录执行：``python -m cli``。"""
 
-from kalman_element_forecast_correction.cli import main
+from . import main
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

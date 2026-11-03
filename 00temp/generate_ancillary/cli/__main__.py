@@ -12,18 +12,7 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-_ROOT = Path(__file__).resolve().parent.parent
-_PARENT = _ROOT.parent
-for _p in (str(_PARENT), str(_ROOT)):
-    while _p in sys.path:
-        sys.path.remove(_p)
-for _p in reversed((str(_PARENT), str(_ROOT))):
-    sys.path.insert(0, _p)
-
-from generate_ancillary.cli import main  # noqa: E402
+from cli import main
 
 
 if __name__ == "__main__":

@@ -4,3 +4,6 @@ numpy
 xarray
 scipy
 python-dateutil
+# optical_flow_nowcast（LK / Extrapolation）依赖
+scikit-image
+opencv-python-headless

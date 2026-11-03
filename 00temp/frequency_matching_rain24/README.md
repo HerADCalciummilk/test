@@ -11,8 +11,14 @@ multi_optimize_tp_24h/
 ├── nbs/          # Jupyter 说明笔记本
 ├── resource/     # 配置文件、站点模板、掩码等
 ├── src/          # 核心算法与主程序
-│   ├── correct_tp_24h.py / cal_*.py / interpolation.py
-│   └── utils/    # 本算法工具：config / data_proc / data_save / verify / logger / util_env
+│   ├── correct_tp_24h.py          # 原光流 + 原 Cressman
+│   ├── correct_tp_24h_nowcast.py  # 项目光流 + 项目 Cressman + 项目双线性
+│   ├── cal_optical_flow.py        # correct_tp_24h 的光流
+│   ├── cal_optical_flow_nowcast.py
+│   ├── interpolation.py           # 原 Cressman 与原双线性
+│   ├── interpolation_sg_cressman.py
+│   ├── interpolation_gg_linear.py # 项目双线性
+│   └── utils/                     # 本算法工具：config / data_proc / data_save / verify / logger / util_env
 ├── test/         # 测试
 └── utils/        # 仅 __init__：合并 00temp/utils 共享插件 + src/utils（无本地副本）
 ```
@@ -26,7 +32,7 @@ multi_optimize_tp_24h/
 5. 运行：
 
 ```bash
-# 命令行（调度主程序 process；参数说明见 --help）
+# 命令行：原主程序 correct_tp_24h（cal_optical_flow + interpolation）
 python -m cli --help
 python -m cli --plugin=resource/ecmwf.json
 python -m cli --rpt-list=2025100100,2025100112 --is-multi true --pro-count 8
@@ -35,8 +41,10 @@ python -m cli --rpt-list=2025100100,2025100112 --is-multi true --pro-count 8
 # from correct_tp_24h import process
 # process(plugin="resource/ecmwf.json", is_multi=True, pro_count=8)
 
-# 直跑（改 src/correct_tp_24h.py 的 __main__ 传参）
-python src/correct_tp_24h.py
+# 项目光流 cal_optical_flow_nowcast + 项目 Cressman interpolation_sg_cressman
+# from correct_tp_24h_nowcast import process
+# process(plugin="resource/ecmwf.json", is_multi=True, pro_count=8)
+python src/correct_tp_24h_nowcast.py
 ```
 
 整理登记见 `NIMM_list.md`、`00log/`、`00temp/`。详细说明见 [docs/multi_optimize_tp_24h_程序说明.md](docs/multi_optimize_tp_24h_程序说明.md)。

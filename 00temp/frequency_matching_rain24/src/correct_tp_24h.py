@@ -4,7 +4,21 @@
 # @Email : mjs1263153117@163.com
 # @File : correctTP_24H.py
 # @Software: PyCharm
+"""24 小时降水频率匹配订正（本包原光流、原 Cressman）。
 
+调用::
+
+    from correct_tp_24h import process
+    process(plugin="resource/ecmwf.json", is_multi=True, pro_count=8)
+
+本文件固定使用：
+
+- 光流 / 半拉格朗日：``cal_optical_flow.OpticalFlow`` / ``Lagrangian``
+- Cressman：``interpolation.GressManInterpolation``
+- 双线性：``interpolation.py`` 的 ``mesh_val`` / ``bilinear_interp``
+
+项目光流、项目 Cressman 与项目双线性另见主程序 ``correct_tp_24h_nowcast.py``。
+"""
 import os, sys, json
 
 # 直跑/导入时确保项目根在 path 前，utils 走根目录合并包
@@ -22,6 +36,10 @@ from utils.util_env import (
     get_runtime_config,
     get_default_is_multi,
     get_default_pro_count,
+    set_main_ini,
+    set_call_overrides,
+    clear_call_overrides,
+    get_call_overrides,
 )
 from utils.multipro_plugin import SimpleParallelTool
 from dateutil.relativedelta import relativedelta
@@ -29,26 +47,44 @@ from concurrent.futures import ThreadPoolExecutor
 
 from utils.data_save import *
 from interpolation import *
+from cal_optical_flow import Lagrangian, OpticalFlow
 from cal_similarity import similarity
 from cal_slice_tp import correct_by_opticalFlow
 from cal_frequency_match import FrequencyMatch
 
-_CFG = get_runtime_config()
-rpt_list = _CFG["rpt_list"]
-ipt_model = _CFG["ipt_model"]
-ipt_obs = _CFG["ipt_obs"]
-ipt_type = _CFG["ipt_type"]
-opt_type = _CFG["opt_type"]
-over_w = _CFG["over_w"]
-start_dtime = _CFG["start_dtime"]
-end_dtime = _CFG["end_dtime"]
-inter_dtime1 = _CFG["inter_dtime1"]
-inter_dtime2 = _CFG["inter_dtime2"]
-report_inter = _CFG["report_inter"]
-res = _CFG["res"]
-slon, elon, slat, elat = _CFG["slon"], _CFG["elon"], _CFG["slat"], _CFG["elat"]
-slon_l, elon_l, slat_l, elat_l = _CFG["slon_l"], _CFG["elon_l"], _CFG["slat_l"], _CFG["elat_l"]
-pool_num = _CFG["pro_count"]  # 兼容旧名；外层并行改用 is_multi / pro_count
+def _load_runtime_globals():
+    """按当前 ini 刷新调度和订正用的模块全局量。"""
+    global _CFG, rpt_list, ipt_model, ipt_obs, ipt_type, opt_type, over_w
+    global start_dtime, end_dtime, inter_dtime1, inter_dtime2, report_inter
+    global res, slon, elon, slat, elat, slon_l, elon_l, slat_l, elat_l, pool_num
+    _CFG = get_runtime_config()
+    rpt_list = _CFG["rpt_list"]
+    ipt_model = _CFG["ipt_model"]
+    ipt_obs = _CFG["ipt_obs"]
+    ipt_type = _CFG["ipt_type"]
+    opt_type = _CFG["opt_type"]
+    over_w = _CFG["over_w"]
+    start_dtime = _CFG["start_dtime"]
+    end_dtime = _CFG["end_dtime"]
+    inter_dtime1 = _CFG["inter_dtime1"]
+    inter_dtime2 = _CFG["inter_dtime2"]
+    report_inter = _CFG["report_inter"]
+    res = _CFG["res"]
+    slon, elon, slat, elat = _CFG["slon"], _CFG["elon"], _CFG["slat"], _CFG["elat"]
+    slon_l, elon_l, slat_l, elat_l = _CFG["slon_l"], _CFG["elon_l"], _CFG["slat_l"], _CFG["elat_l"]
+    pool_num = _CFG["pro_count"]  # 兼容旧名；外层并行改用 is_multi / pro_count
+
+
+def _activate_config(config):
+    """让后续 ini 读取使用 ``config``。``config`` 为空则不切换。"""
+    if not config:
+        return None
+    chosen = set_main_ini(config)
+    _load_runtime_globals()
+    return chosen
+
+
+_load_runtime_globals()
 
 class gain_dataset:
     """
@@ -73,9 +109,9 @@ class gain_dataset:
         # self.mask_grd = meb.read_griddata_from_nc(env_paths['mask_nc'])
         self.grd_hislist_model, self.grd_hislist_model_smooth, self.sta_hislist_obs = self.read_his_ds()
         self.grd_current_model, self.grd_current_model_smooth = self.read_current_ds()
-        self.mask_array = mesh_val(meb.read_griddata_from_nc(env_paths['mask_nc']), self.inter_extend).data.squeeze()
+        self.mask_array = self.mesh_val_fn(meb.read_griddata_from_nc(env_paths['mask_nc']), self.inter_extend).data.squeeze()
         # grd0 = meb.get_grid_of_data(self.grd_current_model)
-        # self.mask_array = mesh_val(meb.read_griddata_from_nc('srcfile/mask010.nc'),
+        # self.mask_array = self.mesh_val_fn(meb.read_griddata_from_nc('srcfile/mask010.nc'),
         #                            [grd0.slon, grd0.elon, grd0.slat, grd0.elat, grd0.dlon]).data.squeeze()
 
     def read_cfg_json(self):
@@ -140,7 +176,7 @@ class gain_dataset:
                             logger.error('历史数据格式有误：{0}.{1:03d}'.format(start_time.strftime('%Y%m%d%H'), self.dtime))
                             continue
                         # grd_mesh = grd.copy()
-                        grd_mesh = mesh_val(grd, self.inter_extend)
+                        grd_mesh = self.mesh_val_fn(grd, self.inter_extend)
                         grd_smooth = smooth9(grd_mesh, smooth_num)
                         sta = meb.read_stadata_from_micaps3(obs_temppath)
                         sta_merge = pd.merge(self.sta_info, sta, on=['id'], how='left')
@@ -177,7 +213,7 @@ class gain_dataset:
                 logger.error('当前模式数据格式有误')
                 return None, None
 
-            grd_current_model_mesh = mesh_val(grd_current_model, self.inter_extend)
+            grd_current_model_mesh = self.mesh_val_fn(grd_current_model, self.inter_extend)
             # grd_current_model_mesh = grd_current_model.copy()
             grd_current_model_smooth = grd_current_model_mesh.copy()
         except:
@@ -186,14 +222,24 @@ class gain_dataset:
 
 class correct_24H_TP(gain_dataset):
     """
-    模式1H降水频率匹配订正
+    模式 24h 降水频率匹配订正。
 
-    :param
-    report_time：起报时间
-    dtime：预报时效
+    光流与 Cressman 固定为本包原实现。项目实现在 ``correct_tp_24h_nowcast.py``。
     """
+
+    optical_flow_cls = OpticalFlow
+    lagrangian_cls = Lagrangian
+    cressman_fn = staticmethod(GressManInterpolation)
+    mesh_val_fn = staticmethod(mesh_val)
+    bilinear_fn = staticmethod(bilinear_interp)
+
     def __init__(self, parafile, report_time, dtime):
-        logger.info(f'开始降水订正：起报时间-{report_time:%Y%m%d%H}, 预报时效-{dtime:03d}')
+        logger.info(
+            f'开始降水订正：起报时间-{report_time:%Y%m%d%H}, 预报时效-{dtime:03d}, '
+            f'光流 {self.optical_flow_cls.__module__}.{self.optical_flow_cls.__name__}，'
+            f'Cressman {self.cressman_fn.__module__}.{self.cressman_fn.__name__}，'
+            f'双线性 {self.mesh_val_fn.__module__}.mesh_val / {self.bilinear_fn.__module__}.bilinear_interp'
+        )
         super().__init__(parafile, report_time, dtime)
         self.gain_slice()
 
@@ -223,8 +269,8 @@ class correct_24H_TP(gain_dataset):
         mask_array = self.mask_array.copy()
         mask_array[mask_array <= 0] = 0
         # 数据集切片
-        current_model_slice = mesh_val(self.grd_current_model_smooth * mask_array, grd_05res)
-        history_model_slice = [mesh_val(i * mask_array, grd_05res) for i in self.grd_hislist_model_smooth]
+        current_model_slice = self.mesh_val_fn(self.grd_current_model_smooth * mask_array, grd_05res)
+        history_model_slice = [self.mesh_val_fn(i * mask_array, grd_05res) for i in self.grd_hislist_model_smooth]
         #  计算当前模式和历史模式的相似度
         similarity_Obj = similarity(history_model_slice, current_model_slice, similar_level)
         similarity_index = similarity_Obj.get_similarity_index()
@@ -232,11 +278,16 @@ class correct_24H_TP(gain_dataset):
         del history_model_slice
         #  获取切片网格的光流场，基于光流场订正当前模式降水
         correct_tp_obj = correct_by_opticalFlow(similarity_index, ext_extend, self.grd_hislist_model,
-                                                self.grd_hislist_model_smooth, self.sta_hislist_obs)
+                                                self.grd_hislist_model_smooth, self.sta_hislist_obs,
+                                                optical_flow_cls=self.optical_flow_cls,
+                                                lagrangian_cls=self.lagrangian_cls,
+                                                cressman_fn=self.cressman_fn,
+                                                mesh_val_fn=self.mesh_val_fn,
+                                                bilinear_fn=self.bilinear_fn)
         correct_current_model = correct_tp_obj.correct_sliceTP(self.dtime, sta_ext, self.grd_current_model,
                                                                self.grd_current_model_smooth)
 
-        correct_current_model_sta_slice = bilinear_interp(correct_current_model, sta)
+        correct_current_model_sta_slice = self.bilinear_fn(correct_current_model, sta)
         correct_current_model_sta_slice = clear_to_num_less_than(correct_current_model_sta_slice, 0.0, 0.01)
         return correct_current_model_sta_slice
 
@@ -304,16 +355,18 @@ class correct_24H_TP(gain_dataset):
     def _correct_current_TP_grd(self, correct_current_model_sta):
         try:
             logger.info('制作降水订正格点产品')
-            grd_current_model = mesh_val(self.grd_current_model, self.inter)
+            grd_current_model = self.mesh_val_fn(self.grd_current_model, self.inter)
             lon, lat, data = subtilize_grd(self.grd_current_model, self.mask_array, inter_dis)
             current_model_sta = creat_M3_grd(lon, lat, data, self.rpt, dtime=self.dtime)
             current_model_sta = select_by_extend(current_model_sta, [slon, elon, slat, elat])
             current_model_sta_add = pd.concat([correct_current_model_sta, current_model_sta], ignore_index=True)
 
-            current_model_grd_add = GressManInterpolation(current_model_sta_add, grd_current_model, [0.8, 0.6, 0.4, 0.2], rain_limit=0.01)
+            current_model_grd_add = self.cressman_fn(
+                current_model_sta_add, grd_current_model, [0.8, 0.6, 0.4, 0.2], rain_limit=0.01
+            )
             current_model_grd_add = smooth9(current_model_grd_add, 10)
             sta_roi = clear_to_num_greater_than(correct_current_model_sta, 0, 0)
-            current_model_sta_inter = bilinear_interp(current_model_grd_add, sta_roi)
+            current_model_sta_inter = self.bilinear_fn(current_model_grd_add, sta_roi)
 
             FrequencyMatchObj = FrequencyMatch([current_model_sta_inter], [correct_current_model_sta], fact_level1)
             used_model_level = FrequencyMatchObj.get_used_model_level_and_extend('grd')
@@ -346,8 +399,7 @@ class correct_24H_TP(gain_dataset):
         write_griddata(correct_current_model_grd, self.opt_grd, opt_type)
 
 def correctTP_24(parafile, report_time, dtime):
-    correct_tp_obj = correct_24H_TP(parafile, report_time, dtime)
-    correct_tp_obj.mainProc()
+    correct_24H_TP(parafile, report_time, dtime).mainProc()
 
 
 def _expand_report_times(rpt_list_override=None):
@@ -388,42 +440,50 @@ def process_single(plugin, **params):
     """单个任务：一个起报 × 一个时效。
 
     只调用原 ``correctTP_24``，不改订正逻辑；异常吞掉后继续（等同原 Pool ``get`` 失败跳过）。
+    子进程会重新导入本模块，因此这里再次套用 ``config`` 和调用覆盖。
     """
-    report_time = params["param"]["report_time"]
-    dtime = params["param"]["dtime"]
+    config = params.pop("config", None)
+    call_overrides = params.pop("call_overrides", None)
     try:
-        correctTP_24(plugin, report_time, dtime)
-    except Exception as e:
-        logger.error("订正失败 report=%s dtime=%s: %s", report_time, dtime, e)
+        if config:
+            _activate_config(config)
+        if call_overrides:
+            set_call_overrides(call_overrides)
+            _load_runtime_globals()
+        report_time = params["param"]["report_time"]
+        dtime = params["param"]["dtime"]
+        try:
+            correctTP_24(plugin, report_time, dtime)
+        except Exception as e:
+            logger.error("订正失败 report=%s dtime=%s: %s", report_time, dtime, e)
+    finally:
+        if call_overrides:
+            clear_call_overrides()
+            _load_runtime_globals()
 
 
-def process_multi(params, pro_count, plugin):
+def process_multi(params, pro_count, plugin, config=None):
     """用 SimpleParallelTool 调度本算法任务列表（非照搬 mait 业务结构）。"""
     sw_all = datetime.now()
+    fixed_params = {"plugin": plugin}
+    if config:
+        fixed_params["config"] = config
+    call_overrides = get_call_overrides()
+    if call_overrides:
+        fixed_params["call_overrides"] = call_overrides
     parallel_tool = SimpleParallelTool(
         target_func=process_single,
         parallel_mode="async",
         with_return=True,
         num_process=pro_count,
-        fixed_params={"plugin": plugin},
+        fixed_params=fixed_params,
     )
     parallel_tool.process({"param": params})
     print(">>> Time elasped: " + str((datetime.now() - sw_all).total_seconds()))
 
 
-def process(plugin=None, is_multi=None, pro_count=None, rpt_times=None):
-    """可调度入口：按 plugin 配置跑 24h 降水频率匹配订正。
-
-    调度约定（保证结果与原算法一致）：
-    - 任务仍是「起报 × 时效」，与原 ``Pool.starmap_async(correctTP_24, ...)`` 一一对应；
-    - 每个任务仍只进 ``correctTP_24`` → ``correct_24H_TP.mainProc``，算法体未改；
-    - ``SimpleParallelTool`` 仅替换进程池实现；``is_multi=false`` 时串行同一任务集。
-
-    :param plugin: 模式路径 JSON；``None`` 时用 ini ``default_plugin``
-    :param is_multi: 是否多进程；``None`` 读 ini（默认 true，贴近原常开 Pool）
-    :param pro_count: 进程数；``None`` 读 ini ``pro_count``（或旧键 ``pool_num``）
-    :param rpt_times: 起报字符串列表覆盖 ini ``rpt_list``；``None`` 用 ini
-    """
+def _schedule(plugin, is_multi, pro_count, rpt_times, config=None):
+    """按起报 × 时效调度，任务固定进入 ``correct_24H_TP``。"""
     parafile = plugin or get_resolved_paths()["default_plugin"]
     if is_multi is None:
         is_multi = get_default_is_multi()
@@ -441,9 +501,85 @@ def process(plugin=None, is_multi=None, pro_count=None, rpt_times=None):
 
     if not is_multi:
         for param in params:
-            process_single(parafile, **{"param": param})
+            process_single(parafile, param=param, config=config)
     else:
-        process_multi(params, pro_count, parafile)
+        process_multi(params, pro_count, parafile, config=config)
+
+
+def process(
+    plugin=None,
+    is_multi=None,
+    pro_count=None,
+    rpt_times=None,
+    config=None,
+    default_plugin=None,
+    rpt_list=None,
+    log_file=None,
+    station_info=None,
+    mask_nc=None,
+    ipt_model=None,
+    ipt_obs=None,
+    ipt_type=None,
+    opt_type=None,
+    over_w=None,
+    start_dtime=None,
+    end_dtime=None,
+    inter_dtime1=None,
+    inter_dtime2=None,
+    report_inter=None,
+    res=None,
+    clip_coords=None,
+):
+    """本包原算法入口：``cal_optical_flow`` + ``interpolation.py`` 的 Cressman 与双线性。
+
+    项目光流、Cressman、双线性用 ``correct_tp_24h_nowcast.process``，参数相同，实现各自独立。
+
+    非 ``None`` 参数覆盖 ini，ini 为空再用代码预设。``plugin`` 优先于 ``default_plugin``；
+    ``rpt_times`` 优先于 ``rpt_list``。调用结束或异常时清掉覆盖。
+
+    :param plugin: 模式路径 JSON；``None`` 时用 ``default_plugin``，再否则 ini
+    :param is_multi: 是否多进程；``None`` 读 ini（默认 true，贴近原常开 Pool）
+    :param pro_count: 进程数；``None`` 读 ini ``pro_count``（或旧键 ``pool_num``）
+    :param rpt_times: 起报字符串列表；``None`` 时用 ``rpt_list``，再否则 ini
+    :param config: 运行配置 ini；``None`` 用 ``resource/conf.ini``
+    :param default_plugin: ini 键 ``default_plugin``；仅当 ``plugin`` 为 ``None`` 时采用
+    :param rpt_list: ini 键 ``rpt_list``；仅当 ``rpt_times`` 为 ``None`` 时采用
+    :param clip_coords: 四个浮点数 ``[slon, elon, slat, elat]``，同时改写外扩边界
+    """
+    overrides = {
+        "log_file": log_file,
+        "station_info": station_info,
+        "mask_nc": mask_nc,
+        "default_plugin": default_plugin,
+        "rpt_list": rpt_list,
+        "ipt_model": ipt_model,
+        "ipt_obs": ipt_obs,
+        "ipt_type": ipt_type,
+        "opt_type": opt_type,
+        "over_w": over_w,
+        "start_dtime": start_dtime,
+        "end_dtime": end_dtime,
+        "inter_dtime1": inter_dtime1,
+        "inter_dtime2": inter_dtime2,
+        "report_inter": report_inter,
+        "res": res,
+        "clip_coords": clip_coords,
+        "is_multi": is_multi,
+        "pro_count": pro_count,
+    }
+    switched = False
+    set_call_overrides(overrides)
+    try:
+        if config:
+            set_main_ini(config)
+            switched = True
+        _load_runtime_globals()
+        return _schedule(plugin, is_multi, pro_count, rpt_times, config=config)
+    finally:
+        if switched:
+            set_main_ini(None)
+        clear_call_overrides()
+        _load_runtime_globals()
 
 
 def mainProcess(parafile):
@@ -457,6 +593,7 @@ if __name__ == "__main__":
     stime = (now - timedelta(days=10) - timedelta(hours=12)).strftime("%Y%m%d%H")
     etime = (now - timedelta(days=10)).strftime("%Y%m%d%H")
     print(stime, etime)
+    # 本文件是原光流 + 原 Cressman。项目实现请运行 correct_tp_24h_nowcast.py
     # process(plugin="../resource/ecmwf.json", is_multi=True, pro_count=4, rpt_times=[stime, etime])
     # process(plugin="../resource/ecmwf.json", is_multi=True, pro_count=4)
     process(plugin="../resource/ecmwf.json", is_multi=True, pro_count=4, rpt_times=['2026081200', '2026081312'])

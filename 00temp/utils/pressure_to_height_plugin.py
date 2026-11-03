@@ -6,17 +6,6 @@
 
 垂直插值在位势高度上进行。温度、湿度、风分量使用线性插值；气压使用 ``vertical_interp="log"``。
 默认目标为离地高度：目标海拔 = 地表海拔 + ``target_height``。夹不住目标海拔的气柱记为缺测。
-低于地表的气压层不参与。``surface_altitude`` 是地表海拔，单位 m。
-``fill_below_lowest=True`` 时，目标落在地表和最低有效气压层之间的空隙，
-用地面以上最低的两层沿高度外推填充；更高处仍不外推。
-
-水平网格不一致时，按经纬做双线性插值对齐。
-``output_grid="isobaric"`` 时结果与等压层网格一致，``"surface"`` 时与近地面场的网格一致；
-未传入近地面场时，``"surface"`` 使用 ``surface_altitude`` 的网格。
-
-``use_surface_field=True`` 时，若目标海拔落在地表和第一个高出地面的等压层之间，
-用传入的一份近地面要素作下界，上界仍是该等压层。近地面值放在地表海拔上。
-目标已被两个地上等压层夹住时，仍只用等压层。
 风向由插值后的 U、V 经 ``wind_speed_and_direction`` 换算。
 
 示例::
@@ -28,16 +17,14 @@
         wind_speed_and_direction,
     )
 
-    levels = (950, 925, 900, 850, 700, 500)  # 等压层层次，单位 hPa
+    levels = (950, 925, 900, 850, 700, 500)
     times = ["2026083100", "2026083112"]
     temperatures = read_pressure_levels(tmp_template, times, levels, dt=3)
     heights = read_pressure_levels(hgt_template, times, levels, dt=3)
     u_winds = read_pressure_levels(u_template, times, levels, dt=3)
     v_winds = read_pressure_levels(v_template, times, levels, dt=3)
     linear = PressureToHeightPlugin(target_height=1000.0, height_type="agl", vertical_interp="linear")
-    log_p = PressureToHeightPlugin(
-        target_height=1000.0, height_type="agl", vertical_interp="log", fill_below_lowest=True
-    )
+    log_p = PressureToHeightPlugin(target_height=1000.0, height_type="agl", vertical_interp="log")
 
     for temperature, height, u_wind, v_wind in zip(temperatures, heights, u_winds, v_winds):
         temperature_h = linear(temperature, height, surface_altitude)
@@ -47,16 +34,6 @@
             linear(u_wind, height, surface_altitude),
             linear(v_wind, height, surface_altitude),
         )
-
-    # 目标落在地表和第一个高出地面的等压层之间时，传入一份近地面要素作下界。
-    low_wind = PressureToHeightPlugin(
-        target_height=150.0,
-        height_type="agl",
-        vertical_interp="linear",
-        output_grid="isobaric",
-        use_surface_field=True,
-    )
-    u_low = low_wind(u_winds[0], heights[0], surface_altitude, u_near_surface)
 """
 
 from __future__ import annotations
@@ -119,101 +96,16 @@ def _lat_lon(data: xr.DataArray) -> Tuple[np.ndarray, np.ndarray]:
     )
 
 
-def _same_horizontal(left: xr.DataArray, right: xr.DataArray) -> bool:
+def _assert_same_horizontal(left: xr.DataArray, right: xr.DataArray, left_name: str, right_name: str) -> None:
     lat_l, lon_l = _lat_lon(left)
     lat_r, lon_r = _lat_lon(right)
-    return (
-        lat_l.shape == lat_r.shape
-        and lon_l.shape == lon_r.shape
-        and np.allclose(lat_l, lat_r, rtol=0.0, atol=1e-3)
-        and np.allclose(lon_l, lon_r, rtol=0.0, atol=1e-3)
-    )
-
-
-def _assert_same_horizontal(left: xr.DataArray, right: xr.DataArray, left_name: str, right_name: str) -> None:
-    if not _same_horizontal(left, right):
-        raise ValueError(f"{left_name} 与 {right_name} 的水平网格不一致")
-
-
-def _bilinear_plane(
-    plane: np.ndarray,
-    source_lat: np.ndarray,
-    source_lon: np.ndarray,
-    target_lat: np.ndarray,
-    target_lon: np.ndarray,
-) -> np.ndarray:
-    """把一张纬向递增的二维场双线性插到目标经纬。越界为缺测。"""
-    from scipy.interpolate import RegularGridInterpolator
-
-    interpolator = RegularGridInterpolator(
-        (source_lat, source_lon),
-        np.asarray(plane, dtype=np.float32),
-        method="linear",
-        bounds_error=False,
-        fill_value=np.nan,
-    )
-    n_lat = int(target_lat.shape[0])
-    n_lon = int(target_lon.shape[0])
-    regridded = np.empty((n_lat, n_lon), dtype=np.float32)
-    row_chunk = 64
-    for start in range(0, n_lat, row_chunk):
-        stop = min(start + row_chunk, n_lat)
-        n_chunk = stop - start
-        sample_points = np.empty((n_chunk * n_lon, 2), dtype=np.float64)
-        sample_points[:, 0] = np.repeat(target_lat[start:stop], n_lon)
-        sample_points[:, 1] = np.tile(target_lon, n_chunk)
-        regridded[start:stop] = interpolator(sample_points).reshape(n_chunk, n_lon)
-    return regridded
-
-
-def _regrid_horizontal(
-    data: xr.DataArray,
-    target_lat: np.ndarray,
-    target_lon: np.ndarray,
-) -> xr.DataArray:
-    """水平网格已一致时原样返回，否则按行双线性插值。"""
-    source_lat, source_lon = _lat_lon(data)
     if (
-        source_lat.shape == target_lat.shape
-        and source_lon.shape == target_lon.shape
-        and np.allclose(source_lat, target_lat, rtol=0.0, atol=1e-3)
-        and np.allclose(source_lon, target_lon, rtol=0.0, atol=1e-3)
+        lat_l.shape != lat_r.shape
+        or lon_l.shape != lon_r.shape
+        or not np.allclose(lat_l, lat_r, rtol=0.0, atol=1e-3)
+        or not np.allclose(lon_l, lon_r, rtol=0.0, atol=1e-3)
     ):
-        return data
-    ordered = data.sortby("lat").sortby("lon")
-    source_lat, source_lon = _lat_lon(ordered)
-    if np.any(np.diff(source_lat) <= 0) or np.any(np.diff(source_lon) <= 0):
-        raise ValueError(f"{data.name or '输入场'} 的经纬坐标必须严格递增才能水平插值")
-    other_dims = [dim for dim in ordered.dims if dim not in ("lat", "lon")]
-    ordered = ordered.transpose(*other_dims, "lat", "lon")
-    values = np.asarray(ordered.values, dtype=np.float32)
-    leading_shape = values.shape[:-2]
-    flat = values.reshape((-1,) + values.shape[-2:])
-    out_flat = np.empty((flat.shape[0], target_lat.size, target_lon.size), dtype=np.float32)
-    for index in range(flat.shape[0]):
-        out_flat[index] = _bilinear_plane(flat[index], source_lat, source_lon, target_lat, target_lon)
-    coords = {dim: ordered.coords[dim] for dim in other_dims}
-    coords["lat"] = ("lat", np.asarray(target_lat, dtype=np.float64))
-    coords["lon"] = ("lon", np.asarray(target_lon, dtype=np.float64))
-    return xr.DataArray(
-        out_flat.reshape(leading_shape + (target_lat.size, target_lon.size)),
-        dims=(*other_dims, "lat", "lon"),
-        coords=coords,
-        attrs=dict(data.attrs),
-        name=data.name,
-    )
-
-
-def _latlon_plane(data: xr.DataArray, name: str) -> xr.DataArray:
-    """把单层场收成 (lat, lon)。长度为 1 的其余维度去掉。"""
-    plane = data
-    for dim in [dim for dim in plane.dims if dim not in ("lat", "lon")]:
-        if plane.sizes[dim] != 1:
-            raise ValueError(f"{name} 必须是单层水平场，{dim} 维长度为 {plane.sizes[dim]}")
-        plane = plane.isel({dim: 0}, drop=True)
-    if set(plane.dims) != {"lat", "lon"}:
-        raise ValueError(f"{name} 必须包含 lat/lon")
-    return plane.transpose("lat", "lon")
+        raise ValueError(f"{left_name} 与 {right_name} 的水平网格不一致")
 
 
 def stack_pressure_levels(
@@ -399,7 +291,6 @@ class PressureToHeightPlugin(BasePlugin):
     """把已叠好的等压层要素插到单一目标高度。
 
     调用 ``plugin(field, geopotential_height, surface_altitude)`` 即执行 :meth:`process`。
-    需要用近地面要素作下界时，再传入 ``surface_field``。
     目标高度和插值方式在构造时固定，同一实例可反复用于温度、湿度、风分量和气压。
     """
 
@@ -409,9 +300,6 @@ class PressureToHeightPlugin(BasePlugin):
         height_units: str = "m",
         height_type: str = "agl",
         vertical_interp: str = "linear",
-        output_grid: str = "isobaric",
-        use_surface_field: bool = False,
-        fill_below_lowest: bool = False,
     ):
         """指定目标高度和插值方式。
 
@@ -426,29 +314,11 @@ class PressureToHeightPlugin(BasePlugin):
         vertical_interp : str, 默认 ``"linear"``
             ``linear`` 沿位势高度线性插值，用于温度、湿度和风分量。
             ``log`` 对正值取对数后插值再还原，用于气压。
-        output_grid : str, 默认 ``"isobaric"``
-            ``isobaric``：结果使用等压层的水平网格，近地面资料先插到该网格。
-            ``surface``：结果使用近地面资料的水平网格，等压层先插到该网格。
-            未传入近地面要素时，``surface`` 使用地表海拔的水平网格。
-        use_surface_field : bool, 默认 False
-            为 True 时，补充等压层夹不住的空隙：目标海拔落在地表和第一个高出地面的等压层之间，
-            用 ``surface_field`` 作下界，上界仍是该等压层。近地面值放在地表海拔上。
-            目标已被两个地上等压层夹住时，仍只用等压层。
-        fill_below_lowest : bool, 默认 False
-            为 True 且没有近地面下界时，目标落在地表和最低有效气压层之间，
-            用地面以上最低的两层按同一垂直插值方式外推。已由两层夹住的目标不变。
-            高于最高有效气压层的目标仍为缺测。
         """
-        grid = output_grid.strip().lower()
-        if grid not in ("isobaric", "surface"):
-            raise ValueError(f"output_grid 仅支持 isobaric 或 surface，实际为 {output_grid!r}")
         self.target_height = target_height
         self.height_units = height_units
         self.height_type = height_type
         self.vertical_interp = vertical_interp
-        self.output_grid = grid
-        self.use_surface_field = bool(use_surface_field)
-        self.fill_below_lowest = bool(fill_below_lowest)
 
     @staticmethod
     def _length_to_metres(values: np.ndarray, units: str | None, *, default: str = "m") -> np.ndarray:
@@ -471,40 +341,8 @@ class PressureToHeightPlugin(BasePlugin):
             squeezed = squeezed.isel({dim: 0}, drop=True)
         return squeezed.transpose("lat", "lon")
 
-    def _align_to_output_grid(
-        self,
-        field: xr.DataArray,
-        geopotential_height: xr.DataArray,
-        surface_altitude: xr.DataArray,
-        surface_field: xr.DataArray | None,
-    ) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray | None]:
-        """按 ``output_grid`` 把各输入场落到同一张水平网格。"""
-        if self.output_grid == "surface":
-            template = surface_field if surface_field is not None else surface_altitude
-        else:
-            template = field
-        target_lat, target_lon = _lat_lon(template)
-        field = _regrid_horizontal(field, target_lat, target_lon)
-        geopotential_height = _regrid_horizontal(geopotential_height, target_lat, target_lon)
-        surface_altitude = _regrid_horizontal(surface_altitude, target_lat, target_lon)
-        surface_plane = None
-        if surface_field is not None:
-            surface_plane = _latlon_plane(
-                _regrid_horizontal(surface_field, target_lat, target_lon),
-                "surface_field",
-            )
-        return field, geopotential_height, surface_altitude, surface_plane
-
     @staticmethod
-    def _interp_columns(
-        heights_m: np.ndarray,
-        values: np.ndarray,
-        target_m: np.ndarray,
-        *,
-        log: bool,
-        fill_below: bool = False,
-        surface_m: np.ndarray | None = None,
-    ) -> np.ndarray:
+    def _interp_columns(heights_m: np.ndarray, values: np.ndarray, target_m: np.ndarray, *, log: bool) -> np.ndarray:
         """沿高度把每一列插到目标海拔。地下层应为 NaN。"""
         valid_height = np.isfinite(heights_m)
         height_for_sort = np.where(valid_height, heights_m, np.inf)
@@ -543,39 +381,6 @@ class PressureToHeightPlugin(BasePlugin):
             if log:
                 interpolated = np.exp(interpolated)
             out[ok] = interpolated
-        if fill_below:
-            lowest_z = np.full(target_m.shape, np.nan, dtype=np.float64)
-            second_z = np.full(target_m.shape, np.nan, dtype=np.float64)
-            lowest_f = np.full(target_m.shape, np.nan, dtype=np.float64)
-            second_f = np.full(target_m.shape, np.nan, dtype=np.float64)
-            seen = np.zeros(target_m.shape, dtype=np.int8)
-            for index in range(n_levels):
-                z = height_sorted[index]
-                f = value_sorted[index]
-                good = np.isfinite(z) & np.isfinite(f) & (seen < 2)
-                take0 = good & (seen == 0)
-                take1 = good & (seen == 1)
-                lowest_z[take0] = z[take0]
-                lowest_f[take0] = f[take0]
-                second_z[take1] = z[take1]
-                second_f[take1] = f[take1]
-                seen[good] = seen[good] + 1
-            below = (
-                np.isnan(out)
-                & (seen >= 2)
-                & np.isfinite(target_m)
-                & (second_z > lowest_z)
-                & (target_m < lowest_z)
-            )
-            if surface_m is not None:
-                below &= np.isfinite(surface_m) & (target_m >= surface_m - UNDERGROUND_TOLERANCE_M)
-            if np.any(below):
-                weight = np.zeros_like(target_m)
-                weight[below] = (target_m[below] - lowest_z[below]) / (second_z[below] - lowest_z[below])
-                extrapolated = lowest_f[below] * (1.0 - weight[below]) + second_f[below] * weight[below]
-                if log:
-                    extrapolated = np.exp(extrapolated)
-                out[below] = extrapolated
         return out
 
     def process(
@@ -583,7 +388,6 @@ class PressureToHeightPlugin(BasePlugin):
         field: xr.DataArray,
         geopotential_height: xr.DataArray,
         surface_altitude: xr.DataArray,
-        surface_field: xr.DataArray | None = None,
     ) -> xr.DataArray:
         """把一个时次的等压层要素插到构造时指定的目标高度。
 
@@ -591,14 +395,13 @@ class PressureToHeightPlugin(BasePlugin):
         ----------
         field : xr.DataArray
             等压层要素，至少两层。``level`` 为气压，须与 ``geopotential_height`` 的层次一致。
+            水平网格也须一致。
         geopotential_height : xr.DataArray
             同位势高度，形状和 ``level`` 与 ``field`` 相同。数值单位为 ``m`` 或 ``gpm``，
             写在 ``attrs["units"]`` 中；缺省按米。
         surface_altitude : xr.DataArray
             地表海拔，单位 ``m``。可以是 ``(lat, lon)``，也可以是其余维长度均为 1 的多维场。
-        surface_field : xr.DataArray, optional
-            与 ``field`` 同一要素的近地面单层场。``use_surface_field`` 为 True 时必传。
-            水平网格可以与等压层不同。插件把它的数值放在地表海拔上作下界，上界仍是高出地面的等压层。
+            经纬须与 ``field`` 一致。
 
         返回值
         -------
@@ -627,19 +430,7 @@ class PressureToHeightPlugin(BasePlugin):
         interp = self.vertical_interp.strip().lower()
         if interp not in ("linear", "log"):
             raise ValueError(f"vertical_interp 仅支持 linear 或 log，实际为 {self.vertical_interp!r}")
-        if self.use_surface_field and surface_field is None:
-            raise ValueError("use_surface_field 为 True 时必须传入 surface_field")
-        if surface_field is not None:
-            field_units = str(field.attrs.get("units") or "").strip()
-            surface_units = str(surface_field.attrs.get("units") or "").strip()
-            if field_units and surface_units and field_units != surface_units:
-                raise ValueError(
-                    f"近地面要素单位 {surface_units!r} 与等压层要素单位 {field_units!r} 不一致"
-                )
 
-        field, geopotential_height, surface_altitude, surface_plane = self._align_to_output_grid(
-            field, geopotential_height, surface_altitude, surface_field
-        )
         _assert_same_horizontal(field, geopotential_height, "field", "geopotential_height")
         surface = self._surface_2d(surface_altitude)
         _assert_same_horizontal(field, surface, "field", "surface_altitude")
@@ -665,37 +456,17 @@ class PressureToHeightPlugin(BasePlugin):
             raise ValueError("surface_altitude 的经纬尺寸与要素场不一致")
         surface_broadcast = np.broadcast_to(surface_m, rest_shape)
         heights = np.where(heights >= surface_broadcast[None, ...] - UNDERGROUND_TOLERANCE_M, heights, np.nan)
-        if self.use_surface_field:
-            surface_values = np.asarray(surface_plane.values, dtype=np.float64)
-            if surface_values.shape != surface_m.shape:
-                raise ValueError("surface_field 的经纬尺寸与地表海拔不一致")
-            surface_value_broadcast = np.broadcast_to(surface_values, rest_shape)
-            valid_height = np.isfinite(heights)
-            lowest = np.min(np.where(valid_height, heights, np.inf), axis=0)
-            usable = (
-                np.isfinite(surface_broadcast)
-                & np.isfinite(surface_value_broadcast)
-                & np.isfinite(lowest)
-                & (surface_broadcast < lowest - UNDERGROUND_TOLERANCE_M)
-            )
-            synthetic_height = np.where(usable, surface_broadcast, np.nan)
-            synthetic_value = np.where(usable, surface_value_broadcast, np.nan)
-            heights = np.concatenate([synthetic_height[None, ...], heights], axis=0)
-            values = np.concatenate([synthetic_value[None, ...], values], axis=0)
         if mode == "agl":
             target = surface_broadcast + target_m
         else:
             target = np.full(rest_shape, target_m, dtype=np.float64)
 
         n_column = int(np.prod(rest_shape, dtype=np.int64))
-        surface_column = np.reshape(np.broadcast_to(surface_m, rest_shape), n_column)
         interpolated = self._interp_columns(
             heights.reshape(heights.shape[0], n_column),
             values.reshape(values.shape[0], n_column),
             np.reshape(target, n_column),
             log=(interp == "log"),
-            fill_below=self.fill_below_lowest,
-            surface_m=surface_column,
         )
         restored = np.expand_dims(interpolated.reshape(rest_shape), axis=level_axis)
 
@@ -708,8 +479,5 @@ class PressureToHeightPlugin(BasePlugin):
         attrs["vertical_interp"] = interp
         attrs["target_height"] = float(self.target_height)
         attrs["target_height_units"] = self.height_units
-        attrs["output_grid"] = self.output_grid
-        attrs["use_surface_field"] = self.use_surface_field
-        attrs["fill_below_lowest"] = self.fill_below_lowest
         out.attrs = attrs
         return out

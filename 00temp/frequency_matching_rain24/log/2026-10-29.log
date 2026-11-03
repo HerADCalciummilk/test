@@ -1,0 +1,150 @@
+[2026-10-29 14:02:14,777] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-036, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,778] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,778] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-048, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,779] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,779] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-060, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,780] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,780] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-072, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,780] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,780] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-084, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,780] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,780] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-096, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,781] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,781] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-108, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,781] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,783] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-120, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,783] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,783] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-132, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,784] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,784] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-144, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,785] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,785] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-156, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,785] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,785] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-168, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,786] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,787] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-180, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,787] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,787] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-192, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,788] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,788] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-204, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,788] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,789] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-216, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,789] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,789] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-228, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,789] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,789] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-240, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,790] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,790] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-252, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,790] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,791] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-036, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,791] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,791] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-048, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,793] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,793] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-060, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,793] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,793] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-072, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,794] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,794] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-084, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,794] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,794] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-096, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,795] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,795] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-108, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,795] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,796] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-120, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,796] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,796] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-132, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,796] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,798] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-144, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,798] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,798] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-156, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,798] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,799] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-168, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,799] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,799] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-180, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,800] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,800] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-192, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,800] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,800] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-204, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,801] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,801] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-216, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,802] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,802] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-228, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,802] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,802] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-240, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,803] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:02:14,803] [SpawnPoolWorker-3] [24508] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-252, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:02:14,803] [SpawnPoolWorker-3] [24508] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,166] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-036, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,167] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,167] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-048, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,168] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,168] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-060, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,168] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,168] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-072, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,169] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,169] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-084, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,169] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-108, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,169] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,170] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-096, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,170] [SpawnPoolWorker-1] [24680] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,170] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-120, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,170] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,170] [SpawnPoolWorker-1] [24680] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,170] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-132, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,171] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-156, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,171] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,171] [SpawnPoolWorker-1] [24680] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,171] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-144, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,171] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-168, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,173] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+
+[2026-10-29 14:43:02,173] [SpawnPoolWorker-2] [35964] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-180, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,173] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-204, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,173] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-228, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,173] [SpawnPoolWorker-2] [35964] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-2] [35964] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-192, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-1] [24680] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-216, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-240, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-2] [35964] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-2] [35964] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100112, 预报时效-252, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-096, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,174] [SpawnPoolWorker-4] [37868] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-048, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,175] [SpawnPoolWorker-2] [35964] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,175] [SpawnPoolWorker-2] [35964] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-036, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,175] [SpawnPoolWorker-1] [24680] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,175] [SpawnPoolWorker-4] [37868] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,175] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,175] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-108, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,175] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-084, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+
+[2026-10-29 14:43:02,175] [SpawnPoolWorker-2] [35964] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-1] [24680] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-2] [35964] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-120, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-4] [37868] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-144, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-4] [37868] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-168, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-192, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-2] [35964] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-2] [35964] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-132, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-1] [24680] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+
+[2026-10-29 14:43:02,176] [SpawnPoolWorker-1] [24680] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-156, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-204, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-4] [37868] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-180, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-2] [35964] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-2] [35964] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-216, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-1] [24680] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-4] [37868] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-240, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-2] [35964] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,177] [SpawnPoolWorker-2] [35964] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-228, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,179] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,179] [SpawnPoolWorker-3] [7624] [INFO] [correct_tp_24h.py:234] [__init__] - 开始降水订正：起报时间-2025100100, 预报时效-252, 光流 cal_optical_flow.OpticalFlow，Cressman interpolation.GressManInterpolation，双线性 interpolation.mesh_val / interpolation.bilinear_interp
+[2026-10-29 14:43:02,179] [SpawnPoolWorker-2] [35964] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失
+[2026-10-29 14:43:02,179] [SpawnPoolWorker-3] [7624] [ERROR] [correct_tp_24h.py:139] [preLogical] - 当前数据缺失

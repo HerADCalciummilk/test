@@ -25,11 +25,23 @@
 | 调度源码 | `src/kalman_cli.py` | Kalman 更新和订正业务流程 |
 | 数据复制 | `src/data_transfer.py` | SWVL/STL 源数据复制流程 |
 | 工具源码 | `utils/grid_utils.py` | `meteva_base` 网格校验、坐标匹配和 Kalman 数值计算 |
-| CLI | `cli/kalman_data.py` | 运行 Kalman 订正流程 |
-| CLI | `cli/trans_data.py` | 复制源数据到处理目录 |
+| CLI | `cli/` | 在本包目录执行 `python -m cli --module kalman` 或 `--module trans` |
+| 运行配置 | `resource/kalman.ini` | 未显式传入的参数先读此文件，再没有则用预设 |
 | 文档 | `docs/kalman_algorithm.md` | 原始算法说明文档 |
 | 示例 | `nbs/kalman_tutorial.ipynb` | notebook 示例 |
 | 测试 | `test/test_grid_utils.py` | 网格工具最小单元测试 |
+
+## 命令行调用示例
+
+在本包目录下执行。用 `--module` 选择订正或拷贝；没写的参数先读 `resource/kalman.ini`，配置里也没有再用代码预设。日期留空时预设为前一天。
+
+```bash
+python -m cli --module kalman --start-date 20260401 --end-date 20260405
+```
+
+```bash
+python -m cli --module trans --date 20260401
+```
 
 ## 输入输出
 

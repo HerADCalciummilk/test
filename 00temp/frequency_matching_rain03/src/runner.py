@@ -47,7 +47,7 @@ from proc import (
     OpticalFlow, RainExtrapolation
 )
 from utils.log import Log
-from utils.util_env import get_resolved_paths
+from utils.util_env import clear_call_overrides, get_resolved_paths, set_call_overrides, set_main_ini
 from utils.util_paths import REPO_ROOT
 from utils.io_meb import expand_data_path, find_grid_file, find_sta_file
 
@@ -403,7 +403,44 @@ def _run_parallel_lead_time_tasks(script_path, cwd, argv, tasks, text2, text4, l
     return summary
 
 
-def process(data_key=None, run_times=None):
+def process(
+    data_key=None,
+    run_times=None,
+    config=None,
+    log_file=None,
+    config_json=None,
+    path_json=None,
+    station_info=None,
+    mask_file=None,
+):
+    """可调度入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。
+
+    ``log_file`` / ``config_json`` / ``path_json`` / ``station_info`` / ``mask_file``
+    非 ``None`` 时覆盖 ``get_resolved_paths``（``log_file`` 对应 ``log_file_template``）。
+    子进程通过环境变量继承同一覆盖。异常时也会清掉覆盖。
+    """
+    set_call_overrides(
+        {
+            "log_file": log_file,
+            "config_json": config_json,
+            "path_json": path_json,
+            "station_info": station_info,
+            "mask_file": mask_file,
+        }
+    )
+    try:
+        if not config:
+            return _process_impl(data_key=data_key, run_times=run_times)
+        set_main_ini(config)
+        try:
+            return _process_impl(data_key=data_key, run_times=run_times)
+        finally:
+            set_main_ini(None)
+    finally:
+        clear_call_overrides()
+
+
+def _process_impl(data_key=None, run_times=None):
     """
     可调度入口。未传项回落 ``path.json`` 的 ``default`` 与当前时刻。
 
@@ -496,7 +533,6 @@ def main(argv=None):
 
     # 读取站点信息
     sta_info_path = str(paths["station_info"])
-    # print("=-------------------------->>>> sta_info_path: ", sta_info_path)
     if not os.path.exists(sta_info_path):
         msg = f"Station info file not found: {sta_info_path}"
         log.write_error(msg, 1)
@@ -526,7 +562,6 @@ def main(argv=None):
         mask_file = "mask010.dat"
 
     mask_path = str(resource_dir / mask_file)
-    # print("=-------------------------->>>> mask_path: ", mask_path)
     if not os.path.exists(mask_path):
         log.write_info(f"{mask_file} not found, fallback to mask010.dat", 0)
         mask_path = str(paths["mask_file"])

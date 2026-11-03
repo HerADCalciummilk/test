@@ -1,5 +1,5 @@
 # 资源目录
 
-当前 STEPS 改造包没有必须内置的静态资源文件。
+`steps.ini` 是统一命令行的运行配置。`--module` 选择 noise、climatological_skill 或 blending。
 
-业务运行所需的雷达、nowcast、NWP、噪声滤波器和 climatological skill 文件均通过 CLI 参数或插件参数传入。
+命令行没写的参数先读这里，配置里也没有再用代码预设。`issue_time`、`input_dir`、`nowcast`、`nwp` 默认留空，使用前在命令行传入，或写进对应节。

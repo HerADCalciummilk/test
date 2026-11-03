@@ -62,6 +62,7 @@ from utils.util_env import (
     get_default_is_interp,
     get_default_is_multi,
     get_repo_root,
+    set_main_ini,
 )
 from utils.multipro_plugin import SimpleParallelTool
 
@@ -79,6 +80,9 @@ class RunProcess:
         is_interp,
         clip_coords,
         predict_valid_list=None,
+        log_file=None,
+        station_info=None,
+        mask_dat=None,
     ):
         self.time_input = time_input
         self.para_path = para_path
@@ -88,6 +92,9 @@ class RunProcess:
         self.is_interp = is_interp
         self.clip_coords = clip_coords
         self.predict_valid_list = predict_valid_list
+        self.log_file = log_file
+        self.station_info = station_info
+        self.mask_dat = mask_dat
 
     def _process_single(self):
         """处理一个起报的全部时效（与 mait01/24 相同：多进程按起报分发）。
@@ -101,6 +108,12 @@ class RunProcess:
         app_dir = get_repo_root()
         os.chdir(app_dir)
         env_paths = get_resolved_paths()
+        if self.log_file is not None:
+            env_paths["log_file_template"] = self.log_file
+        if self.station_info is not None:
+            env_paths["station_info"] = self.station_info
+        if self.mask_dat is not None:
+            env_paths["mask_dat"] = self.mask_dat
 
         predict_valid_list = self.predict_valid_list
         if isinstance(predict_valid_list, int):
@@ -185,7 +198,7 @@ class RunProcess:
 
 def process_single(
     para_path, beta_path, background_path, is_obs_bjt, is_interp, clip_coords,
-    predict_valid_list, **params,
+    predict_valid_list, log_file=None, station_info=None, mask_dat=None, **params,
 ):
     """多进程 worker：处理一个 ``time_input`` 的全部时效。"""
     param = params["param"]
@@ -193,12 +206,13 @@ def process_single(
     RunProcess(
         param["time_input"], para_path, beta_path, background_path,
         is_obs_bjt, is_interp, clip_coords, predict_valid_list,
+        log_file=log_file, station_info=station_info, mask_dat=mask_dat,
     )._process_single()
 
 
 def process_multi(
     params, pro_count, para_path, beta_path, background_path, is_obs_bjt, is_interp,
-    clip_coords, predict_valid_list,
+    clip_coords, predict_valid_list, log_file=None, station_info=None, mask_dat=None,
 ):
     """用 ``SimpleParallelTool`` 按多个起报并行（与 mait01/24 相同）。"""
     sw_all = datetime.datetime.now()
@@ -215,6 +229,9 @@ def process_multi(
             "is_interp": is_interp,
             "clip_coords": clip_coords,
             "predict_valid_list": predict_valid_list,
+            "log_file": log_file,
+            "station_info": station_info,
+            "mask_dat": mask_dat,
         },
     )
     parallel_tool.process({"param": params})
@@ -233,9 +250,55 @@ def process(
     clip_coords=None,
     pro_count=None,
     predict_valid_list=None,
+    config=None,
+    log_file=None,
+    station_info=None,
+    mask_dat=None,
+):
+    """3 小时集成入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
+    kwargs = dict(
+        time_inputs=time_inputs,
+        time_input=time_input,
+        para_path=para_path,
+        beta_path=beta_path,
+        background_path=background_path,
+        is_obs_bjt=is_obs_bjt,
+        is_interp=is_interp,
+        is_multi=is_multi,
+        clip_coords=clip_coords,
+        pro_count=pro_count,
+        predict_valid_list=predict_valid_list,
+        log_file=log_file,
+        station_info=station_info,
+        mask_dat=mask_dat,
+    )
+    if not config:
+        return _process_impl(**kwargs)
+    set_main_ini(config)
+    try:
+        return _process_impl(**kwargs)
+    finally:
+        set_main_ini(None)
+
+
+def _process_impl(
+    time_inputs=None,
+    time_input=None,
+    para_path=None,
+    beta_path=None,
+    background_path=None,
+    is_obs_bjt=None,
+    is_interp=None,
+    is_multi=None,
+    clip_coords=None,
+    pro_count=None,
+    predict_valid_list=None,
+    log_file=None,
+    station_info=None,
+    mask_dat=None,
 ):
     """
-    可调度入口。未传项从 ``resource/mait_3.ini`` 读取。
+    可调度入口。未传项从 ``resource/conf.ini`` 读取。
 
     多进程与 mait01/24 一致：``is_multi=True`` 时用 ``SimpleParallelTool``
     按 **起报时刻** 分发；每个 worker 串行跑该起报的全部时效。
@@ -286,7 +349,7 @@ def process(
     params = [{"time_input": t} for t in time_inputs]
     common = (
         para_path, beta_path, background_path, is_obs_bjt, is_interp, clip_coords,
-        predict_valid_list,
+        predict_valid_list, log_file, station_info, mask_dat,
     )
     if not is_multi:
         for param in params:

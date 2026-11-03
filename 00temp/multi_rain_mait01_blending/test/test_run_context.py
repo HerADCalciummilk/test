@@ -53,8 +53,8 @@ def test_analysis_background_ini_reads_resource_file():
 
 def test_util_env_resolves_paths_from_mait_1_ini():
     paths = get_resolved_paths()
-    assert paths["background_ini"].endswith("local_background.ini")
-    assert paths["para_ini"].endswith("local.ini")
+    assert paths["background_ini"].endswith("para_1_background.ini")
+    assert paths["para_ini"].endswith("para_1.ini")
     assert paths["mask_dat"].endswith("mask010.dat")
     ini_path = os.path.join(_REPO, "resource", "mait_1.ini")
     assert os.path.isfile(ini_path)

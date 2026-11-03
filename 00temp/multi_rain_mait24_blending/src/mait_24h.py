@@ -60,6 +60,7 @@ from utils.util_env import (
     get_default_pro_count,
     get_default_split_lat,
     get_default_split_lon,
+    set_main_ini,
 )
 from utils.util_new import (
     read_grid_mask_nc, _prepare, _analysis_para_ini, init_run_log,
@@ -71,7 +72,8 @@ from utils.util_new import (
 class RunProcess():
     """单次起报时刻（``time_input``）的完整集成流水线。"""
 
-    def __init__(self, time_input, para_path, beta_path, is_obs_bjt, clip_coords, split_lat=1, split_lon=1, predict_valid_list=None):
+    def __init__(self, time_input, para_path, beta_path, is_obs_bjt, clip_coords, split_lat=1, split_lon=1, predict_valid_list=None,
+                 log_file=None, background_ini=None, station_info=None, mask_nc=None):
         self.time_input = time_input
         self.para_path = para_path
         self.beta_path = beta_path
@@ -80,6 +82,10 @@ class RunProcess():
         self.split_lat = split_lat
         self.split_lon = split_lon
         self.predict_valid_list = predict_valid_list
+        self.log_file = log_file
+        self.background_ini = background_ini
+        self.station_info = station_info
+        self.mask_nc = mask_nc
         if predict_valid_list is None:
             self.predict_valid_list = [i for i in range(36, 252 + 24, 24)]
 
@@ -88,13 +94,21 @@ class RunProcess():
         准备阶段：解析配置、读站点表、组装 ``RunContext``。
 
         文件依赖（均在调用 ``build_run_context`` 之前完成）：
-        - ``resource/mait_24.ini``（经 ``get_resolved_paths``）
+        - ``resource/conf.ini``（经 ``get_resolved_paths``）
         - ``para_24.ini``、``para_24_background.ini``、``station_info.txt``
 
         返回 ``(ctx, env_paths, log)``；失败时 ``ctx`` 为 ``None``，日志仍可用。
         """
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         env_paths = get_resolved_paths()
+        if self.log_file is not None:
+            env_paths["log_file_template"] = self.log_file
+        if self.background_ini is not None:
+            env_paths["background_ini"] = self.background_ini
+        if self.station_info is not None:
+            env_paths["station_info"] = self.station_info
+        if self.mask_nc is not None:
+            env_paths["mask_nc"] = self.mask_nc
         para_filepath = self.para_path or env_paths["para_ini"]
         beta_filepath = self.beta_path or env_paths["beta_path_template"]
 
@@ -189,18 +203,20 @@ class RunProcess():
         log.info("全部时效处理完成 time_input=%s", self.time_input)
 
 
-def process_single(para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list, **params):
+def process_single(para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list,
+                   log_file=None, background_ini=None, station_info=None, mask_nc=None, **params):
     """多进程 worker 入口：处理一个 ``time_input``。"""
     RunProcess(
         params['param']['time_input'], para_path, beta_path, is_obs_bjt,
         clip_coords, split_lat, split_lon, predict_valid_list,
+        log_file=log_file, background_ini=background_ini, station_info=station_info, mask_nc=mask_nc,
     )._process_single()
 
 
-def process_multi(params, pro_count, para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list):
+def process_multi(params, pro_count, para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list,
+                  log_file=None, background_ini=None, station_info=None, mask_nc=None):
     """多进程批量处理多个 ``time_input``。"""
     sw_all = datetime.datetime.now()
-    print("=----------------------------------------> ???")
     parallel_tool = SimpleParallelTool(
         target_func=process_single,
         parallel_mode="async",
@@ -214,6 +230,10 @@ def process_multi(params, pro_count, para_path, beta_path, is_obs_bjt, clip_coor
             "split_lat": split_lat,
             "split_lon": split_lon,
             "predict_valid_list": predict_valid_list,
+            "log_file": log_file,
+            "background_ini": background_ini,
+            "station_info": station_info,
+            "mask_nc": mask_nc,
         }
     )
     parallel_tool.process({"param": params})
@@ -231,11 +251,58 @@ def process(*,
             pro_count = None,
             split_lat = None,
             split_lon = None,
+            log_file: str = None,
+            background_ini: str = None,
+            station_info: str = None,
+            mask_nc: str = None,
+            config=None,
+            ):
+    """24 小时集成入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
+    kwargs = dict(
+        time_inputs=time_inputs,
+        predict_valid_list=predict_valid_list,
+        para_path=para_path,
+        beta_path=beta_path,
+        is_obs_bjt=is_obs_bjt,
+        is_multi=is_multi,
+        clip_coords=clip_coords,
+        pro_count=pro_count,
+        split_lat=split_lat,
+        split_lon=split_lon,
+        log_file=log_file,
+        background_ini=background_ini,
+        station_info=station_info,
+        mask_nc=mask_nc,
+    )
+    if not config:
+        return _process_impl(**kwargs)
+    set_main_ini(config)
+    try:
+        return _process_impl(**kwargs)
+    finally:
+        set_main_ini(None)
+
+
+def _process_impl(*,
+            time_inputs: list = None,
+            predict_valid_list: list = None,
+            para_path: str = None,
+            beta_path: str = None,
+            is_obs_bjt = None,
+            is_multi = None,
+            clip_coords: list = None,
+            pro_count = None,
+            split_lat = None,
+            split_lon = None,
+            log_file: str = None,
+            background_ini: str = None,
+            station_info: str = None,
+            mask_nc: str = None,
             ):
     """
     24 小时集成主入口。
 
-    ``time_inputs`` 为必传列表。其余为 ``None`` 时从 ``resource/mait_24.ini`` 读取默认值
+    ``time_inputs`` 为必传列表。其余为 ``None`` 时从 ``resource/conf.ini`` 读取默认值
     （见 ``utils/util_env.py``）。
     """
     if predict_valid_list is None:
@@ -255,11 +322,23 @@ def process(*,
 
     params = [{"time_input": t} for t in time_inputs]
 
+    path_overrides = dict(
+        log_file=log_file,
+        background_ini=background_ini,
+        station_info=station_info,
+        mask_nc=mask_nc,
+    )
     if not is_multi:
         for param in params:
-            process_single(para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list, **{"param": param})
+            process_single(
+                para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list,
+                **path_overrides, **{"param": param},
+            )
     else:
-        process_multi(params, pro_count, para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list)
+        process_multi(
+            params, pro_count, para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list,
+            **path_overrides,
+        )
 
 
 if __name__ == "__main__":

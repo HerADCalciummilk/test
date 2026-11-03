@@ -39,6 +39,7 @@ from utils.util_env import (
     build_glon_glat,
     get_linear_params,
     get_resolved_paths,
+    set_main_ini,
 )
 
 
@@ -98,12 +99,59 @@ def process(
     glon=None,
     glat=None,
     domain=None,
+    log_file: str = None,
+    grid_type: str = None,
+    grid_template_type: str = None,
+    config=None,
+):
+    """双线性插值入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
+    kwargs = dict(
+        grid_path=grid_path,
+        output_path=output_path,
+        grid_template_path=grid_template_path,
+        used_coords=used_coords,
+        outer_value=outer_value,
+        glon=glon,
+        glat=glat,
+        domain=domain,
+        log_file=log_file,
+        grid_type=grid_type,
+        grid_template_type=grid_template_type,
+    )
+    if not config:
+        return _process_impl(**kwargs)
+    set_main_ini(config)
+    try:
+        return _process_impl(**kwargs)
+    finally:
+        set_main_ini(None)
+
+
+def _process_impl(
+    grid_path: str = None,
+    output_path: str = None,
+    grid_template_path: str = None,
+    used_coords: str = None,
+    outer_value=None,
+    glon=None,
+    glat=None,
+    domain=None,
+    log_file: str = None,
+    grid_type: str = None,
+    grid_template_type: str = None,
 ):
     """
-    双线性插值可调度入口。未传参数从 ``resource/interp_gg_linear.ini`` 读取。
+    双线性插值可调度入口。未传参数从 ``resource/conf.ini`` 读取。
     """
     paths = get_resolved_paths()
     params = get_linear_params()
+
+    if log_file is not None:
+        paths["log_file_template"] = log_file
+    if grid_type is not None:
+        params["grid_type"] = grid_type
+    if grid_template_type is not None:
+        params["grid_template_type"] = grid_template_type
 
     grid_path = grid_path or paths["grid_path"]
     output_path = output_path or paths["output_path"]

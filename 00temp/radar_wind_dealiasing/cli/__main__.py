@@ -4,8 +4,8 @@
 # Distributed under the terms of the GPL V3 License.
 """Command line entrypoint for region_dealias CLI commands."""
 
-from radar_wind_dealiasing.cli import main
+from . import main
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

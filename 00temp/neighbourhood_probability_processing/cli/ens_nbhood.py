@@ -2,16 +2,61 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""Neighbourhood 处理 CLI 示例。"""
+"""邻域概率处理命令行。
+
+在本包目录执行::
+
+    python cli/ens_nbhood.py --input-data-path PATH --neighbourhood-output probabilities --radii 20000
+    python -m cli.ens_nbhood --input-data-path PATH --neighbourhood-output probabilities --radii 20000
+
+Python::
+
+    from cli.ens_nbhood import EnsNbhoodCli
+    EnsNbhoodCli.call(input_data_path="PATH", neighbourhood_output="probabilities", radii=[20000])
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import List, Optional, Sequence, Union
+from typing import Optional, Sequence
 
 import numpy as np
 import xarray as xr
 import meteva_base as meb
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
+
+
+def _csv_floats(text: str):
+    parts = [item.strip() for item in str(text).split(",") if item.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("需要逗号分隔的数值")
+    return [float(item) for item in parts]
+
+
+def _csv_ints(text: str):
+    parts = [item.strip() for item in str(text).split(",") if item.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("需要逗号分隔的整数")
+    return [int(item) for item in parts]
 
 
 def process(
@@ -27,8 +72,7 @@ def process(
     weighted_mode: bool = False,
     area_sum: bool = False,
     percentiles: Optional[Sequence[float]] = None,
-    halo_radius: Optional[float] = None,
-) -> xr.DataArray:
+    halo_radius: Optional[float] = None, config=None) -> xr.DataArray:
     """执行邻域处理。
 
     参数
@@ -63,6 +107,19 @@ def process(
     xr.DataArray
         邻域处理结果。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "mask_path": (mask_path, "str"),
+        "output_path": (output_path, "str"),
+        "lead_times": (lead_times, "int_list"),
+        "percentiles": (percentiles, "float_list"),
+        "halo_radius": (halo_radius, "float"),
+    })
+    mask_path = _over['mask_path']
+    output_path = _over['output_path']
+    lead_times = _over['lead_times']
+    percentiles = _over['percentiles']
+    halo_radius = _over['halo_radius']
     from neighbourhood_probability_processing.src.utils._helpers import (
         complex_to_deg,
         deg_to_complex,
@@ -170,50 +227,51 @@ def process(
     return result
 
 
+class EnsNbhoodCli(CliBase):
+    """``ens_nbhood`` 的命令行。``run`` 转调 ``process``。"""
+
+    prog = "python cli/ens_nbhood.py"
+    description = (
+        "邻域概率或百分位处理。\n"
+        "输入路径、输出类型和半径必填。省略的可选项保持函数默认值；"
+        "仍为 None 的项可从 --config 或 resource/conf.ini 填补。"
+    )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/ens_nbhood.py --help\n"
+        "  python cli/ens_nbhood.py --input-data-path PATH --neighbourhood-output probabilities "
+        "--radii 20000 --output-path OUT.nc\n"
+        "  python -m cli.ens_nbhood --input-data-path PATH --neighbourhood-output percentiles "
+        "--radii 10000,20000 --config resource/conf.ini\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--input-data-path", required=True, metavar="PATH", help="输入网格 NetCDF。必填。")
+        parser.add_argument("--neighbourhood-output", required=True, choices=("probabilities", "percentiles"), help="邻域输出类型。必填。")
+        parser.add_argument("--radii", required=True, type=_csv_floats, help="邻域半径（米），逗号分隔。必填。")
+        parser.add_argument("--mask-path", default=None, metavar="PATH", help="外部掩码 NetCDF。仅 probabilities 可用。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="输出 NetCDF。省略则不写文件。")
+        parser.add_argument("--neighbourhood-shape", default=None, choices=("square", "circular"), help="邻域形状。省略则用 square。")
+        parser.add_argument("--lead-times", dest="lead_times", type=_csv_ints, default=None, help="与 radii 配套的时效（小时），逗号分隔。")
+        self.add_optional_bool(parser, "--degrees-as-complex", help_true="把角度场转为复数后再计算。", help_false="不把角度场转为复数。省略则用函数默认值 false。")
+        self.add_optional_bool(parser, "--weighted-mode", help_true="圆形邻域加权。", help_false="不加权。省略则用函数默认值 false。")
+        self.add_optional_bool(parser, "--area-sum", help_true="返回邻域和。", help_false="返回邻域平均。省略则用函数默认值 false。")
+        parser.add_argument("--percentiles", type=_csv_floats, default=None, help="百分位列表，逗号分隔，单位为百分数。仅 percentiles 模式。省略则用默认百分位。")
+        parser.add_argument("--halo-radius", dest="halo_radius", type=float, default=None, help="结果外圈裁剪半径（米）。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        process(**{key: value for key, value in params.items() if value is not None})
+        return 0
+
+
+def ens_nbhood_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.ens_nbhood`` 都进这里。"""
+    return EnsNbhoodCli().main(argv)
+
+
+main = ens_nbhood_cli
+
+
 if __name__ == "__main__":
-    import sys
-
-    #添加项目根目录到系统路径,可直接运行示例脚本
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    # 测试数据路径（输入 cli_input，输出 cli_output）
-    test_root = Path(__file__).resolve().parent.parent / "test_data" / "official_test_nbhood"
-    input_dir = test_root / "cli_input" / "basic"
-    output_dir = test_root / "cli_output"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    #各输入文件的路径映射
-    input_data_path = input_dir / "input.nc"   #待处理输入场nc文件路径
-    mask_path = None   #外部掩码nc文件路径
-    output_path = str(output_dir / "cli_nbhood_square_result.nc")   #输出nc文件路径
-
-    neighbourhood_output = "probabilities"   #邻域输出类型
-    neighbourhood_shape = "square"   #邻域形状
-    radii: List[float] = [20000.0]   #邻域半径（米）
-    lead_times = None   #与radii对应的时效（小时）
-    degrees_as_complex = False   #是否将输入角度场转为复数后再计算
-    weighted_mode = False   #圆形邻域加权模式
-    area_sum = False   #是否返回邻域和而非邻域平均
-    halo_radius = None   #结果外圈裁剪半径（米）
-
-    if not input_data_path.is_file():
-        print(
-            f"示例输入不存在：{input_data_path}\n"
-            "请补充 test_data 后重试，或在此处配置自己的输入与输出路径。"
-        )
-    else:
-        result = process(
-            str(input_data_path),
-            neighbourhood_output,
-            radii,
-            mask_path=mask_path,
-            output_path=output_path,
-            neighbourhood_shape=neighbourhood_shape,
-            lead_times=lead_times,
-            degrees_as_complex=degrees_as_complex,
-            weighted_mode=weighted_mode,
-            area_sum=area_sum,
-            halo_radius=halo_radius,
-        )
+    raise SystemExit(ens_nbhood_cli())

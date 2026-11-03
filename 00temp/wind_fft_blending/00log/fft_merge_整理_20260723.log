@@ -1,0 +1,83 @@
+================================================================================
+算法整理日志 — 多风场 FFT 融合
+================================================================================
+整理日期   : 2026-07-23
+算法代号   : fft_merge / multi_wind_fft_blending
+仓库目录   : 00temp/multi_wind_fft_blending/
+整理阶段   : 入口职责分离（CLI → cli；main 仅 process + __main__ 传参）
+贡献人     : 胡海川、李振、郭云谦
+前次日志   : 00log/fft_merge_整理_20260722.log（入口标准化 + is_multi）
+原始来源   : D:\temp\202301_zhinengwangge\20230206_unitycode\NIMM_pip_repos\TEMP\260625\FftForNimm
+================================================================================
+
+一、目录映射（现结构）
+--------------------------------------------------------------------------------
+  算法核心           → src/fft_merge.py（FFTMergePlugin）
+  可调度执行入口     → src/main.py（process；is_multi / pro_count）
+  直跑入口           → src/main.py 的 if __name__ == "__main__"（直接给 process 传参）
+  CLI 路由           → cli/__main__.py（argparse → main.process）
+  多进程工具         → 00temp/utils/multipro_plugin.py（SimpleParallelTool）
+  单元/集成测试      → test/test_fft_merge.py、test/test_main.py
+  程序说明           → docs/FFT_MERGE_程序说明.md、docs/multi_wind_fft_blending.md
+  原理 notebook      → nbs/fft_merge_说明.ipynb
+  样例资源           → 与仓库同级 NIMM_pip_testdata/multi_wind_fft_blending/test_data/
+  整理清单           → NIMM_list.md（算法包内）
+  整理中间数据       → 00temp/fft_merge/
+  整理过程日志       → 00log/（本文件；一次整理过程对应一份）
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 将 argparse / 命令行解析从 src/main.py 迁至 cli/__main__.py
+  [x] src/main.py 仅保留业务 API（process 等），供外部模块 import
+  [x] src/main.py 的 __main__ 改为直接 process(...) 传参运行（对齐 multi_weather_phenom_grid_12h）
+  [x] cli 不再 subprocess 转发脚本，改为 import main.process 后解析参数调用
+  [x] 同步 docs、算法包 NIMM_list.md 中入口说明
+  [x] 延续：is_multi / pro_count；样例路径为同级 NIMM_pip_testdata
+
+三、试跑记录
+--------------------------------------------------------------------------------
+  通过:
+    python -m cli --help
+      → 可见 --is-multi / --pro-count 与多任务示例
+
+  未验证 / 需数据环境:
+    NIMM_pip_testdata/multi_wind_fft_blending/test_data/ 仍为空（或样例未就绪）
+    → python src/main.py、pytest 依赖样例的用例无法完整验证
+    补齐 sample_a1/a2_uv.m11、sample_b1/b2_uv.m11 后建议执行:
+      python src/main.py
+      python -m cli --main-uv ... --ass-uv ... --output-dir ... --output-prefix ...
+      python -m pytest test/test_main.py test/test_fft_merge.py -q
+
+四、仍存在问题（需人工补充）★
+--------------------------------------------------------------------------------
+  [ ] 同级 NIMM_pip_testdata/multi_wind_fft_blending/test_data/ 样例文件缺失，需人工放入 Micaps11
+  [ ] nbs/ 及部分文档中旧 resource/、fft_merge_cli 文案，需人工核对遗漏
+  [ ] FFTMergePlugin 未继承仓库统一 BasePlugin，正式入库前评估是否接入
+  [ ] 尚未补充到正式 NIMM/05blending/ 目录
+  [ ] 未做完整业务数据试跑与结果对比
+  [ ] 00temp/fft_merge/ 仅占位，整理对照中间文件待按需归档或清理
+
+五、调用方式（正式）
+--------------------------------------------------------------------------------
+  模块调度:
+    from main import process
+    process(main_uv_path=..., ass_uv_path=..., output_dir=..., output_prefix=...,
+            is_multi=False, pro_count=4)
+
+  直跑 main.py（改 __main__ 传参）:
+    python src/main.py
+
+  命令行:
+    python -m cli --help
+    python -m cli --main-uv ... --ass-uv ... --output-dir ... --output-prefix ...
+    python -m cli ... --is-multi --pro-count 2
+
+六、规范目录说明（本仓库约定）
+--------------------------------------------------------------------------------
+  00temp/          存放算法整理过程中的中间数据（本算法：00temp/fft_merge/）
+  00log/           存放原始算法整理过程日志；一次整理过程对应一个 log（本文件）
+  NIMM_list.md     以表格记录已整理算法：种类、功能、更新时间、贡献人、目录、待办
+
+================================================================================
+日志结束 — 下次整理请新建 00log/<算法代号>_整理_<YYYYMMDD>.log
+================================================================================

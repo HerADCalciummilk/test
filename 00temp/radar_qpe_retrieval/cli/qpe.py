@@ -2,15 +2,46 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""QPE 插件 CLI 示例。"""
+"""QPE 命令行。
+
+在本包目录执行::
+
+    python cli/qpe.py --method z --refl-path PATH [--output-path PATH]
+    python -m cli.qpe --method z --refl-path PATH
+
+Python::
+
+    from cli.qpe import QpeCli
+    QpeCli.call(method="z", refl_path="PATH")
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import meteva_base as meb
 import xarray as xr
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
 
 
 def process(
@@ -35,8 +66,7 @@ def process(
     thresh: float = None,
     thresh_max: bool = None,
     mp_factor: float = 0.6,
-    output_path: Optional[str] = None,
-) -> xr.DataArray:
+    output_path: Optional[str] = None, config=None) -> xr.DataArray:
     """QPE 统一入口，通过 ``method`` 选择并执行算法。
 
     参数说明
@@ -72,6 +102,35 @@ def process(
         ``radar_estimated_rain_rate``；``ztor`` 默认变量名为
         ``NWS_primary_prate``（可通过 ``rr_field`` 覆盖）。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "refl_path": (refl_path, "str"),
+        "kdp_path": (kdp_path, "str"),
+        "att_path": (att_path, "str"),
+        "hydro_path": (hydro_path, "str"),
+        "kdp_alpha": (kdp_alpha, "float"),
+        "kdp_beta": (kdp_beta, "float"),
+        "a_alpha": (a_alpha, "float"),
+        "a_beta": (a_beta, "float"),
+        "rr_field": (rr_field, "str"),
+        "main_field": (main_field, "str"),
+        "thresh": (thresh, "float"),
+        "thresh_max": (thresh_max, "bool"),
+        "output_path": (output_path, "str"),
+    })
+    refl_path = _over['refl_path']
+    kdp_path = _over['kdp_path']
+    att_path = _over['att_path']
+    hydro_path = _over['hydro_path']
+    kdp_alpha = _over['kdp_alpha']
+    kdp_beta = _over['kdp_beta']
+    a_alpha = _over['a_alpha']
+    a_beta = _over['a_beta']
+    rr_field = _over['rr_field']
+    main_field = _over['main_field']
+    thresh = _over['thresh']
+    thresh_max = _over['thresh_max']
+    output_path = _over['output_path']
     from radar_qpe_retrieval.src.qpe import QPEPlugin
     from radar_qpe_retrieval.cli.cinrad_meb import save_meteva_grid_to_netcdf
 
@@ -107,22 +166,58 @@ def process(
     return result
 
 
-if __name__ == "__main__":
-    import sys
-    # 添加项目根目录到 Python 路径
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
+class QpeCli(CliBase):
+    """``qpe`` 的命令行。``run`` 转调 ``process``。"""
 
-    # 设置输入输出路径
-    data_dir = Path(__file__).resolve().parents[1] / "test_data" / "qpe" / "cli_input"
-    refl_path = str(data_dir / "ACHN_CREF000_20240612_070000.nc")
-    output_path = str(
-        Path(__file__).resolve().parents[1]
-        / "test_data"
-        / "qpe"
-        / "cli_output"
-        / "est_rain_rate_z_cli_run.nc"
+    prog = "python cli/qpe.py"
+    description = (
+        "雷达降水定量反演。用 --method 选择算法。\n"
+        "各算法所需路径不同，路径本身可选。"
+        "省略的可选项保持函数默认值；仍为 None 的项可从 --config 或 resource/conf.ini 填补。"
+    )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/qpe.py --help\n"
+        "  python cli/qpe.py --method z --refl-path PATH --output-path OUT.nc\n"
+        "  python -m cli.qpe --method kdp --kdp-path PATH --config resource/conf.ini\n"
     )
 
-    process("z", refl_path=refl_path, output_path=output_path)
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--method", required=True, help="算法：z、zpoly、kdp、a、zkdp、za、hydro、ztor。必填。")
+        parser.add_argument("--refl-path", default=None, metavar="PATH", help="反射率网格。z/zpoly/ztor/zkdp/za/hydro 需要。")
+        parser.add_argument("--kdp-path", default=None, metavar="PATH", help="KDP 网格。kdp/zkdp 需要。")
+        parser.add_argument("--att-path", default=None, metavar="PATH", help="衰减场。a/za/hydro 需要。")
+        parser.add_argument("--hydro-path", default=None, metavar="PATH", help="水凝物分类场。hydro 需要。")
+        parser.add_argument("--z-alpha", dest="z_alpha", type=float, default=None, help="Z-R 系数 alpha。省略则用 0.0376。")
+        parser.add_argument("--z-beta", dest="z_beta", type=float, default=None, help="Z-R 系数 beta。省略则用 0.6112。")
+        parser.add_argument("--kdp-alpha", dest="kdp_alpha", type=float, default=None, help="KDP-R 系数 alpha。")
+        parser.add_argument("--kdp-beta", dest="kdp_beta", type=float, default=None, help="KDP-R 系数 beta。")
+        parser.add_argument("--a-alpha", dest="a_alpha", type=float, default=None, help="A-R 系数 alpha。")
+        parser.add_argument("--a-beta", dest="a_beta", type=float, default=None, help="A-R 系数 beta。")
+        parser.add_argument("--snow-alpha", dest="snow_alpha", type=float, default=None, help="冰相 Z-R 系数 alpha。省略则用 0.1。")
+        parser.add_argument("--snow-beta", dest="snow_beta", type=float, default=None, help="冰相 Z-R 系数 beta。省略则用 0.5。")
+        parser.add_argument("--ztor-a", dest="ztor_a", type=float, default=None, help="ZtoR 系数 a。省略则用 300。")
+        parser.add_argument("--ztor-b", dest="ztor_b", type=float, default=None, help="ZtoR 系数 b。省略则用 1.4。")
+        parser.add_argument("--rr-field", default=None, help="降水率输出字段名。")
+        parser.add_argument("--main-field", default=None, help="融合算法主判据字段。")
+        parser.add_argument("--thresh", type=float, default=None, help="融合切换阈值。")
+        self.add_optional_bool(parser, "--thresh-max", help_true="主场大于阈值时切换。", help_false="主场小于阈值时切换。省略则保持 None。")
+        parser.add_argument("--mp-factor", dest="mp_factor", type=float, default=None, help="hydro 混合相修正系数。省略则用 0.6。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="结果 NetCDF。省略则只返回内存结果。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        process(**{key: value for key, value in params.items() if value is not None})
+        return 0
+
+
+def qpe_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.qpe`` 都进这里。"""
+    return QpeCli().main(argv)
+
+
+main = qpe_cli
+
+
+if __name__ == "__main__":
+    raise SystemExit(qpe_cli())

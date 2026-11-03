@@ -1230,8 +1230,6 @@ def _prepare(time_input, log_file, sd_sta_info_file):
             f"读取站点信息文件返回空结果: {sd_sta_info_file}。请检查文件编码和 Micaps3 内容格式。"
         )
 
-    print("=------------------------------------------------------------>>>> sd_sta ", sd_sta_info_file)
-    print("=------------------------------------------------------------>>>> sd_sta ", sd_sta_info)
     sd_sta_info.iloc[:, -1] = 0.0
     return simple_log, dt_now, sd_sta_info
 

@@ -7,20 +7,23 @@
 from typing import Optional, Sequence
 
 
-_CLI_SCRIPTS = (
-    "orographic_precipitation_downscaling/cli/preprocess_test_data.py",
-    "orographic_precipitation_downscaling/cli/dsc_orographic_enhancement.py",
-    "orographic_precipitation_downscaling/cli/dsc_orographic_enhancement_uv.py",
-    "orographic_precipitation_downscaling/cli/dsc_apply_orographic_enhancement.py",
-)
-
-
 def main(argv: Optional[Sequence[str]] = None):
-    """列出可直接运行的 CLI 示例脚本。"""
+    """列出带路径参数的命令行。"""
+    del argv
     lines = [
-        "orographic_enhancement 模块 CLI 已改为示例脚本，请直接运行：",
-        *(f"  python {script}" for script in _CLI_SCRIPTS),
+        "地形降水增强命令行参数由 flags 传入，先看 --help：",
+        "  python cli/dsc_orographic_enhancement.py --help",
+        "  python cli/dsc_orographic_enhancement.py --temperature-path PATH --humidity-path PATH --pressure-path PATH --wind-speed-path PATH --wind-direction-path PATH --orography-path PATH [--output-path PATH] [--config PATH]",
+        "  python -m cli.dsc_orographic_enhancement --help",
         "",
-        "在脚本底部的 if __name__ == '__main__' 中修改路径与参数后执行。",
+        "  python cli/dsc_orographic_enhancement_uv.py --help",
+        "  python -m cli.dsc_orographic_enhancement_uv --help",
+        "",
+        "  python cli/dsc_apply_orographic_enhancement.py --help",
+        "  python -m cli.dsc_apply_orographic_enhancement --help",
+        "",
+        "预处理脚本仍直接运行：",
+        "  python cli/preprocess_test_data.py",
     ]
-    raise SystemExit("\n".join(lines))
+    print("\n".join(lines))
+    return 0

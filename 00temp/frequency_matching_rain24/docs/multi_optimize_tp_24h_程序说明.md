@@ -47,11 +47,14 @@
 
 ### 3.3 光流订正
 
-模块：`src/cal_optical_flow.py`、`src/cal_slice_tp.py`
+两个主程序，调度和频率匹配相同，各自固定光流、Cressman 和双线性：
 
-- 取相似度最高的若干历史个例（最多 20 个）；
-- 对每对历史模式—实况格点场估计光流矢量；
-- 将光流叠加到当前模式场上，做半拉格朗日平流（仅 **dtime ≤ 60** 时启用）。
+| 主程序 | 调用 | 光流 / 半拉格朗日 | Cressman | 双线性 |
+|--------|------|-------------------|----------|--------|
+| `src/correct_tp_24h.py` | `from correct_tp_24h import process`，或 `python -m cli` | `src/cal_optical_flow.py` | `src/interpolation.py` 的 `GressManInterpolation` | `src/interpolation.py` 的 `mesh_val` / `bilinear_interp` |
+| `src/correct_tp_24h_nowcast.py` | `from correct_tp_24h_nowcast import process`，或 `python src/correct_tp_24h_nowcast.py` | `src/cal_optical_flow_nowcast.py` → 子模块 `optical_flow_nowcast.LK` / `Extrapolation` | `src/interpolation_sg_cressman.py` → 子模块 `interp_sg_cressman`（半径由度换算为米） | `src/interpolation_gg_linear.py`：格点→格点 → 子模块 `interp_gg_linear`，格点→站点 `meteva.base.interp_gs_linear` |
+
+两个 `process` 的参数相同（`plugin` / `is_multi` / `pro_count` / `rpt_times`）。光流只在 **dtime ≤ 60** 时启用。
 
 ### 3.4 频率匹配
 
@@ -88,12 +91,16 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 
 | 文件 | 功能 |
 |------|------|
-| `src/correct_tp_24h.py` | **主程序**：流程、数据加载、切片循环、产品输出 |
+| `src/correct_tp_24h.py` | **主程序（原算法）**：`cal_optical_flow` + `interpolation.GressManInterpolation`；`python -m cli` |
+| `src/correct_tp_24h_nowcast.py` | **主程序（项目算法）**：`cal_optical_flow_nowcast` + `interpolation_sg_cressman` + `interpolation_gg_linear` |
 | `src/cal_similarity.py` | **核心算法**：历史—当前模式相似度 |
 | `src/cal_slice_tp.py` | **核心算法**：切片光流 + 频率匹配订正 |
-| `src/cal_optical_flow.py` | **核心算法**：光流场 / 拉格朗日平流 |
+| `src/cal_optical_flow.py` | 原主程序的光流 / 半拉格朗日平流 |
+| `src/cal_optical_flow_nowcast.py` | 项目主程序的光流：→ `optical_flow_nowcast.LK` / `Extrapolation` |
 | `src/cal_frequency_match.py` | **核心算法**：频率匹配（站点/格点） |
-| `src/interpolation.py` | **核心算法**：Cressman / 双线性插值 |
+| `src/interpolation.py` | 原主程序的 Cressman 与双线性 |
+| `src/interpolation_sg_cressman.py` | 项目主程序的 Cressman：→ `interp_sg_cressman` |
+| `src/interpolation_gg_linear.py` | 项目主程序的双线性：格点→格点 `interp_gg_linear`，格点→站点 `interp_gs_linear` |
 | `src/utils/data_proc.py` | **工具**：格点/站点预处理、平滑、掩膜（`from utils.data_proc`） |
 | `src/utils/data_save.py` | **工具**：MICAPS3/4/NC 写出 |
 | `src/utils/config.py` | **工具**：算法内部常量参数 |
@@ -210,14 +217,25 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 ### 7.3 命令行
 
 ```bash
-# 使用 ini 中 default_plugin（默认 ECMWF）
+# 原光流 cal_optical_flow + 原 Cressman interpolation
 python -m cli
-
-# 指定模式 plugin
 python -m cli --plugin=resource/ecmwf.json
 
-# 切换其他模式
+# 切换其他模式（仍是原主程序）
 python -m cli --plugin=resource/CMA_MESO.json
+
+# 项目光流 + 项目 Cressman
+python src/correct_tp_24h_nowcast.py
+```
+
+模块调用，两个入口参数相同：
+
+```python
+from correct_tp_24h import process
+process(plugin="resource/ecmwf.json", is_multi=True, pro_count=8)
+
+from correct_tp_24h_nowcast import process
+process(plugin="resource/ecmwf.json", is_multi=True, pro_count=8)
 ```
 
 **起报时间** 不在命令行传入，在 `optimize_tp_24.ini` 的 `rpt_list` 中配置：

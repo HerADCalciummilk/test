@@ -1,7 +1,7 @@
-"""Executable entry for python -m linear_scd_multi_time_fusion.cli."""
+"""Executable entry for python -m cli. Run from this package directory."""
 
-from linear_scd_multi_time_fusion.cli import main
+from . import main
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

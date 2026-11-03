@@ -1,0 +1,119 @@
+================================================================================
+算法整理日志 — 网格天气现象综合电码生成（12h）
+================================================================================
+整理日期   : 2026-07-22
+最后更新   : 2026-07-22（统一执行入口；废弃 cli/main.py、cli/runner.py）
+算法代号   : weather_phenom_grid_12h
+仓库目录   : multi_weather_phenom_grid_12h/
+整理阶段   : NIMM 规范目录落地 + 主程序入口统一到 src/main.py
+贡献人     : 待补充
+原始来源   : 待补充（请填写原脚本/工程路径或版本号）
+标准依据   : QX/T 740-2024《基于网格预报的城镇预报生成规范 天气现象》
+架构规范   : 国省统筹算法技术规范（三级架构 / DIA Plugin）
+版本       : v1.0.0
+================================================================================
+
+一、目录映射（现仓库结构）
+--------------------------------------------------------------------------------
+  执行入口（主程序） → src/main.py          (process / main；命令行可独立运行)
+  CLI 路由           → cli/__main__.py      (python -m cli → src/main.py)
+  数据加载（I/O）    → src/utils/data_loader.py
+  纯计算调度         → src/processor.py
+  判识 Plugin        → src/identifier.py      (DIA_WeatherPhenomIdentifier)
+  选取 Plugin        → src/selector.py         (DIA_WeatherPhenomSelector)
+  逻辑 Plugin        → src/logic_judger.py     (DIA_WeatherPhenomLogicJudger)
+  编码 Plugin        → src/encoder.py          (DIA_WeatherPhenomEncoder)
+  业务规则配置       → resource/weather_config.py
+  结构常量           → resource/data_schema.py
+  运行环境配置       → resource/config.py
+  算法说明           → docs/算法说明.md
+  算法说明 Notebook  → nbs/算法说明.ipynb
+  单元测试           → test/test_*.py
+  整理清单           → NIMM_list.md
+  整理中间数据       → 00temp/weather_phenom_grid_12h/
+  整理过程日志       → 00log/（本文件）
+
+  【已废弃，已删除】
+  cli/main.py        — 原命令行入口（逻辑已并入 src/main.py）
+  cli/runner.py      — 原时段编排（逻辑已并入 src/main.py）
+
+二、本次已完成（2026-07-22）
+--------------------------------------------------------------------------------
+  [x] 建立 NIMM 规范目录：00temp/、00log/、NIMM_list.md
+  [x] 新增 docs/算法说明.md、nbs/算法说明.ipynb
+  [x] 新增统一执行入口 src/main.py（process + 命令行）
+  [x] cli/__main__.py 转发至 src/main.py，并补充传参示例
+  [x] 删除 cli/main.py、cli/runner.py（旧调用方式舍弃）
+  [x] 更新 NIMM_list.md 目录明细与 CLI 入口说明
+
+三、文件变更摘要（入口整理阶段）
+--------------------------------------------------------------------------------
+  【新增】
+    src/main.py
+    cli/__main__.py（转发 + 传参示例）
+    00temp/、00log/、NIMM_list.md（规范目录与清单）
+
+  【删除】
+    cli/main.py
+    cli/runner.py
+
+  【保留】
+    cli/data_loader.py（主程序内部仍调用）
+
+四、仍存在问题（需人工补充）
+--------------------------------------------------------------------------------
+  [ ] 贡献人、原始代码来源路径 — NIMM_list.md 与本日志待补
+  [ ] docs / nbs 仍有旧 cli/main.py、cli.runner 文案 — 需人工同步为 src.main.process
+  [ ] docs 多份算法文档并存 — 算法技术指南.md / algorithm_guide.md / 算法说明.md
+  [ ] 业务数据路径依赖 SCMOC 网络盘 — 离线环境无法跑通完整端到端
+  [ ] resource/config.py 含开发默认 DATA_ROOT — 生产应以环境变量 / --data-root 注入
+  [ ] PHENOM/ 为运行输出目录 — 是否加入 .gitignore 需确认
+  [ ] 根目录 utils/ 为空、汇报 PPT 大文件 — 是否保留需人工决定
+  [ ] nbs/算法说明.ipynb 尚未本机执行验证
+  [ ] 正式入库 NIMM 中央仓库时的包路径 / 算法种类编号 — 待补充
+  [ ] 00temp/weather_phenom_grid_12h/ 仅占位 — 有中间文件时放入并记入日志
+
+五、验证记录
+--------------------------------------------------------------------------------
+  历史已验证（见 docs/技术汇报材料.md，非本次复跑）:
+    pytest test/ -v                         → 58 passed
+    真实数据端到端（2026033112 段1）        → 曾跑通
+
+  本次入口整理已验证:
+    python -m cli --help                    → 转发 src/main.py 成功
+    python src/main.py --help               → 成功（需 Python ≥ 3.10）
+
+  本次未复跑:
+    真实 SCMOC 端到端
+    pytest 全量
+    nbs/算法说明.ipynb 全单元格
+
+六、当前仓库目录树（核心）
+--------------------------------------------------------------------------------
+  multi_weather_phenom_grid_12h/
+  ├── 00log/          ← 整理过程日志（一次整理一个 log）
+  ├── 00temp/         ← 整理过程中间数据
+  │   └── weather_phenom_grid_12h/
+  ├── NIMM_list.md    ← 已整理算法列表
+  ├── cli/
+  │   ├── __main__.py     （转发 src/main.py）
+  │   └── data_loader.py
+  ├── src/
+  │   ├── main.py         （统一执行入口）
+  │   ├── processor.py
+  │   ├── identifier.py / selector.py / logic_judger.py / encoder.py
+  │   └── utils/
+  ├── resource/
+  ├── docs/
+  ├── nbs/
+  ├── test/
+  ├── env/
+  ├── conftest.py
+  └── pyproject.toml
+
+================================================================================
+后续：入口/CLI/data_loader/多进程整理见
+  00log/weather_phenom_grid_12h_整理_20260723.log
+================================================================================
+日志结束
+================================================================================

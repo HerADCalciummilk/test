@@ -2,16 +2,47 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""地形增强 CLI 示例。"""
+"""地形降水增强命令行。
+
+在本包目录执行::
+
+    python cli/dsc_orographic_enhancement.py --temperature-path PATH --humidity-path PATH --pressure-path PATH --wind-speed-path PATH --wind-direction-path PATH --orography-path PATH
+    python -m cli.dsc_orographic_enhancement --temperature-path PATH --humidity-path PATH --pressure-path PATH --wind-speed-path PATH --wind-direction-path PATH --orography-path PATH
+
+Python::
+
+    from cli.dsc_orographic_enhancement import DscOrographicEnhancementCli
+    DscOrographicEnhancementCli.call(temperature_path="PATH", humidity_path="PATH", pressure_path="PATH", wind_speed_path="PATH", wind_direction_path="PATH", orography_path="PATH")
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import xarray as xr
 import meteva_base as meb
 import numpy as np
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
 
 def process(
     temperature_path: str,
@@ -23,8 +54,7 @@ def process(
     output_path: Optional[str] = None,
     *,
     boundary_height: float = 1000.0,
-    boundary_height_units: str = "m",
-) -> xr.DataArray:
+    boundary_height_units: str = "m", config=None) -> xr.DataArray:
     """地形增强处理流程。
 
     参数
@@ -53,6 +83,11 @@ def process(
     xr.DataArray
         地形增强结果，单位 ``m s-1``。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "output_path": (output_path, "str"),
+    })
+    output_path = _over['output_path']
     from orographic_precipitation_downscaling.src.orographic_enhancement import MetaOrographicEnhancement
     
     _unbounded = (-np.inf, np.inf, np.nan)
@@ -110,43 +145,50 @@ def process(
     return result
 
 
+class DscOrographicEnhancementCli(CliBase):
+    """``dsc_orographic_enhancement`` 的命令行。``run`` 转调 ``process``。"""
+
+    prog = "python cli/dsc_orographic_enhancement.py"
+    description = (
+        "地形降水增强。\n"
+        "六个输入路径必填。省略的可选项保持函数默认值；"
+        "仍为 None 的项可从 --config 或 resource/conf.ini 填补。"
+    )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/dsc_orographic_enhancement.py --help\n"
+        "  python cli/dsc_orographic_enhancement.py --temperature-path PATH --humidity-path PATH "
+        "--pressure-path PATH --wind-speed-path PATH --wind-direction-path PATH "
+        "--orography-path PATH --output-path OUT.nc\n"
+        "  python -m cli.dsc_orographic_enhancement --temperature-path PATH --humidity-path PATH "
+        "--pressure-path PATH --wind-speed-path PATH --wind-direction-path PATH "
+        "--orography-path PATH --config resource/conf.ini\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--temperature-path", required=True, metavar="PATH", help="温度场 NetCDF。必填。")
+        parser.add_argument("--humidity-path", required=True, metavar="PATH", help="相对湿度场 NetCDF。必填。")
+        parser.add_argument("--pressure-path", required=True, metavar="PATH", help="气压场 NetCDF。必填。")
+        parser.add_argument("--wind-speed-path", required=True, metavar="PATH", help="风速场 NetCDF。必填。")
+        parser.add_argument("--wind-direction-path", required=True, metavar="PATH", help="风向场 NetCDF（相对真北角度）。必填。")
+        parser.add_argument("--orography-path", required=True, metavar="PATH", help="目标地形网格 NetCDF。必填。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="输出 NetCDF。省略则不写文件。")
+        parser.add_argument("--boundary-height", dest="boundary_height", type=float, default=None, help="边界层代表高度。省略则用 1000。")
+        parser.add_argument("--boundary-height-units", dest="boundary_height_units", default=None, help="边界层高度单位。省略则用 m。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        process(**{key: value for key, value in params.items() if value is not None})
+        return 0
+
+
+def dsc_orographic_enhancement_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.dsc_orographic_enhancement`` 都进这里。"""
+    return DscOrographicEnhancementCli().main(argv)
+
+
+main = dsc_orographic_enhancement_cli
+
+
 if __name__ == "__main__":
-    import sys
-
-    #添加项目根目录到系统路径,可直接运行示例脚本
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-        
-    # 测试数据路径
-    data_root = (
-        Path(__file__).resolve().parent.parent
-        / "test_data"
-        / "orographic_enhancement_data"
-    )
-    cli_input_dir = data_root / "cli_input"
-    cli_output_dir = data_root / "cli_output"
-
-    # 各输入文件的路径映射
-    temperature_path = str(cli_input_dir / "temperature.nc")   # 温度场 nc 文件路径
-    humidity_path = str(cli_input_dir / "humidity.nc")   # 相对湿度场 nc 文件路径
-    pressure_path = str(cli_input_dir / "pressure.nc")   # 气压场 nc 文件路径
-    wind_speed_path = str(cli_input_dir / "wind_speed.nc")   # 风速场 nc 文件路径
-    wind_direction_path = str(cli_input_dir / "wind_direction.nc")   # 风向场 nc 文件路径
-    orography_path = str(cli_input_dir / "orography_uk-standard_1km.nc")   # 地形场 nc 文件路径
-    output_path = str(cli_output_dir / "cli_result.nc")   # 输出 nc 文件路径
-
-    boundary_height = 1000.0   #边界层代表高度  
-    boundary_height_units = "m"   #边界层代表高度单位
-
-    result = process(
-        temperature_path,
-        humidity_path,
-        pressure_path,
-        wind_speed_path,
-        wind_direction_path,
-        orography_path,
-        output_path=output_path,
-        boundary_height=boundary_height,
-        boundary_height_units=boundary_height_units,
-    )
+    raise SystemExit(dsc_orographic_enhancement_cli())

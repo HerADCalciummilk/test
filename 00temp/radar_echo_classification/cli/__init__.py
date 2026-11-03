@@ -17,13 +17,6 @@ import numpy as np
 import xarray as xr
 
 
-_CLI_SCRIPTS = (
-    "radar_echo_classification/cli/steiner_conv_strat_main.py",
-    "radar_echo_classification/cli/feature_detection_main.py",
-    "radar_echo_classification/cli/conv_strat_raut_main.py",
-    "radar_echo_classification/cli/hydroclass_semisupervised_main.py",
-)
-
 # netCDF 库对 float32 的默认填充值（NC_FILL_FLOAT），与 netCDF4.default_fillvals['f4'] 相同。
 # CF/NUG 推荐用 ``_FillValue`` 显式声明缺测；该数值本身来自 netCDF 库而非 CF 另行规定。
 _CF_NETCDF_FILL = np.float32(9.969209968386869e36)
@@ -168,11 +161,22 @@ def save_echo_class_grid_to_netcdf(
 
 
 def main(argv: Optional[Sequence[str]] = None):
-    """列出可直接运行的 CLI 示例脚本。"""
+    """列出带路径参数的命令行。"""
+    del argv
     lines = [
-        "echo_class 模块 CLI 已改为示例脚本，请直接运行：",
-        *(f"  python {script}" for script in _CLI_SCRIPTS),
-        "",
-        "在脚本底部的 if __name__ == '__main__' 中修改路径与参数后执行。",
+        "echo_class 命令行参数由 flags 传入，先看 --help：",
+        "  python cli/steiner_conv_strat_main.py --help",
+        "  python cli/steiner_conv_strat_main.py --refl-path PATH [--output-path PATH] [--config PATH]",
+        "  python -m cli.steiner_conv_strat_main --help",
+        "  python cli/feature_detection_main.py --help",
+        "  python cli/feature_detection_main.py --field-data-path PATH [--output-path PATH] [--config PATH]",
+        "  python -m cli.feature_detection_main --help",
+        "  python cli/conv_strat_raut_main.py --help",
+        "  python cli/conv_strat_raut_main.py --refl-path PATH [--output-path PATH] [--config PATH]",
+        "  python -m cli.conv_strat_raut_main --help",
+        "  python cli/hydroclass_semisupervised_main.py --help",
+        "  python cli/hydroclass_semisupervised_main.py --refl-path PATH [--zdr-path PATH] [--output-path PATH] [--config PATH]",
+        "  python -m cli.hydroclass_semisupervised_main --help",
     ]
-    raise SystemExit("\n".join(lines))
+    print("\n".join(lines))
+    return 0

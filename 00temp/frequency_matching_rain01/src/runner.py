@@ -57,7 +57,7 @@ from proc import (
 from utils.log import Log
 from utils.multipro_plugin import SimpleParallelTool
 from utils.string_process import date_replace
-from utils.util_env import get_resolved_paths
+from utils.util_env import clear_call_overrides, get_resolved_paths, set_call_overrides, set_main_ini
 from utils.util_paths import repo_root
 
 # 分块内频率匹配用的实况等级表（mm）
@@ -1099,6 +1099,58 @@ def _normalize_run_times(
 
 
 def process(
+    *,
+    data_key: Optional[str] = None,
+    run_times: Optional[Sequence[Union[str, datetime]]] = None,
+    sample_workers: Optional[int] = None,
+    block_workers: Optional[int] = None,
+    fixed_seed: Optional[int] = None,
+    is_multi: bool = False,
+    pro_count: int = 4,
+    config: Optional[str] = None,
+    log_file: Optional[str] = None,
+    config_json: Optional[str] = None,
+    path_json: Optional[str] = None,
+    station_info: Optional[str] = None,
+    mask_file: Optional[str] = None,
+) -> int:
+    """逐 1 小时降水频率匹配入口。``config`` 非空时本次调用改读该 ini。
+
+    ``log_file`` / ``config_json`` / ``path_json`` / ``station_info`` / ``mask_file``
+    非 ``None`` 时覆盖 ``get_resolved_paths``（``log_file`` 对应 ``log_file_template``）。
+    ``get_env_paths`` 读的就是这组路径。异常时也会清掉覆盖。
+    """
+    kwargs = dict(
+        data_key=data_key,
+        run_times=run_times,
+        sample_workers=sample_workers,
+        block_workers=block_workers,
+        fixed_seed=fixed_seed,
+        is_multi=is_multi,
+        pro_count=pro_count,
+    )
+    set_call_overrides(
+        {
+            "log_file": log_file,
+            "config_json": config_json,
+            "path_json": path_json,
+            "station_info": station_info,
+            "mask_file": mask_file,
+        }
+    )
+    try:
+        if not config:
+            return _process_impl(**kwargs)
+        set_main_ini(config)
+        try:
+            return _process_impl(**kwargs)
+        finally:
+            set_main_ini(None)
+    finally:
+        clear_call_overrides()
+
+
+def _process_impl(
     *,
     data_key: Optional[str] = None,
     run_times: Optional[Sequence[Union[str, datetime]]] = None,

@@ -341,32 +341,6 @@ def _needs_regridding(source: xr.DataArray, target: xr.DataArray) -> bool:
     return False
 
 
-def _interpolate_by_rows(
-    interpolator: RegularGridInterpolator,
-    target_y_values: np.ndarray,
-    target_x_values: np.ndarray,
-    transformer: Optional[Transformer],
-    row_chunk: int = 64,
-) -> np.ndarray:
-    """按行插值，避免在整张细网格上一次分配采样点。"""
-    n_rows = int(target_y_values.shape[0])
-    n_cols = int(target_x_values.shape[0])
-    regridded = np.empty((n_rows, n_cols), dtype=np.float32)
-    for start in range(0, n_rows, row_chunk):
-        stop = min(start + row_chunk, n_rows)
-        n_chunk = stop - start
-        if transformer is None:
-            sample_points = np.empty((n_chunk * n_cols, 2), dtype=np.float64)
-            sample_points[:, 0] = np.repeat(target_y_values[start:stop], n_cols)
-            sample_points[:, 1] = np.tile(target_x_values, n_chunk)
-        else:
-            sample_x, sample_y = np.meshgrid(target_x_values, target_y_values[start:stop])
-            sample_x, sample_y = transformer.transform(sample_x, sample_y)
-            sample_points = np.column_stack((sample_y.ravel(), sample_x.ravel()))
-        regridded[start:stop] = interpolator(sample_points).reshape(n_chunk, n_cols)
-    return regridded
-
-
 def _regrid_scalar_field(source: xr.DataArray, target: xr.DataArray) -> xr.DataArray:
     """将标量场线性插值到目标网格。
 
@@ -392,6 +366,9 @@ def _regrid_scalar_field(source: xr.DataArray, target: xr.DataArray) -> xr.DataA
     source_x_values = _coord_values_for_crs(source.coords[source_x], source_crs)
     target_y_values = _coord_values_for_crs(target.coords[target_y], target_crs)
     target_x_values = _coord_values_for_crs(target.coords[target_x], target_crs)
+    target_x_mesh, target_y_mesh = np.meshgrid(target_x_values, target_y_values)
+    sample_x = target_x_mesh
+    sample_y = target_y_mesh
     # 若无法识别 CRS，则只能按“同一坐标系”假设直接插值；
     # 为避免网格完全不重叠时发生无约束外推，这里做范围检查并显式报错。
     if source_crs is None and target_crs is None:
@@ -405,10 +382,10 @@ def _regrid_scalar_field(source: xr.DataArray, target: xr.DataArray) -> xr.DataA
             raise ValueError(
                 "源网格与目标网格坐标范围不重叠，且缺少 CRS 信息，无法安全重采样。"
             )
-    # 投影不一致时，按行把目标点反算到源投影后再插值。
-    transformer = None
+    # 投影不一致时，先把目标点反算到源投影，再在源网格上插值。
     if source_crs is not None and target_crs is not None and not source_crs.equals(target_crs):
         transformer = Transformer.from_crs(target_crs, source_crs, always_xy=True)
+        sample_x, sample_y = transformer.transform(target_x_mesh, target_y_mesh)
     interpolator = RegularGridInterpolator(
         (source_y_values, source_x_values),
         np.asarray(source.values, dtype=np.float32),
@@ -416,12 +393,8 @@ def _regrid_scalar_field(source: xr.DataArray, target: xr.DataArray) -> xr.DataA
         bounds_error=False,
         fill_value=np.nan,
     )
-    regridded = _interpolate_by_rows(
-        interpolator,
-        target_y_values,
-        target_x_values,
-        transformer,
-    )
+    sample_points = np.column_stack([sample_y.ravel(), sample_x.ravel()])
+    regridded = interpolator(sample_points).reshape(target.shape).astype(np.float32)
     return xr.DataArray(
         regridded,
         coords={target_y: target.coords[target_y], target_x: target.coords[target_x]},

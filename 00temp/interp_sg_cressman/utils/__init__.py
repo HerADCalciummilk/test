@@ -5,7 +5,7 @@
 
 路径合并顺序：
 1. 本目录（仅本文件）
-2. 仓库根 ``utils/`` — 共享：``base_plugin`` / ``interp_gg_pulgin`` 等
+2. 仓库根 ``utils/`` — 共享：``base_plugin`` 等；双线性用同级子模块 ``interp_gg_linear``
 3. ``src/utils`` — 本算法：``util_env`` 等
 
 ``src/utils/`` 下仅放模块文件，不要添加 ``__init__.py``。

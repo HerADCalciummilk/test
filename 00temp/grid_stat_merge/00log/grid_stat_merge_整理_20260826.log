@@ -1,0 +1,62 @@
+================================================================================
+算法整理日志 — 格站融合（grid_stat_merge）
+================================================================================
+整理日期   : 2026-08-26
+算法代号   : grid_stat_merge
+仓库目录   : grid_stat_merge/
+整理阶段   : 原始算法入仓整理（runner/CLI、util_env、登记清单、文档与烟测）
+贡献人     : （待补）
+原始来源   : 格站融合算法（与仓库根 utils/grid_stat_merge_plugin.py 同源逻辑）
+================================================================================
+说明：一次「原始算法整理过程」对应本文件一份日志；中间数据见 00temp/；
+      清单见 NIMM_list.md。仍有问题见第四节「需人工补充」。
+================================================================================
+
+一、目录映射
+--------------------------------------------------------------------------------
+  主程序             → src/runner.py（process → do_gs_merge → 写 Micaps4）
+  算法核心           → src/grid_stat_merge.py
+  CLI                → cli/__main__.py（argparse → process）
+  本包工具           → src/utils/util_env.py（读 resource/grid_stat_merge.ini）
+  共享插件路径合并   → utils/__init__.py → ../../utils + src/utils
+  运行配置           → resource/grid_stat_merge.ini
+  单元测试           → test/test_layout.py、test_util_env.py、test_merge_smoke.py
+  程序说明           → docs/grid_stat_merge_程序说明.md、README.md、nbs/
+  整理清单           → NIMM_list.md
+  整理中间数据       → 00temp/grid_stat_merge/
+  整理过程日志       → 00log/（本文件）
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 将 main.py 整理为 src/grid_stat_merge.py（算法）+ src/runner.py（调度）
+  [x] 抽出 process(...) 供模块 / CLI / 直跑调用
+  [x] cli/__main__.py：中文 --help；覆盖 grid/sta/output/R/domain/热传导
+  [x] src/utils/util_env.py 读 ini；根 utils/__init__.py 合并共享路径
+  [x] resource/grid_stat_merge.ini 默认配置
+  [x] README / NIMM_list / docs / nbs / 00log / 00temp / test 脚手架
+
+三、试跑记录
+--------------------------------------------------------------------------------
+  建议验证:
+    cd grid_stat_merge
+    python -m cli --help
+    python -m pytest test/ -q
+
+  端到端（需真实格点/站点）:
+    修改 resource/grid_stat_merge.ini 后
+      python -m cli
+      python src/runner.py
+
+四、仍存在问题（需人工补充）★
+--------------------------------------------------------------------------------
+  [ ] 贡献人 / 原始绝对路径完整登记
+  [ ] resource/ 演示样例格点、站点未入库
+  [ ] 业务路径端到端未复跑
+  [ ] 与 ../../utils/grid_stat_merge_plugin.py 双份算法的长期同步策略
+  [ ] requirements 版本锁定
+  [ ] 00temp/grid_stat_merge/ 仅占位
+
+五、备注
+--------------------------------------------------------------------------------
+  共享插件可继续被其他算法包 import；本仓库作为独立可调度产品。
+================================================================================

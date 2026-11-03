@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "weather-phenom-grid-12h"
+version = "1.0.0"
+description = "网格天气现象综合电码生成系统（依据 QX/T 740-2024）"
+readme = "docs/README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+keywords = ["weather", "meteorology", "grid", "forecast", "QX/T-740"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+dependencies = [
+    "numpy>=1.24",
+    "xarray>=2023.1",
+    "netcdf4>=1.6",
+    "meteva>=1.3",
+    "numexpr>=2.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "jupyter>=1.0",
+    "nbformat>=5.0",
+]
+
+[project.scripts]
+weather-phenom = "cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "cli*", "resource*"]
+
+# ──────────────────────────────────────────────────────────────
+# pytest 配置
+# ──────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+# ──────────────────────────────────────────────────────────────
+# coverage 配置
+# ──────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/__main__.py", "*/test_*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

@@ -59,6 +59,7 @@ from utils.util_env import (
     get_default_pro_count,
     get_default_split_lat,
     get_default_split_lon,
+    set_main_ini,
 )
 from utils.util_new import read_grid_mask, _prepare, _analysis_para_ini, _data_write_to_micaps3, write_grid_to_micaps4
 
@@ -66,7 +67,8 @@ from utils.util_new import read_grid_mask, _prepare, _analysis_para_ini, _data_w
 class RunProcess():
     """1小时预报集成处理类。"""
 
-    def __init__(self, time_input, para_path, beta_path, is_obs_bjt, clip_coords, split_lat=1, split_lon=1, predict_valid_list=None):
+    def __init__(self, time_input, para_path, beta_path, is_obs_bjt, clip_coords, split_lat=1, split_lon=1, predict_valid_list=None,
+                 log_file=None, background_ini=None, station_info=None, mask_dat=None):
         self.time_input = time_input
         self.para_path = para_path
         self.beta_path = beta_path
@@ -75,6 +77,10 @@ class RunProcess():
         self.split_lat = split_lat
         self.split_lon = split_lon
         self.predict_valid_list = predict_valid_list
+        self.log_file = log_file
+        self.background_ini = background_ini
+        self.station_info = station_info
+        self.mask_dat = mask_dat
         if predict_valid_list is None:
             self.predict_valid_list = [i for i in range(1, 48 + 1, 1)]
 
@@ -82,6 +88,14 @@ class RunProcess():
         """解析配置、读站点表、组装 ``RunContext``；失败时返回 ``ctx=None``。"""
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         env_paths = get_resolved_paths()
+        if self.log_file is not None:
+            env_paths["log_file_template"] = self.log_file
+        if self.background_ini is not None:
+            env_paths["background_ini"] = self.background_ini
+        if self.station_info is not None:
+            env_paths["station_info"] = self.station_info
+        if self.mask_dat is not None:
+            env_paths["mask_dat"] = self.mask_dat
         para_filepath = self.para_path or env_paths["para_ini"]
         beta_filepath = self.beta_path or env_paths["beta_path_template"]
         log_file = env_paths["log_file_template"]
@@ -201,16 +215,19 @@ class RunProcess():
             write_grid_to_micaps4(gd_final_output, grid_base, ctx)
 
 
-def process_single(para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list, **params):
+def process_single(para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list,
+                   log_file=None, background_ini=None, station_info=None, mask_dat=None, **params):
     param = params['param']
     print(param)
     RunProcess(
         param['time_input'], para_path, beta_path, is_obs_bjt,
         clip_coords, split_lat, split_lon, predict_valid_list,
+        log_file=log_file, background_ini=background_ini, station_info=station_info, mask_dat=mask_dat,
     )._process_single()
 
 
-def process_multi(params, pro_count, para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list):
+def process_multi(params, pro_count, para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list,
+                  log_file=None, background_ini=None, station_info=None, mask_dat=None):
     sw_all = datetime.datetime.now()
     parallel_tool = SimpleParallelTool(
         target_func=process_single,
@@ -225,6 +242,10 @@ def process_multi(params, pro_count, para_path, beta_path, is_obs_bjt, clip_coor
             "split_lat": split_lat,
             "split_lon": split_lon,
             "predict_valid_list": predict_valid_list,
+            "log_file": log_file,
+            "background_ini": background_ini,
+            "station_info": station_info,
+            "mask_dat": mask_dat,
         }
     )
     parallel_tool.process({"param": params})
@@ -242,6 +263,53 @@ def process(*,
             pro_count = None,
             split_lat = None,
             split_lon = None,
+            log_file: str = None,
+            background_ini: str = None,
+            station_info: str = None,
+            mask_dat: str = None,
+            config=None,
+            ):
+    """1 小时集成入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
+    kwargs = dict(
+        time_inputs=time_inputs,
+        predict_valid_list=predict_valid_list,
+        para_path=para_path,
+        beta_path=beta_path,
+        is_obs_bjt=is_obs_bjt,
+        is_multi=is_multi,
+        clip_coords=clip_coords,
+        pro_count=pro_count,
+        split_lat=split_lat,
+        split_lon=split_lon,
+        log_file=log_file,
+        background_ini=background_ini,
+        station_info=station_info,
+        mask_dat=mask_dat,
+    )
+    if not config:
+        return _process_impl(**kwargs)
+    set_main_ini(config)
+    try:
+        return _process_impl(**kwargs)
+    finally:
+        set_main_ini(None)
+
+
+def _process_impl(*,
+            time_inputs: list = None,
+            predict_valid_list: list = None,
+            para_path: str = None,
+            beta_path: str = None,
+            is_obs_bjt = None,
+            is_multi = None,
+            clip_coords: list = None,
+            pro_count = None,
+            split_lat = None,
+            split_lon = None,
+            log_file: str = None,
+            background_ini: str = None,
+            station_info: str = None,
+            mask_dat: str = None,
             ):
     """1小时气象预报集成处理的主函数。"""
     if predict_valid_list is None:
@@ -261,11 +329,23 @@ def process(*,
 
     params = [{"time_input": time_input} for time_input in time_inputs]
 
+    path_overrides = dict(
+        log_file=log_file,
+        background_ini=background_ini,
+        station_info=station_info,
+        mask_dat=mask_dat,
+    )
     if not is_multi:
         for param in params:
-            process_single(para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list, **{"param": param})
+            process_single(
+                para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list,
+                **path_overrides, **{"param": param},
+            )
     else:
-        process_multi(params, pro_count, para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list)
+        process_multi(
+            params, pro_count, para_path, beta_path, is_obs_bjt, clip_coords, split_lat, split_lon, predict_valid_list,
+            **path_overrides,
+        )
 
 
 if __name__ == "__main__":

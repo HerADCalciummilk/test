@@ -25,4 +25,4 @@ from emos_probability_calibration.cli import main  # noqa: E402
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

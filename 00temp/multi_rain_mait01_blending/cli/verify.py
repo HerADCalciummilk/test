@@ -121,9 +121,8 @@ def get_verify_result(sta_all):
     sta_all_20.drop(columns=["hour"], inplace=True)
 
     # 打印数据信息
-    print(sta_all_08)
-    print("=------------------------------------------------------------------------------->>>")
-    print(sta_all_20)
+    # print(sta_all_08)
+    # print(sta_all_20)
 
     # 定义阈值列表
     grade_list = [0.1, 10, 25, 50, 100]
@@ -158,11 +157,10 @@ def get_verify_result(sta_all):
             pro_ts_20 = mem.ts(ob_sta_20, pro_sta_20, grade_list=grade_list)
 
             # 打印验证结果
-            print("=--------------------------------------------------->>> ", dtime, pro_name)
-            print(pro_hfmc_08)
-            print(pro_hfmc_20)
-            print(pro_ts_08)
-            print(pro_ts_20)
+            # print(pro_hfmc_08)
+            # print(pro_hfmc_20)
+            # print(pro_ts_08)
+            # print(pro_ts_20)
 
             # 填充验证结果到DataFrame
             for grade_idx, grade in enumerate(grade_list):

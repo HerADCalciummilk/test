@@ -11,4 +11,4 @@
 
 默认命令（包根目录；在 `cli/der_feel_like_temp.py` 的 `main()` 中改路径）::
 
-    python -m cli
+    python -m cli feel-like-temp

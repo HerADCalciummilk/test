@@ -1,29 +1,39 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""地形带权重辅助场生成 CLI 示例。
+"""地形带权重辅助场生成 CLI。
 
-约定（无 Improver ``cli`` 装饰器）::
+在本包目录执行::
 
-    - ``process`` 接收文件路径，在函数内完成读入、计算与可选写出；
-    - ``main`` 中定义路径等参数，再直接调用 ``process``。
+    python -m cli.dsc_generate_topographic_zone_weights --orography-path orog.nc --output-path out.nc
+    python cli/dsc_generate_topographic_zone_weights.py --orography-path orog.nc --output-path out.nc
 
-包根目录执行::
+Python::
 
-    python -m cli weights
-    python cli/dsc_generate_topographic_zone_weights.py
+    from cli.dsc_generate_topographic_zone_weights import DscGenerateTopographicZoneWeightsCli
+    DscGenerateTopographicZoneWeightsCli.call(orography_path="orog.nc", output_path="out.nc")
 """
-
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import meteva_base as meb
 import xarray as xr
 
-_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+
+def _bootstrap_paths() -> None:
+    package_root = Path(__file__).resolve().parents[1]
+    parent = str(package_root.parent)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
 
 
 def process(
@@ -31,6 +41,7 @@ def process(
     landmask_path: Optional[str] = None,
     thresholds_path: Optional[str] = None,
     output_path: Optional[str] = None,
+    config=None,
 ) -> xr.DataArray:
     """读取输入数据并生成地形带折叠权重。
 
@@ -63,6 +74,8 @@ def process(
 
     output_path : str, optional
         输出 nc 路径；为空时仅返回结果。
+    config :
+        命令行 ``--config`` 传入。本模块无 ini 读取器，不覆盖已给路径。
 
     返回
     -------
@@ -97,30 +110,95 @@ def process(
     return result
 
 
-def main() -> None:
-    """定义输入/输出路径并调用 ``process``。
+class DscGenerateTopographicZoneWeightsCli(CliBase):
+    """按海拔阈值生成地形带折叠权重。"""
 
-    默认使用 ``resource/cli_input`` 下经纬 meb 六维样例；业务使用时在此修改路径即可。
-    """
-    repo_root = str(_PACKAGE_ROOT.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
-
-    input_dir = _PACKAGE_ROOT / "resource" / "cli_input"
-    output_dir = _PACKAGE_ROOT / "resource" / "cli_output"
-
-    orography_path = input_dir / "input_orog_meb.nc"
-    landmask_path = input_dir / "input_land_meb.nc"
-    thresholds_path = input_dir / "bounds_topographic_zone_weights.json"
-    output_path = output_dir / "cli_topographic_zone_weights_result.nc"
-
-    process(
-        orography_path=str(orography_path),
-        landmask_path=str(landmask_path) if landmask_path.is_file() else None,
-        thresholds_path=str(thresholds_path) if thresholds_path.is_file() else None,
-        output_path=str(output_path),
+    prog = "python -m cli.dsc_generate_topographic_zone_weights"
+    description = (
+        "按海拔阈值生成地形带权重：带中心为 1，带边界上下带各 0.5。\n"
+        "提供海陆掩码时屏蔽海点。"
     )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python -m cli.dsc_generate_topographic_zone_weights --help\n"
+        "  python -m cli.dsc_generate_topographic_zone_weights "
+        "--orography-path orog.nc --landmask-path land.nc --output-path out.nc\n"
+        "  python cli/dsc_generate_topographic_zone_weights.py "
+        "--orography-path orog.nc --thresholds-path bounds.json --output-path out.nc\n"
+        "\n"
+        "说明:\n"
+        "  - 省略 --thresholds-path 时使用包内默认地形带\n"
+        "  - --config 传给 process；本模块无 ini 读取器，省略则不改路径\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--orography-path",
+            dest="orography_path",
+            required=True,
+            metavar="PATH",
+            help="标准网格地形高度场 nc。",
+        )
+        parser.add_argument(
+            "--landmask-path",
+            dest="landmask_path",
+            default=None,
+            metavar="PATH",
+            help="海陆掩码 nc（陆=1，海=0）。省略则陆海都生成权重。",
+        )
+        parser.add_argument(
+            "--thresholds-path",
+            dest="thresholds_path",
+            default=None,
+            metavar="PATH",
+            help='地形带 JSON，如 {"bounds": [[0, 50]], "units": "m"}。省略则用默认带。',
+        )
+        parser.add_argument(
+            "--output-path",
+            dest="output_path",
+            default=None,
+            metavar="PATH",
+            help="输出 nc。省略则只返回、不写文件。",
+        )
+        parser.add_argument(
+            "--config",
+            dest="config",
+            default=None,
+            metavar="PATH",
+            help=(
+                "运行配置文件，传给 process 的 config。"
+                "相对路径按项目根解析。"
+                "本模块无 ini 读取器，省略则不改路径。"
+            ),
+        )
+
+    def run(
+        self,
+        orography_path=None,
+        landmask_path=None,
+        thresholds_path=None,
+        output_path=None,
+        config=None,
+    ) -> int:
+        process(
+            orography_path=orography_path,
+            landmask_path=landmask_path,
+            thresholds_path=thresholds_path,
+            output_path=output_path,
+            config=config,
+        )
+        return 0
+
+
+def dsc_generate_topographic_zone_weights_cli(
+    argv: Optional[Sequence[str]] = None,
+) -> int:
+    """命令行入口。``python -m cli.dsc_generate_topographic_zone_weights`` 与直接运行本文件都进这里。"""
+    return DscGenerateTopographicZoneWeightsCli().main(argv)
+
+
+main = dsc_generate_topographic_zone_weights_cli
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(dsc_generate_topographic_zone_weights_cli())

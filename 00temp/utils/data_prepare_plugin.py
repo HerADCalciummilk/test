@@ -140,7 +140,6 @@ def prepare_dataset_on_obTime(para, recover=True, times=None):
 
             sta_ob = creat_ob_dataset_on_obTime_multi(para, times=times, num_process=num_process)
 
-        print("=------------------------------------------->>>> ???? sta_ob: \n", sta_ob)
         sta_ob = sta_list_to_df(sta_ob, para, hdf_path)
         operation = para["ob_data"]["operation"]
         operation_para = para["ob_data"]["operation_para"]
@@ -322,7 +321,6 @@ def prepare_dataset_on_foTime(para, recover=True, times=None):
             sta_ob = creat_ob_dataset_on_foTime_multi(para, times=times, num_process=num_process)
 
         sta_ob = sta_list_to_df(sta_ob, para, hdf_path)
-        print("=-------------------------------------------------->>>> sta_ob: \n", sta_ob)
         operation = para["ob_data"]["operation"]
         operation_para = para["ob_data"]["operation_para"]
         if operation_para is None:

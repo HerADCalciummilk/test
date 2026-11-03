@@ -1,0 +1,107 @@
+================================================================================
+算法整理日志 — 网格天气现象综合电码生成（12h）
+================================================================================
+整理日期   : 2026-07-23
+算法代号   : weather_phenom_grid_12h
+仓库目录   : 00temp/multi_weather_phenom_grid_12h/
+整理阶段   : 统一主程序入口、CLI 收敛、数据加载迁入 src/utils、多起报多进程
+贡献人     : 待补充
+原始来源   : 待补充
+标准依据   : QX/T 740-2024《基于网格预报的城镇预报生成规范 天气现象》
+关联日志   : 00log/weather_phenom_grid_12h_整理_20260722.log（文档与 NIMM 目录初建）
+================================================================================
+
+一、本次整理目标
+--------------------------------------------------------------------------------
+  1. 主程序统一为 src/main.py（模块引用 process + __main__ 直接传参）
+  2. 命令行仅保留 cli/__main__.py（argparse → process）
+  3. 舍弃旧 cli/main.py、cli/runner.py、cli/data_loader.py
+  4. 数据加载迁至 src/utils/data_loader.py 并更新引用
+  5. 多起报增加 is_multi / pro_count（参考 mait24 的 SimpleParallelTool 用法，不直接复用业务代码）
+  6. 按规范维护 00temp/、00log/、NIMM_list.md
+
+二、目录映射（当前）
+--------------------------------------------------------------------------------
+  执行入口（主程序） → src/main.py
+  CLI（参数解析）    → cli/__main__.py
+  数据加载（I/O）    → src/utils/data_loader.py
+  输出工具           → src/utils/output.py
+  计算调度           → src/processor.py
+  四 Plugin          → src/identifier.py / selector.py / logic_judger.py / encoder.py
+  配置               → resource/{weather_config,data_schema,config}.py
+  共享多进程         → （上级）00temp/utils/multipro_plugin.py
+  输入数据根         → 外部 SCMOC（SCMOC_DATA_ROOT / --data-root），仓库内无输入目录
+  业务输出           → PHENOM/<起报时次>/
+  整理中间数据       → 00temp/weather_phenom_grid_12h/（空占位）
+  整理清单           → NIMM_list.md
+  本日志             → 00log/weather_phenom_grid_12h_整理_20260723.log
+
+三、本次已完成
+--------------------------------------------------------------------------------
+  [x] 新增/完善 src/main.py：process；单起报时段线程池；多起报 is_multi 多进程
+  [x] CLI 收敛至 cli/__main__.py；删除 cli/main.py、cli/runner.py
+  [x] cli/data_loader.py → src/utils/data_loader.py，更新 main/test/nbs 引用
+  [x] test/test_data_loader.py 脚本跑通
+  [x] python -m cli --help 验证通过
+  [x] 更新 NIMM_list.md、00log/、00temp/ 说明
+
+四、文件变更摘要
+--------------------------------------------------------------------------------
+  【新增/重写】
+    src/main.py
+    cli/__main__.py（含完整 argparse）
+    src/utils/data_loader.py（正式 I/O）
+    00log/weather_phenom_grid_12h_整理_20260723.log
+    NIMM_list.md（按近期结构刷新）
+
+  【删除】
+    cli/main.py
+    cli/runner.py
+    cli/data_loader.py
+
+  【保留】
+    cli/__init__.py（包说明）
+    00temp/weather_phenom_grid_12h/.gitkeep
+    PHENOM/（运行输出样例，非整理中间数据）
+
+五、仍存在问题（需人工补充）——必填
+--------------------------------------------------------------------------------
+  [ ] 贡献人、原始代码来源路径
+  [ ] docs/README.md、docs/algorithm_guide.md、docs/技术汇报材料.md、nbs/算法说明.ipynb
+      仍可能写旧入口（cli/main、cli/runner、cli/data_loader）→ 人工同步
+  [ ] docs 多份说明并存，主从关系未定
+  [ ] 真实 SCMOC 端到端 / --is-multi 多起报未在本环境复跑
+  [ ] PHENOM/ 是否 .gitignore
+  [ ] 根目录空 utils/、汇报 PPT 大文件去留
+  [ ] nbs/算法说明.ipynb 本机未执行验证
+  [ ] 正式入库 NIMM 中央仓路径与算法种类编号
+  [ ] 00temp/weather_phenom_grid_12h/ 仍为空，无中间对照文件
+
+六、验证记录
+--------------------------------------------------------------------------------
+  已验证:
+    python -m cli --help
+    from src.main import process
+    python test/test_data_loader.py → 全部通过
+
+  未复跑:
+    真实 SCMOC 全时段端到端
+    --is-multi 多起报真实数据
+    pytest 全量 / nbs 全单元格
+
+七、调用约定（整理后）
+--------------------------------------------------------------------------------
+  # 命令行
+  python -m cli 2026030100
+  python -m cli 2026030100 2026030112 --seg-range 1 6 --is-multi --pro-count 2
+
+  # 模块
+  from src.main import process
+  process("2026030100", seg_range=(1, 3))
+
+  # 直接运行主程序（改 src/main.py 底部传参）
+  python src/main.py
+
+================================================================================
+日志结束
+================================================================================

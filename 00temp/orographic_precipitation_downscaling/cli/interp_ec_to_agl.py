@@ -5,10 +5,12 @@
 使用 ``read_pressure_levels`` 逐时次读取各气压层，再用 ``PressureToHeightPlugin``
 插值。地形为 ``EC_D1D_orography_20km.nc``。温湿风在目标落在地面与最低有效气压层之间时，
 用近地面场作下界：``TMP_2M``、``RH_2M``、``UGRD_100M``、``VGRD_100M``。
-结果网格与 EC 气压层一致，覆盖 ``resource/data`` 中的同名文件。
+写出前裁到模式地形覆盖区（约 70–140°E、0–60°N），去掉气压层大框外的整片 NaN。
+覆盖 ``resource/data`` 中的同名文件。
 
 输出目录 ``resource/data/<要素>/YYYY/YYYYMMDD/YYYYMMDDHH.TTT.nc``：
 TMP、RH、UGRD、VGRD 保留源文件单位；PRES 为 Pa；另写出风速和来向风向。
+仅裁剪已有文件：``python cli/interp_ec_to_agl.py --crop-existing``。
 """
 
 from __future__ import annotations
@@ -47,6 +49,10 @@ NEAR_SURFACE = {
 LEVELS = (1000, 950, 925, 900, 850, 800, 700, 600, 500, 400, 300, 250, 200, 150, 100, 50, 10)
 AGL_M = 1000.0
 SOURCE_ELEMENTS = ("TMP", "RH", "UGRD", "VGRD")
+# 与 EC_D1D 模式地形一致：框外无地形则 AGL 全是 NaN，写出前裁掉
+VALID_LON_MIN, VALID_LON_MAX = 70.0, 140.0
+VALID_LAT_MIN, VALID_LAT_MAX = 0.0, 60.0
+AGL_ELEMENTS = ("TMP", "RH", "PRES", "UGRD", "VGRD", "wind_speed", "wind_direction")
 
 
 def _template(element: str) -> str:
@@ -86,10 +92,40 @@ def _read_near_surface(element: str, init_s: str, lead_h: int) -> xr.DataArray:
     return field
 
 
+def crop_to_valid_orography(
+    field: xr.DataArray,
+    *,
+    lon_min: float = VALID_LON_MIN,
+    lon_max: float = VALID_LON_MAX,
+    lat_min: float = VALID_LAT_MIN,
+    lat_max: float = VALID_LAT_MAX,
+) -> xr.DataArray:
+    """裁到模式地形覆盖区，去掉等压面大框外的整片 NaN。"""
+    lat = np.asarray(field.lat.values, dtype=float)
+    if lat.size >= 2 and lat[0] > lat[-1]:
+        lat_slice = slice(lat_max, lat_min)
+    else:
+        lat_slice = slice(lat_min, lat_max)
+    out = field.sel(lat=lat_slice, lon=slice(lon_min, lon_max))
+    if out.lat.size < 2 or out.lon.size < 2:
+        raise RuntimeError(
+            f"裁剪后网格过小: lon[{lon_min},{lon_max}] lat[{lat_min},{lat_max}] "
+            f"→ {out.lat.size}×{out.lon.size}"
+        )
+    out = out.copy()
+    out.attrs = dict(out.attrs)
+    out.attrs["valid_domain"] = "EC_D1D_orography"
+    out.attrs["lon_min"] = lon_min
+    out.attrs["lon_max"] = lon_max
+    out.attrs["lat_min"] = lat_min
+    out.attrs["lat_max"] = lat_max
+    return out
+
+
 def _write(field: xr.DataArray, element: str, init_s: str, lead_h: int) -> Path:
     path = OUT_ROOT / element / init_s[:4] / init_s[:8] / f"{init_s}.{lead_h:03d}.nc"
     path.parent.mkdir(parents=True, exist_ok=True)
-    out = field.copy()
+    out = crop_to_valid_orography(field)
     out.name = element
     attrs = dict(out.attrs)
     for key, value in attrs.items():
@@ -100,6 +136,36 @@ def _write(field: xr.DataArray, element: str, init_s: str, lead_h: int) -> Path:
     return path
 
 
+def crop_existing_agl_outputs(out_root: Path = OUT_ROOT) -> int:
+    """原地裁剪 ``resource/data`` 里已有的 AGL1000 要素文件。"""
+    n = 0
+    for element in AGL_ELEMENTS:
+        root = out_root / element
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.nc")):
+            field = meb.read_griddata_from_nc(str(path))
+            cropped = crop_to_valid_orography(field)
+            cropped.name = field.name or element
+            attrs = dict(cropped.attrs)
+            for key, value in attrs.items():
+                if isinstance(value, (bool, np.bool_)):
+                    attrs[key] = int(value)
+            cropped.attrs = attrs
+            cropped.to_dataset(name=cropped.name).to_netcdf(path, mode="w")
+            n += 1
+            if n == 1:
+                print(
+                    "样例",
+                    path.name,
+                    f"lat {float(cropped.lat.min()):.1f}~{float(cropped.lat.max()):.1f}",
+                    f"lon {float(cropped.lon.min()):.1f}~{float(cropped.lon.max()):.1f}",
+                    f"{cropped.lat.size}x{cropped.lon.size}",
+                    f"finite%={float(np.mean(np.isfinite(cropped.values))):.3f}",
+                )
+    return n
+
+
 def _one(template: str, init_s: str, lead_h: int) -> xr.DataArray:
     fields = read_pressure_levels(template, init_s, LEVELS, dt=lead_h, level_units="hPa")
     if len(fields) != 1:
@@ -107,11 +173,21 @@ def _one(template: str, init_s: str, lead_h: int) -> xr.DataArray:
     return fields[0]
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] in {"--crop-existing", "crop-existing"}:
+        n = crop_existing_agl_outputs()
+        print(f"已裁剪 {n} 个 AGL 文件 → {OUT_ROOT}")
+        return
+
     forecasts = _discover_forecasts()
     print(f"时次 {len(forecasts)}，气压层 {LEVELS}")
     print(f"输入 {EC_ROOT}")
     print(f"输出 {OUT_ROOT}")
+    print(
+        f"写出域 lon[{VALID_LON_MIN},{VALID_LON_MAX}] "
+        f"lat[{VALID_LAT_MIN},{VALID_LAT_MAX}]（与模式地形一致）"
+    )
 
     linear = PressureToHeightPlugin(
         target_height=AGL_M,

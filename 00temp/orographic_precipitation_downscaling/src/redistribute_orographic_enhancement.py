@@ -40,6 +40,8 @@ from orographic_precipitation_downscaling.utils.utils import (
 )
 
 _MEB_DIMS = ("member", "level", "time", "dtime", "lat", "lon")
+# 负降水截断后按比例扣回的轮数（实现细节，不对外暴露）
+_CLIP_ITERATIONS = 2
 
 
 class RedistributeOrographicEnhancement(BasePlugin):
@@ -58,10 +60,6 @@ class RedistributeOrographicEnhancement(BasePlugin):
         无经纬坐标时，按 ``block_deg × 111`` km 换算成格点数分块。
     grid_spacing_km : float, optional
         网格距，单位 km。缺省时由降水坐标估算；无坐标的数组按 1 km。
-    clip_iterations : int, 默认 2
-        负降水截断后按比例扣回的次数。
-    window_km : float, optional
-        兼容旧参数名，等同 ``smooth_km``。二者同时给出时以 ``smooth_km`` 为准。
     """
 
     def __init__(
@@ -70,30 +68,19 @@ class RedistributeOrographicEnhancement(BasePlugin):
         smooth_km: float = 15.0,
         block_deg: float = 0.1,
         grid_spacing_km: Optional[float] = None,
-        clip_iterations: int = 2,
-        window_km: Optional[float] = None,
     ) -> None:
         if wet_threshold_mmh < 0:
             raise ValueError(f"wet_threshold_mmh 须非负，收到 {wet_threshold_mmh}")
-        if window_km is not None:
-            if window_km < 0:
-                raise ValueError(f"window_km 须非负，收到 {window_km}")
-            if smooth_km == 15.0:
-                smooth_km = float(window_km)
         if smooth_km < 0:
             raise ValueError(f"smooth_km 须非负，收到 {smooth_km}")
         if block_deg <= 0:
             raise ValueError(f"block_deg 须为正，收到 {block_deg}")
         if grid_spacing_km is not None and grid_spacing_km <= 0:
             raise ValueError(f"grid_spacing_km 须为正，收到 {grid_spacing_km}")
-        if clip_iterations < 0:
-            raise ValueError(f"clip_iterations 须非负，收到 {clip_iterations}")
         self.wet_threshold_mmh = float(wet_threshold_mmh)
         self.smooth_km = float(smooth_km)
-        self.window_km = self.smooth_km
         self.block_deg = float(block_deg)
         self.grid_spacing_km = None if grid_spacing_km is None else float(grid_spacing_km)
-        self.clip_iterations = int(clip_iterations)
 
     def __repr__(self) -> str:
         return (
@@ -101,8 +88,7 @@ class RedistributeOrographicEnhancement(BasePlugin):
             f"wet_threshold_mmh={self.wet_threshold_mmh}, "
             f"smooth_km={self.smooth_km}, "
             f"block_deg={self.block_deg}, "
-            f"grid_spacing_km={self.grid_spacing_km}, "
-            f"clip_iterations={self.clip_iterations}>"
+            f"grid_spacing_km={self.grid_spacing_km}>"
         )
 
     def process(
@@ -156,7 +142,6 @@ class RedistributeOrographicEnhancement(BasePlugin):
             smooth_km=self.smooth_km,
             block_deg=self.block_deg,
             grid_spacing_km=spacing_km,
-            clip_iterations=self.clip_iterations,
             precip_plane=precip_plane,
         )
         return _restore_like_precip(precip, corrected, precip_units)
@@ -171,7 +156,6 @@ def redistribute_precipitation(
     smooth_km: float,
     block_deg: float,
     grid_spacing_km: float,
-    clip_iterations: int,
     precip_plane: Optional[xr.DataArray] = None,
 ) -> np.ndarray:
     """对二维降水场按粗格块做零和调整，返回 float32 结果。"""
@@ -195,7 +179,7 @@ def redistribute_precipitation(
     if np.any(adjustable):
         block_id = _coarse_block_id(precip64.shape, block_deg, grid_spacing_km, precip_plane)
         balanced = _clip_and_rebalance_blocks(
-            precip64, updated, finite, adjustable, block_id, clip_iterations
+            precip64, updated, finite, adjustable, block_id, _CLIP_ITERATIONS
         )
     else:
         balanced = np.where(finite, precip64, np.nan)

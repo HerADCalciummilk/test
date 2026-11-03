@@ -47,7 +47,7 @@ from proc import (
     OpticalFlow, RainExtrapolation
 )
 from utils.log import Log
-from utils.util_env import get_resolved_paths
+from utils.util_env import clear_call_overrides, get_resolved_paths, set_call_overrides
 from utils.util_paths import REPO_ROOT
 
 
@@ -348,10 +348,6 @@ def _run_parallel_lead_time_tasks(script_path, cwd, argv, tasks, text2, text4, l
         path2 = StringProcess.date_replace(text4 + ".m3", date_time, predict_valid)
         path3 = StringProcess.date_replace(text4 + ".m4", date_time, predict_valid)
         path4 = StringProcess.date_replace(text2, date_time, predict_valid)
-        print("=-------------------------->>>> desc: ", desc)
-        print("=-------------------------->>>> path2: ", path2)
-        print("=-------------------------->>>> path3: ", path3)
-        print("=-------------------------->>>> path4: ", path4)
 
         if (os.path.exists(path2) and os.path.exists(path3)) or not os.path.exists(path4):
             if os.path.exists(path2) and os.path.exists(path3):
@@ -379,9 +375,20 @@ def _run_parallel_lead_time_tasks(script_path, cwd, argv, tasks, text2, text4, l
     return summary
 
 
-def process(data_key=None, run_times=None):
+def process(
+    data_key=None,
+    run_times=None,
+    log_file=None,
+    config_json=None,
+    path_json=None,
+    station_info=None,
+    mask_file=None,
+):
     """
     可调度入口。未传项回落 ``path.json`` 的 ``default`` 与当前时刻。
+
+    路径参数非 ``None`` 时覆盖 ``get_resolved_paths``（``log_file`` 对应日志模板）。
+    本函数是 ``runner.process`` 的公开副本，签名上的路径参数与其对齐。
 
     参数
     ----
@@ -401,7 +408,19 @@ def process(data_key=None, run_times=None):
                 argv.append(t.strftime("%Y%m%d%H%M"))
             else:
                 argv.append(str(t))
-    return main(argv)
+    set_call_overrides(
+        {
+            "log_file": log_file,
+            "config_json": config_json,
+            "path_json": path_json,
+            "station_info": station_info,
+            "mask_file": mask_file,
+        }
+    )
+    try:
+        return main(argv)
+    finally:
+        clear_call_overrides()
 
 
 def main(argv=None):
@@ -471,7 +490,6 @@ def main(argv=None):
 
     # 读取站点信息
     sta_info_path = str(paths["station_info"])
-    # print("=-------------------------->>>> sta_info_path: ", sta_info_path)
     if not os.path.exists(sta_info_path):
         msg = f"Station info file not found: {sta_info_path}"
         log.write_error(msg, 1)
@@ -501,7 +519,6 @@ def main(argv=None):
         mask_file = "mask010.dat"
 
     mask_path = str(resource_dir / mask_file)
-    # print("=-------------------------->>>> mask_path: ", mask_path)
     if not os.path.exists(mask_path):
         log.write_info(f"{mask_file} not found, fallback to mask010.dat", 0)
         mask_path = str(paths["mask_file"])
@@ -544,10 +561,6 @@ def main(argv=None):
                 path2 = StringProcess.date_replace(text4 + ".m3", date_time, predict_valid)
                 path3 = StringProcess.date_replace(text4 + ".m4", date_time, predict_valid)
                 path4 = StringProcess.date_replace(text2, date_time, predict_valid)
-
-                print("=-------------------------->>>> path2: ", path2)
-                print("=-------------------------->>>> path3: ", path3)
-                print("=-------------------------->>>> path4: ", path4)
 
                 if (os.path.exists(path2) and os.path.exists(path3)) or not os.path.exists(path4):
                     if os.path.exists(path2) and os.path.exists(path3):

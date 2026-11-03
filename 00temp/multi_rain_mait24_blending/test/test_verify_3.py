@@ -38,18 +38,12 @@ def task(ftime):
         ec_path = meb.get_path(ec_dir, fo_time, dtime)
         mt_path = meb.get_path(mait_dir, fo_time, dtime)
         pg_path = meb.get_path(png_dir, fo_time)
-        # print("=----------------------------->>> ob_path : ", ob_path)
-        # print("=----------------------------->>> ec_path : ", ec_path)
-        # print("=----------------------------->>> mt_path : ", mait_path)
+
         if os.path.exists(mt_path) and os.path.exists(ec_path) and os.path.exists(ob_path):
 
             ob_grd = meb.read_griddata_from_nc(ob_path)
             ec_grd = meb.read_griddata_from_nc(ec_path)
             mt_grd = meb.read_griddata_from_micaps4(mt_path)
-
-            print(f"--------------------->>> ob_grd : {ob_path}\n", ob_grd)
-            print(f"--------------------->>> ec_grd : {ec_path}\n", ec_grd)
-            print(f"--------------------->>> mt_grd : {mt_path}\n", mt_grd)
 
             map_extend = [113, 119.99, 36, 42.99]
             axs = meb.creat_axs(3, map_extend, ncol=3, add_index=["观测", "EC", "MAIT"], sup_title=f"{ftime}_{dtime:03d}时效降水", sup_fontsize=26, wspace=1, height=26, width=26)

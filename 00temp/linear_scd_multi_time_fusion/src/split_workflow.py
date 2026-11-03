@@ -16,6 +16,11 @@ import numpy as np
 
 UTC = dt.timezone.utc
 
+try:
+    from .conf_overrides import CONF_KEYS, apply_conf_overrides
+except ImportError:
+    from conf_overrides import CONF_KEYS, apply_conf_overrides
+
 
 @dataclass(frozen=True)
 class Source1File:
@@ -561,13 +566,58 @@ def daemon_loop(cfg: configparser.ConfigParser, args: argparse.Namespace) -> Non
         time.sleep(sleep_seconds)
 
 
-def main() -> None:
-    args = parse_args()
-    cfg = load_config(args.config)
+def process(
+    history_range=None,
+    config=None,
+    daemon: bool = False,
+    allowed_realtime_minutes=None,
+    history_step_minutes=None,
+    dry_run=None,
+    max_files=None,
+    source1_dir=None,
+    source2_dir=None,
+    truth_dir=None,
+    output_dir=None,
+    enabled=None,
+    time_step_minutes=None,
+    overwrite=None,
+    blending_type=None,
+    keyframe_weights=None,
+    lon_min=None,
+    lon_max=None,
+    lat_min=None,
+    lat_max=None,
+    output_var=None,
+    output_source=None,
+) -> None:
+    """10 分钟拆分入口。``config`` 为空时读 ``resource/split_config.ini``。
+
+    其余参数对应 conf.ini 的键，写入本次配置（节不存在则创建）。
+    ``None`` 不覆盖；空字符串会写入空值。``daemon`` 默认仍为 ``False``。
+    """
+    passed = locals()
+    conf_options = {key: passed[key] for key in CONF_KEYS}
+    config_path = (
+        Path(config)
+        if config
+        else Path(__file__).resolve().parents[1] / "resource" / "split_config.ini"
+    )
+    args = argparse.Namespace(
+        history_range=list(history_range or []),
+        config=config_path,
+        daemon=daemon,
+    )
+    cfg = load_config(config_path)
+    apply_conf_overrides(cfg, **conf_options)
     if args.daemon:
         daemon_loop(cfg, args)
     else:
         run_once(cfg, args)
+
+
+def main() -> None:
+    args = parse_args()
+    process(history_range=args.history_range, config=args.config, daemon=args.daemon)
 
 
 if __name__ == "__main__":

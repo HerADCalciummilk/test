@@ -1,15 +1,14 @@
-"""Command line entry points for kalman_element_forecast_correction."""
-
+"""统一命令行入口。在本包目录执行 ``python -m cli``。"""
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from .kalman_element_forecast_correction_cli import (
+    kalman_element_forecast_correction_cli,
+    main,
+    parse_args,
+)
 
-
-def main(argv: Optional[Sequence[str]] = None) -> None:
-    """List available CLI entry points."""
-    lines = [
-        "kalman_element_forecast_correction 命令行入口：",
-        "  python -m kalman_element_forecast_correction.cli.kalman_data [START_YYYYMMDD END_YYYYMMDD]",
-        "  python -m kalman_element_forecast_correction.cli.trans_data [YYYYMMDD]",
-    ]
-    raise SystemExit("\n".join(lines))
+__all__ = [
+    "kalman_element_forecast_correction_cli",
+    "main",
+    "parse_args",
+]

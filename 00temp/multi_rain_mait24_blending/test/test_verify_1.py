@@ -26,17 +26,14 @@ mait_path = meb.get_path(mait_dir, time, dtime)
 
 station = meteva.base.io.read_stadata_from_micaps3(sta_info)
 
-print("=----------------->>>> : ", ob_path)
 ob_sta = meteva.base.io.read_stadata_from_micaps3(ob_path)
 ob_dat = meb.put_stadata_on_station(ob_sta, station)
 print(ob_dat)
 
-print("=----------------->>>> : ", ec_path)
 ec_grd = meteva.base.io.read_griddata_from_nc(ec_path)
 ec_dat = meteva.base.interp_gs_nearest(ec_grd, station)
 print(ec_dat)
 
-print("=----------------->>>> : ", mait_path)
 mait_grd = meteva.base.io.read_stadata_from_micaps3(mait_path)
 mait_dat = meb.put_stadata_on_station(mait_grd, station)
 print(mait_dat)

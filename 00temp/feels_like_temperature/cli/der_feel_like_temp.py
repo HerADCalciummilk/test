@@ -2,31 +2,46 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""计算体感温度的 CLI 示例。
+"""计算体感温度的 CLI。
 
-约定（无 Improver ``cli`` 装饰器）::
+在本包目录执行::
 
-    - ``process`` 接收文件路径，在函数内完成读入、计算与可选写出；
-    - ``main`` 中定义路径等参数，再直接调用 ``process``。
+    python -m cli.der_feel_like_temp --temperature-path t.nc --wind-speed-path w.nc --relative-humidity-path rh.nc --pressure-path p.nc --output-path out.nc
+    python cli/der_feel_like_temp.py --temperature-path t.nc --wind-speed-path w.nc --relative-humidity-path rh.nc --pressure-path p.nc --output-path out.nc
 
-包根目录执行::
+Python::
 
-    python -m cli feel-like-temp
-    python cli/der_feel_like_temp.py
+    from cli.der_feel_like_temp import DerFeelLikeTempCli
+    DerFeelLikeTempCli.call(
+        temperature_path="t.nc",
+        wind_speed_path="w.nc",
+        relative_humidity_path="rh.nc",
+        pressure_path="p.nc",
+        output_path="out.nc",
+    )
 """
-
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import numpy as np
 import xarray as xr
 import meteva_base as meb
 
-# 本包根目录（含 resource/、src/、cli/）
-_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+
+def _bootstrap_paths() -> None:
+    package_root = Path(__file__).resolve().parents[1]
+    parent = str(package_root.parent)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
 
 
 def process(
@@ -35,6 +50,7 @@ def process(
     relative_humidity_path: str,
     pressure_path: str,
     output_path: Optional[str] = None,
+    config=None,
 ) -> xr.DataArray:
     """根据气温、风速、相对湿度和气压计算体感温度。
 
@@ -53,6 +69,8 @@ def process(
         气压场 nc 文件路径（海平面气压或地面气压，按单位自动换算）。
     output_path : str, optional
         输出 nc 文件路径；为 None 时不写文件。
+    config :
+        命令行 ``--config`` 传入。本模块无 ini 读取器，不覆盖已给路径。
 
     返回
     -------
@@ -102,41 +120,103 @@ def process(
     return result
 
 
-def main() -> None:
-    """定义输入/输出路径并调用 ``process``。
+class DerFeelLikeTempCli(CliBase):
+    """由气温、风速、相对湿度和气压计算体感温度。"""
 
-    默认使用 ``resource/cli_input`` 下经纬 meb 六维样例；业务使用时在此修改路径即可。
-    """
-    # 保证可 ``from feels_like_temperature...``（直接运行本脚本时）
-    repo_root = str(_PACKAGE_ROOT.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
+    prog = "python -m cli.der_feel_like_temp"
+    description = (
+        "由屏幕高度气温、10 米风速、相对湿度和气压计算体感温度。\n"
+        "四场须为同一时空网格的 meb 六维 nc。"
+    )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python -m cli.der_feel_like_temp --help\n"
+        "  python -m cli.der_feel_like_temp "
+        "--temperature-path t.nc --wind-speed-path w.nc "
+        "--relative-humidity-path rh.nc --pressure-path p.nc --output-path out.nc\n"
+        "  python cli/der_feel_like_temp.py "
+        "--temperature-path t.nc --wind-speed-path w.nc "
+        "--relative-humidity-path rh.nc --pressure-path p.nc --output-path out.nc\n"
+        "\n"
+        "说明:\n"
+        "  - --config 传给 process；本模块无 ini 读取器，省略则不改路径\n"
+    )
 
-    input_dir = _PACKAGE_ROOT / "resource" / "cli_input"
-    output_dir = _PACKAGE_ROOT / "resource" / "cli_output"
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--temperature-path",
+            dest="temperature_path",
+            required=True,
+            metavar="PATH",
+            help="屏幕高度气温场 nc。",
+        )
+        parser.add_argument(
+            "--wind-speed-path",
+            dest="wind_speed_path",
+            required=True,
+            metavar="PATH",
+            help="10 米风速场 nc。",
+        )
+        parser.add_argument(
+            "--relative-humidity-path",
+            dest="relative_humidity_path",
+            required=True,
+            metavar="PATH",
+            help="屏幕高度相对湿度场 nc。",
+        )
+        parser.add_argument(
+            "--pressure-path",
+            dest="pressure_path",
+            required=True,
+            metavar="PATH",
+            help="气压场 nc（海平面气压或地面气压）。",
+        )
+        parser.add_argument(
+            "--output-path",
+            dest="output_path",
+            default=None,
+            metavar="PATH",
+            help="输出 nc。省略则只返回、不写文件。",
+        )
+        parser.add_argument(
+            "--config",
+            dest="config",
+            default=None,
+            metavar="PATH",
+            help=(
+                "运行配置文件，传给 process 的 config。"
+                "相对路径按项目根解析。"
+                "本模块无 ini 读取器，省略则不改路径。"
+            ),
+        )
 
-    temperature_path = str(
-        input_dir / "20181121T1200Z-PT0012H00M-temperature_at_screen_level.nc"
-    )
-    wind_speed_path = str(
-        input_dir / "20181121T1200Z-PT0012H00M-wind_speed_at_10m.nc"
-    )
-    relative_humidity_path = str(
-        input_dir / "20181121T1200Z-PT0012H00M-relative_humidity_at_screen_level.nc"
-    )
-    pressure_path = str(
-        input_dir / "20181121T1200Z-PT0012H00M-pressure_at_mean_sea_level.nc"
-    )
-    output_path = str(output_dir / "cli_feels_like_temp_result.nc")
+    def run(
+        self,
+        temperature_path=None,
+        wind_speed_path=None,
+        relative_humidity_path=None,
+        pressure_path=None,
+        output_path=None,
+        config=None,
+    ) -> int:
+        process(
+            temperature_path=temperature_path,
+            wind_speed_path=wind_speed_path,
+            relative_humidity_path=relative_humidity_path,
+            pressure_path=pressure_path,
+            output_path=output_path,
+            config=config,
+        )
+        return 0
 
-    process(
-        temperature_path=temperature_path,
-        wind_speed_path=wind_speed_path,
-        relative_humidity_path=relative_humidity_path,
-        pressure_path=pressure_path,
-        output_path=output_path,
-    )
+
+def der_feel_like_temp_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。``python -m cli.der_feel_like_temp`` 与直接运行本文件都进这里。"""
+    return DerFeelLikeTempCli().main(argv)
+
+
+main = der_feel_like_temp_cli
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(der_feel_like_temp_cli())

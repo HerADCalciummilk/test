@@ -255,7 +255,7 @@ python feels_like_temperature/cli/preprocess_test_data.py
 包根目录：
 
 ```bash
-python -m cli
+python -m cli feel-like-temp
 ```
 
 或：

@@ -1,6 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""EMOS 概率订正 CLI（仿 ``lizi.py``：仅暴露 ``process``）。
+"""EMOS 概率订正命令行。
+
+在本包目录执行::
+
+    python -m cli emos --historic-forecast-path PATH --truth-path PATH
+    python cli/run_emos.py --historic-forecast-path PATH --truth-path PATH
+
+Python::
+
+    from cli.run_emos import RunEmosCli
+    RunEmosCli.call(historic_forecast_path="PATH", truth_path="PATH")
 
 数据约定
 --------
@@ -18,27 +28,38 @@
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
+
+def _bootstrap_paths() -> None:
+    root = Path(__file__).resolve().parent.parent
+    src = root / "src"
+    parent = root.parent
+    src_s = str(src)
+    if src_s not in sys.path:
+        sys.path.insert(0, src_s)
+    root_s = str(root)
+    parent_s = str(parent)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+    if parent_s not in sys.path:
+        sys.path.append(parent_s)
+
+
+_bootstrap_paths()
+
 import meteva_base as meb
 import numpy as np
 import pandas as pd
 import xarray as xr
 
-# 包根目录；核心代码在 src/emos_*.py
-_PKG = Path(__file__).resolve().parents[1]
-_SRC = _PKG / "src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+from utils.cli_base import CliBase
 
-# __main__ 演示：概率订正阈值（与数据同单位，示例为 Kelvin）
-THRESHOLDS = [285.0, 288.0, 292.0]
-# __main__ 演示：订正后输出的分位（百分位，0–100）
-OUTPUT_PERCENTILES = [10.0, 50.0, 90.0]
 # 内部：集合 → 输入分位场时用的百分位（min / 中位 / max）
 _INPUT_PERCENTILES = np.array([0.0, 50.0, 100.0], dtype=np.float32)
 # 内部：站点 CSV 的维度列名；读表时这些列不转成 float32
@@ -159,8 +180,7 @@ def process(
     thresholds: Optional[Sequence[float]] = None,
     thresholds_operator: str = "below",
     percentiles: Optional[Sequence[float]] = None,
-    realizations_count: Optional[int] = None,
-) -> Dict[str, Optional[xr.Dataset]]:
+    realizations_count: Optional[int] = None, config=None) -> Dict[str, Optional[xr.Dataset]]:
     """训练 EMOS 系数并对集合预报做订正（集合 / 可选概率 / 可选分位）。
 
     参数
@@ -258,32 +278,139 @@ def process(
     }
 
 
-def main() -> None:
-    """定义输入/输出路径并调用 ``process``（默认 ``resource/`` 样例）。"""
-    data_dir = _PKG / "resource" / "cli_input"
-    output_dir = _PKG / "resource" / "cli_output"
-    result = process(
-        str(data_dir / "hf.csv"),
-        str(data_dir / "truth.csv"),
-        forecast_path=None,
-        static_paths=[str(data_dir / "static_altitude.csv")],
-        output_dir=str(output_dir),
-        distribution="norm",
-        predictor="mean",
-        point_by_point=True,
-        thresholds=THRESHOLDS,
-        thresholds_operator="below",
-        percentiles=OUTPUT_PERCENTILES,
+def _parse_float_list(text: str):
+    parts = [part.strip() for part in str(text).split(",") if part.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("需要至少一个数值，多个用逗号分隔")
+    return [float(part) for part in parts]
+
+
+def _omit_none(kwargs):
+    return {key: value for key, value in kwargs.items() if value is not None}
+
+
+_CONFIG_HELP = (
+    "运行配置文件，传给 process 的 config。"
+    "省略则为 None，process 使用各参数自身的默认值。"
+)
+
+
+class RunEmosCli(CliBase):
+    """EMOS 概率订正。``run`` 调用 ``process``。"""
+
+    prog = "python cli/run_emos.py"
+    description = (
+        "训练 EMOS 系数并对集合预报做订正。\n"
+        "未在命令行给出的可选项保持 process 的默认值。"
     )
-    print("EMOS process 完成:")
-    for key, ds in result.items():
-        if ds is None:
-            print(f"  {key}: None")
-        else:
-            print(
-                f"  {key}: {{{', '.join(f'{k}: {dict(ds[k].sizes)}' for k in ds.data_vars)}}}"
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python -m cli emos --help\n"
+        "  python -m cli emos --historic-forecast-path PATH --truth-path PATH --output-dir DIR\n"
+        "  python cli/run_emos.py --historic-forecast-path PATH --truth-path PATH "
+        "--static-paths PATH --thresholds 285,288,292\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--historic-forecast-path", required=True, metavar="PATH", help="历史集合预报（.nc 或 .csv）。")
+        parser.add_argument("--truth-path", required=True, metavar="PATH", help="对应实况（.nc 或 .csv）。")
+        parser.add_argument("--forecast-path", default=None, metavar="PATH", help="待订正预报。省略则用历史预报最后一起报。")
+        parser.add_argument(
+            "--static-paths",
+            nargs="+",
+            default=None,
+            metavar="PATH",
+            help="静态因子路径列表。省略则为 None。",
+        )
+        parser.add_argument("--output-dir", default=None, metavar="DIR", help="输出目录。省略则不写文件。")
+        parser.add_argument("--distribution", default=None, help="norm 或 truncnorm。省略则使用 process 默认值 norm。")
+        parser.add_argument("--predictor", default=None, help="预报统计量，如 mean。省略则使用 process 默认值 mean。")
+        CliBase.add_optional_bool(
+            parser,
+            "--point-by-point",
+            help_true="逐站或逐格点估计系数。",
+            help_false="全场共用系数。省略则使用 process 默认值。",
+        )
+        CliBase.add_optional_bool(
+            parser,
+            "--use-default-initial-guess",
+            help_true="使用默认初值。",
+            help_false="不使用默认初值。省略则使用 process 默认值。",
+        )
+        parser.add_argument(
+            "--thresholds",
+            type=_parse_float_list,
+            default=None,
+            metavar="FLOAT[,...]",
+            help="概率阈值，逗号分隔。省略则跳过概率输出。",
+        )
+        parser.add_argument(
+            "--thresholds-operator",
+            default=None,
+            help="below 或 above。省略则使用 process 默认值 below。",
+        )
+        parser.add_argument(
+            "--percentiles",
+            type=_parse_float_list,
+            default=None,
+            metavar="FLOAT[,...]",
+            help="输出分位，逗号分隔。省略则跳过分位输出。",
+        )
+        parser.add_argument(
+            "--realizations-count",
+            type=int,
+            default=None,
+            help="分位路径 ECC 成员数。省略则为 None。",
+        )
+        parser.add_argument("--config", default=None, metavar="PATH", help=_CONFIG_HELP)
+
+    def run(
+        self,
+        historic_forecast_path,
+        truth_path,
+        forecast_path=None,
+        static_paths=None,
+        output_dir=None,
+        distribution=None,
+        predictor=None,
+        point_by_point=None,
+        use_default_initial_guess=None,
+        thresholds=None,
+        thresholds_operator=None,
+        percentiles=None,
+        realizations_count=None,
+        config=None,
+    ) -> int:
+        process(
+            **_omit_none(
+                dict(
+                    historic_forecast_path=historic_forecast_path,
+                    truth_path=truth_path,
+                    forecast_path=forecast_path,
+                    static_paths=static_paths,
+                    output_dir=output_dir,
+                    distribution=distribution,
+                    predictor=predictor,
+                    point_by_point=point_by_point,
+                    use_default_initial_guess=use_default_initial_guess,
+                    thresholds=thresholds,
+                    thresholds_operator=thresholds_operator,
+                    percentiles=percentiles,
+                    realizations_count=realizations_count,
+                    config=config,
+                )
             )
+        )
+        return 0
+
+
+def run_emos_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。``python -m cli emos`` 与直接运行本文件都进这里。"""
+    return RunEmosCli().main(argv)
+
+
+main = run_emos_cli
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(run_emos_cli())

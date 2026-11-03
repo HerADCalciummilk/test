@@ -1,0 +1,1 @@
+"""Precipitation transform command module."""

@@ -2,16 +2,61 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""半监督水凝物分类 CLI 示例脚本。"""
+"""半监督水凝物分类命令行。
+
+在本包目录执行::
+
+    python cli/hydroclass_semisupervised_main.py --refl-path PATH [--output-path PATH]
+    python -m cli.hydroclass_semisupervised_main --refl-path PATH
+
+Python::
+
+    from cli.hydroclass_semisupervised_main import HydroclassSemisupervisedMainCli
+    HydroclassSemisupervisedMainCli.call(refl_path="PATH")
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
 import meteva_base as meb
 import numpy as np
 import xarray as xr
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
+
+
+def _csv_strs(text: str):
+    parts = [item.strip() for item in str(text).split(",") if item.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("需要逗号分隔的非空列表")
+    return tuple(parts)
+
+
+def _csv_floats(text: str):
+    parts = [item.strip() for item in str(text).split(",") if item.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("需要逗号分隔的数值")
+    return tuple(float(item) for item in parts)
 
 
 def _read_mass_centers(path: Optional[str]) -> np.ndarray | None:
@@ -49,8 +94,7 @@ def process(
     output_distances: bool = False,
     vectorize: bool = False,
     result_key: str = None,
-    output_path: Optional[str] = None,
-) -> xr.DataArray | xr.Dataset:
+    output_path: Optional[str] = None, config=None) -> xr.DataArray | xr.Dataset:
     """使用半监督分类方法识别雷达体积中的水凝物类别。
 
     参数
@@ -99,6 +143,29 @@ def process(
         ``result_key`` 被指定时为对应结果场；否则为至少含 ``hydro`` 的
         数据集，并按 ``compute_entropy``、``output_distances`` 包含可选字段。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "refl_path": (refl_path, "str"),
+        "zdr_path": (zdr_path, "str"),
+        "rhv_path": (rhv_path, "str"),
+        "kdp_path": (kdp_path, "str"),
+        "temp_path": (temp_path, "str"),
+        "iso0_path": (iso0_path, "str"),
+        "mass_centers_path": (mass_centers_path, "str"),
+        "radar_freq": (radar_freq, "float"),
+        "result_key": (result_key, "str"),
+        "output_path": (output_path, "str"),
+    })
+    refl_path = _over['refl_path']
+    zdr_path = _over['zdr_path']
+    rhv_path = _over['rhv_path']
+    kdp_path = _over['kdp_path']
+    temp_path = _over['temp_path']
+    iso0_path = _over['iso0_path']
+    mass_centers_path = _over['mass_centers_path']
+    radar_freq = _over['radar_freq']
+    result_key = _over['result_key']
+    output_path = _over['output_path']
     from radar_echo_classification.src.echo_class import HydroclassSemisupervisedPlugin
 
     refl = meb.read_griddata_from_nc(refl_path) if refl_path is not None else None
@@ -139,22 +206,56 @@ def process(
     return result
 
 
-if __name__ == "__main__":
-    import sys
+class HydroclassSemisupervisedMainCli(CliBase):
+    """``hydroclass_semisupervised_main`` 的命令行。``run`` 转调 ``process``。"""
 
-    # 添加项目根目录到 Python 路径
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    data_dir = Path(__file__).resolve().parents[1] / "test_data" / "echo_class" / "cli_input"
-    output_dir = Path(__file__).resolve().parents[1] / "test_data" / "echo_class" / "cli_output"
-
-    process(
-        refl_path=str(data_dir / "hydro_corrected_reflectivity.nc"),
-        zdr_path=str(data_dir / "hydro_corrected_differential_reflectivity.nc"),
-        kdp_path=str(data_dir / "hydro_specific_differential_phase.nc"),
-        rhv_path=str(data_dir / "hydro_uncorrected_cross_correlation_ratio.nc"),
-        temp_path=str(data_dir / "hydro_temperature.nc"),
-        output_path=str(output_dir / "hydroclass_cli.nc"),
+    prog = "python cli/hydroclass_semisupervised_main.py"
+    description = (
+        "半监督水凝物分类。\n"
+        "输入路径由 var_names 决定，命令行均可省略。"
+        "省略的可选项保持函数默认值；仍为 None 的项可从 --config 或 resource/conf.ini 填补。"
     )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/hydroclass_semisupervised_main.py --help\n"
+        "  python cli/hydroclass_semisupervised_main.py --refl-path PATH --zdr-path PATH --kdp-path PATH --rhv-path PATH --temp-path PATH --output-path OUT.nc\n"
+        "  python -m cli.hydroclass_semisupervised_main --refl-path PATH --config resource/conf.ini\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--refl-path", default=None, metavar="PATH", help="反射率网格。var_names 含 Zh 时需要。")
+        parser.add_argument("--zdr-path", default=None, metavar="PATH", help="差分反射率网格。")
+        parser.add_argument("--rhv-path", default=None, metavar="PATH", help="相关系数网格。")
+        parser.add_argument("--kdp-path", default=None, metavar="PATH", help="比差分相移率网格。")
+        parser.add_argument("--temp-path", default=None, metavar="PATH", help="温度场。temp_ref=temperature 且使用 relH 时需要。")
+        parser.add_argument("--iso0-path", default=None, metavar="PATH", help="相对零度层高度场。")
+        parser.add_argument("--hydro-names", type=_csv_strs, default=None, help="水凝物类别，逗号分隔。省略则用默认九类。")
+        parser.add_argument("--var-names", type=_csv_strs, default=None, help="分类变量及顺序，逗号分隔。省略则用 Zh,ZDR,KDP,RhoHV,relH。")
+        parser.add_argument("--mass-centers-path", default=None, metavar="PATH", help="质心文件（.npy 或文本）。省略则按频率选默认质心。")
+        parser.add_argument("--weights", type=_csv_floats, default=None, help="变量距离权重，逗号分隔，顺序与 var_names 一致。")
+        parser.add_argument("--value", type=float, default=None, help="距离衰减控制参数。省略则用 50。")
+        parser.add_argument("--lapse-rate", dest="lapse_rate", type=float, default=None, help="温度垂直递减率。省略则用 -6.5。")
+        parser.add_argument("--radar-freq", dest="radar_freq", type=float, default=None, help="雷达频率（Hz）。仅在无质心且网格无 frequency 时使用。")
+        parser.add_argument("--temp-ref", dest="temp_ref", default=None, help="temperature 或 height_over_iso0。省略则用 temperature。")
+        self.add_optional_bool(parser, "--compute-entropy", help_true="额外输出分类熵。", help_false="不输出分类熵。省略则用函数默认值 false。")
+        self.add_optional_bool(parser, "--output-distances", help_true="额外输出各类别比例场。", help_false="不输出类别比例场。省略则用函数默认值 false。")
+        self.add_optional_bool(parser, "--vectorize", help_true="使用向量化距离分类。", help_false="不使用向量化路径。省略则用函数默认值 false。")
+        parser.add_argument("--result-key", default=None, help="只返回该字段，例如 hydro。省略则返回全部字段。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="结果 NetCDF。省略则只返回内存结果。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        process(**{key: value for key, value in params.items() if value is not None})
+        return 0
+
+
+def hydroclass_semisupervised_main_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.hydroclass_semisupervised_main`` 都进这里。"""
+    return HydroclassSemisupervisedMainCli().main(argv)
+
+
+main = hydroclass_semisupervised_main_cli
+
+
+if __name__ == "__main__":
+    raise SystemExit(hydroclass_semisupervised_main_cli())

@@ -544,19 +544,10 @@ class OrographicEnhancement(BasePlugin):
     ) -> Tuple[np.ndarray, np.ndarray]:
         """把块内回溯距离换成上游格点索引，并限制在全域范围内。"""
         _, n_chunk, _ = distance.shape
-        xpos, ypos = np.meshgrid(
-            np.arange(n_cols, dtype=np.float32),
-            np.arange(y0, y0 + n_chunk, dtype=np.float32),
-        )
-        sin_b = np.broadcast_to(np.asarray(sin_wind_dir, dtype=np.float32), distance.shape)
-        cos_b = np.broadcast_to(np.asarray(cos_wind_dir, dtype=np.float32), distance.shape)
-        x_float = np.asarray(xpos - distance * sin_b, dtype=np.float32)
-        y_float = np.asarray(ypos - distance * cos_b, dtype=np.float32)
+        xpos, ypos = np.meshgrid(np.arange(n_cols), np.arange(y0, y0 + n_chunk))
         finite = np.isfinite(distance)
-        x_float = np.where(finite, x_float, xpos)
-        y_float = np.where(finite, y_float, ypos)
-        x_source = np.rint(x_float).astype(np.int32)
-        y_source = np.rint(y_float).astype(np.int32)
+        x_source = np.around(np.where(finite, xpos - distance * sin_wind_dir, xpos)).astype(np.int32)
+        y_source = np.around(np.where(finite, ypos - distance * cos_wind_dir, ypos)).astype(np.int32)
         np.clip(x_source, 0, n_cols - 1, out=x_source)
         np.clip(y_source, 0, n_rows - 1, out=y_source)
         return x_source, y_source
@@ -583,7 +574,11 @@ class OrographicEnhancement(BasePlugin):
         cos_wind_dir = np.zeros(wind_speed.shape, dtype=np.float32)
         sin_wind_dir[moving_mask] = uwind[moving_mask] / wind_speed[moving_mask]
         cos_wind_dir[moving_mask] = vwind[moving_mask] / wind_speed[moving_mask]
-        max_sin_cos = np.where(np.abs(sin_wind_dir) > np.abs(cos_wind_dir), np.abs(sin_wind_dir), np.abs(cos_wind_dir))
+        max_sin_cos = np.where(
+            np.abs(sin_wind_dir) > np.abs(cos_wind_dir),
+            np.abs(sin_wind_dir),
+            np.abs(cos_wind_dir),
+        )
         upstream_roi = self.upstream_range_of_influence_km / self.grid_spacing_km
         max_roi = (upstream_roi * max_sin_cos).astype(int)
         if np.max(max_roi) <= 0:
@@ -593,7 +588,7 @@ class OrographicEnhancement(BasePlugin):
         # 扩散尺度由风速和云寿命共同决定，二者越大，上游影响越远。
         stddev = (wind_speed * self.cloud_lifetime_s / grid_spacing_m).astype(np.float32)
         variance = np.square(stddev)
-        # 1 km 中国区约 4301×6801。整域 (length, ny, nx) 的 float64 索引会到数 GiB，
+        # 1 km 中国区约 4301×6801。整域 (length, ny, nx) 峰值到数 GiB；
         # 按行分块，块内公式与整域一次计算相同。
         ny, nx = wind_speed.shape
         weighted_values = np.zeros((ny, nx), dtype=np.float32)
@@ -614,10 +609,13 @@ class OrographicEnhancement(BasePlugin):
                 np.float32(0.0),
             ).astype(np.float32, copy=False)
             sum_of_weights[y0:y1] = np.sum(value_weight, axis=0)
-            weighted_values[y0:y1] = np.sum(source_values * value_weight, axis=0)
-            del dist, x_source, y_source, source_values, value_weight, finite
+            weighted_values[y0:y1] = np.sum(source_values * value_weight, axis=0).astype(
+                np.float32
+            )
         valid_mask = moving_mask & (sum_of_weights > 0)
-        weighted_values[valid_mask] = self.efficiency_factor * (weighted_values[valid_mask] / sum_of_weights[valid_mask])
+        weighted_values[valid_mask] = self.efficiency_factor * (
+            weighted_values[valid_mask] / sum_of_weights[valid_mask]
+        )
         return weighted_values.astype(np.float32)
 
     def process(self, temperature: Union[xr.DataArray, np.ndarray], humidity: Union[xr.DataArray, np.ndarray], pressure: Union[xr.DataArray, np.ndarray], uwind: Union[xr.DataArray, np.ndarray], vwind: Union[xr.DataArray, np.ndarray], topography: Union[xr.DataArray, np.ndarray]) -> xr.DataArray:

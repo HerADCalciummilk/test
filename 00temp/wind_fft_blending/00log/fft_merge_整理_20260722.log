@@ -1,0 +1,112 @@
+================================================================================
+算法整理日志 — 多风场 FFT 融合
+================================================================================
+整理日期   : 2026-07-22
+算法代号   : fft_merge / multi_wind_fft_blending
+仓库目录   : 00temp/multi_wind_fft_blending/
+整理阶段   : 执行入口标准化 + 多进程开关（is_multi）+ 中间目录规范补齐
+贡献人     : 胡海川、李振、郭云谦
+原始来源   : D:\temp\202301_zhinengwangge\20230206_unitycode\NIMM_pip_repos\TEMP\260625\FftForNimm
+================================================================================
+
+一、目录映射（现结构）
+--------------------------------------------------------------------------------
+  算法核心           → src/fft_merge.py（FFTMergePlugin）
+  可调度执行入口     → src/main.py（process；is_multi / pro_count）
+  CLI 路由           → cli/__main__.py（python -m cli → src/main.py）
+  多进程工具         → 00temp/utils/multipro_plugin.py（SimpleParallelTool，经 sys.path）
+  单元/集成测试      → test/test_fft_merge.py、test/test_main.py
+  程序说明           → docs/FFT_MERGE_程序说明.md、docs/multi_wind_fft_blending.md
+  原理 notebook      → nbs/fft_merge_说明.ipynb
+  样例资源           → 与仓库同级 NIMM_pip_testdata/multi_wind_fft_blending/test_data/
+  整理清单           → NIMM_list.md（算法包内）
+  整理中间数据       → 00temp/fft_merge/
+  整理过程日志       → 00log/（本文件；一次整理过程对应一份）
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 新增 src/main.py：process 显式传参、不读配置；可被模块调度；可命令行执行
+  [x] cli/__main__.py 统一转发到 src/main.py，并写明必填/可选参数与示例
+  [x] 废弃并删除 cli/fft_merge_cli.py；删除依赖旧 CLI 的 test/test_fft_merge_cli.py
+  [x] 样例路径改为同级 NIMM_pip_testdata/.../test_data（不再用包内 resource/）
+  [x] process / CLI 增加 is_multi、pro_count：多任务时可选多进程（参考 MAIT24，不照搬 jobs.json）
+  [x] 多任务以路径列表表达（main_uv_path / ass_uv_path / output_prefix 等长）
+  [x] test/test_main.py：单任务、串行多任务、并行多任务用例
+  [x] 建立算法包内 00temp/、00log/、NIMM_list.md
+  [x] 更新仓库根 NIMM_list.md 与 00log/multi_wind_fft_blending.md
+
+三、试跑记录
+--------------------------------------------------------------------------------
+  通过:
+    python -m cli --help
+    python src/main.py --help
+      → 可见 --is-multi / --no-is-multi / --pro-count 与多任务示例
+
+  未验证 / 需数据环境:
+    NIMM_pip_testdata/multi_wind_fft_blending/test_data/ 当前为空目录
+    → test/test_main.py、test/test_fft_merge.py 中依赖样例的用例会 skip
+    补齐 sample_a1/a2_uv.m11、sample_b1/b2_uv.m11 后建议执行:
+      python -m pytest test/test_main.py test/test_fft_merge.py -q
+      python -m cli --main-uv ... --ass-uv ... --output-dir ... --output-prefix ...
+      python -m cli --main-uv a1 b1 --ass-uv a2 b2 --output-prefix pa pb \
+          --output-dir ... --is-multi --pro-count 2
+
+四、仍存在问题（需人工补充）★
+--------------------------------------------------------------------------------
+  [ ] 同级 NIMM_pip_testdata/multi_wind_fft_blending/test_data/ 样例文件缺失，需人工放入 Micaps11
+  [ ] docs/FFT_MERGE_程序说明.md、nbs/ 中仍有旧调用链（fft_merge_cli / resource）文案，需人工核对遗漏
+  [ ] FFTMergePlugin 未继承仓库统一 BasePlugin，正式入库前评估是否接入
+  [ ] 尚未补充到正式 NIMM/05blending/ 目录
+  [ ] 未做完整业务数据试跑与结果对比
+  [ ] 00temp/fft_merge/ 仅占位，整理对照中间文件待按需归档或清理
+
+五、CLI / process 参数（正式调用）
+--------------------------------------------------------------------------------
+  必填:
+    --main-uv / main_uv_path          （可多个 = 多任务）
+    --ass-uv / ass_uv_path            （单主场可多辅助；多主场须等长）
+    --output-dir / output_dir
+    --output-prefix / output_prefix   （多主场须等长）
+  可选:
+    --feature-border (128)
+    --max-iterations (1024)
+    --move-percent (1.0)
+    --write-linear-compare / --no-write-linear-compare
+    --is-multi / --no-is-multi        （多任务是否多进程，默认 False）
+    --pro-count (4)                   （is_multi=True 时生效）
+
+  模块调度示例:
+    from main import process
+    process(
+        main_uv_path=[a1, b1],
+        ass_uv_path=[a2, b2],
+        output_dir=out,
+        output_prefix=["sample_a", "sample_b"],
+        is_multi=True,
+        pro_count=2,
+    )
+
+  命令行单任务示例:
+    python -m cli \
+      --main-uv <testdata>/sample_a1_uv.m11 \
+      --ass-uv <testdata>/sample_a2_uv.m11 \
+      --output-dir <testdata> \
+      --output-prefix sample_a
+
+  命令行多任务 + 多进程示例:
+    python -m cli \
+      --main-uv <testdata>/sample_a1_uv.m11 <testdata>/sample_b1_uv.m11 \
+      --ass-uv <testdata>/sample_a2_uv.m11 <testdata>/sample_b2_uv.m11 \
+      --output-prefix sample_a sample_b \
+      --output-dir <testdata> \
+      --is-multi --pro-count 2
+
+六、规范目录说明（本仓库约定）
+--------------------------------------------------------------------------------
+  00temp/          存放算法整理过程中的中间数据（本算法：00temp/fft_merge/）
+  00log/           存放原始算法整理过程日志；一次整理过程对应一个 log（本文件）
+  NIMM_list.md     以表格记录已整理算法：种类、功能、更新时间、贡献人、目录、待办
+
+================================================================================
+日志结束 — 下次整理请新建 00log/<算法代号>_整理_<YYYYMMDD>.log
+================================================================================

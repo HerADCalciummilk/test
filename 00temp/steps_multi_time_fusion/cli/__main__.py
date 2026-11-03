@@ -1,7 +1,7 @@
-"""Executable entry for python -m steps_multi_time_fusion.cli."""
+"""在本包目录执行：``python -m cli``。"""
 
-from steps_multi_time_fusion.cli import main
+from . import main
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

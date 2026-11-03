@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""从 ``resource/gust_factor.ini`` 读取运行路径与默认参数。
+"""从 ``resource/conf.ini`` 读取运行路径与默认参数。
 
 约定：
 - 路径可为相对本包根目录，或绝对路径；
@@ -12,8 +12,10 @@ from typing import Dict, List, Optional, Tuple
 
 _UTIL_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(os.path.dirname(_UTIL_DIR))
-_MAIN_INI_REL = os.path.join("resource", "gust_factor.ini")
+_MAIN_INI_REL = os.path.join("resource", "conf.ini")
 _RAW_INI_CACHE: Optional[Dict[str, str]] = None
+_CONFIG_OVERRIDE: Optional[str] = None
+_CONFIG_ENV = "NIMM_GUST_FACTOR_INI"
 
 
 def _abspath(p: str) -> str:
@@ -32,8 +34,39 @@ def _expand_path_maybe_relative_to_repo(p: str) -> str:
     return _abspath(os.path.join(_REPO_ROOT, os.path.normpath(exp)))
 
 
-def _main_ini_abs_path() -> str:
+def _default_ini_abs_path() -> str:
     return _abspath(os.path.join(_REPO_ROOT, os.path.normpath(_MAIN_INI_REL)))
+
+
+def _main_ini_abs_path() -> str:
+    if _CONFIG_OVERRIDE:
+        return _CONFIG_OVERRIDE
+    env_path = os.environ.get(_CONFIG_ENV, "").strip()
+    if env_path:
+        return env_path
+    return _default_ini_abs_path()
+
+
+def set_main_ini(path: Optional[str] = None) -> str:
+    """切换运行配置 ini，并清空缓存。
+
+    ``path`` 为空时回到 ``resource/conf.ini``。
+    相对路径按项目根目录解析。文件不存在时抛出 FileNotFoundError。
+    同时写入环境变量，供多进程子进程继承同一 ini。
+    """
+    global _CONFIG_OVERRIDE, _RAW_INI_CACHE
+    if path is None or not str(path).strip():
+        _CONFIG_OVERRIDE = None
+        os.environ.pop(_CONFIG_ENV, None)
+        chosen = _default_ini_abs_path()
+    else:
+        chosen = _expand_path_maybe_relative_to_repo(str(path))
+        if not os.path.isfile(chosen):
+            raise FileNotFoundError(f"配置文件不存在: {chosen}")
+        _CONFIG_OVERRIDE = chosen
+        os.environ[_CONFIG_ENV] = chosen
+    _RAW_INI_CACHE = None
+    return chosen
 
 
 def _parse_kv_ini(path: str) -> Dict[str, str]:

@@ -2,15 +2,53 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""region_dealias 算法命令行入口。"""
+"""径向速度区域退模糊命令行。
+
+在本包目录执行::
+
+    python cli/region_dealias.py --velocity-path PATH [--output-path PATH]
+    python -m cli.region_dealias --velocity-path PATH
+
+Python::
+
+    from cli.region_dealias import RegionDealiasCli
+    RegionDealiasCli.call(velocity_path="PATH")
+"""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
 from typing import Literal, Optional, Sequence
 
 import numpy as np
 import xarray as xr
+
+
+def _bootstrap_paths() -> None:
+    """沿用原脚本：把 00temp 放进 sys.path，并让包根上的 utils 优先。"""
+    root = Path(__file__).resolve().parent.parent
+    temp_root = root.parent
+    temp_s = str(temp_root)
+    if temp_s not in sys.path:
+        sys.path.insert(0, temp_s)
+    root_s = str(root)
+    if root_s not in sys.path:
+        sys.path.insert(0, root_s)
+
+
+_bootstrap_paths()
+
+from utils.cli_base import CliBase
+from utils.conf_ini import overlay_none
+
+
+def _csv_floats(text: str):
+    parts = [item.strip() for item in str(text).split(",") if item.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("需要逗号分隔的数值")
+    return [float(item) for item in parts]
 
 
 def process(
@@ -43,8 +81,7 @@ def process(
     geo_nlon: int = None,
     geo_nlat: int = None,
     auto_remap_to_latlon: bool = False,
-    output_path: Optional[str] = None,
-) -> xr.DataArray:
+    output_path: Optional[str] = None, config=None) -> xr.DataArray:
     """从文件路径执行基于区域连通关系的径向速度退模糊。
 
     读取六维网格 NetCDF / 可选掩码后，构造 ``RegionDealiasPlugin`` 并写出结果。
@@ -103,6 +140,37 @@ def process(
     xr.DataArray
         退模糊后的速度场（``float32``）；若开启重映射则为规则经纬网格。
     """
+    # 只填补仍为 None 的项。默认 resource/conf.ini 为空，不改已传入的参数。
+    _over = overlay_none(__file__, config, {
+        "ref_velocity_path": (ref_velocity_path, "str"),
+        "gatefilter_path": (gatefilter_path, "str"),
+        "refl_path": (refl_path, "str"),
+        "ncp_path": (ncp_path, "str"),
+        "rhv_path": (rhv_path, "str"),
+        "interval_limits": (interval_limits, "float_list"),
+        "nyquist_velocity": (nyquist_velocity, "float"),
+        "min_rhv": (min_rhv, "float"),
+        "rays_wrap_around": (rays_wrap_around, "bool"),
+        "radar_lon": (radar_lon, "float"),
+        "radar_lat": (radar_lat, "float"),
+        "geo_nlon": (geo_nlon, "int"),
+        "geo_nlat": (geo_nlat, "int"),
+        "output_path": (output_path, "str"),
+    })
+    ref_velocity_path = _over['ref_velocity_path']
+    gatefilter_path = _over['gatefilter_path']
+    refl_path = _over['refl_path']
+    ncp_path = _over['ncp_path']
+    rhv_path = _over['rhv_path']
+    interval_limits = _over['interval_limits']
+    nyquist_velocity = _over['nyquist_velocity']
+    min_rhv = _over['min_rhv']
+    rays_wrap_around = _over['rays_wrap_around']
+    radar_lon = _over['radar_lon']
+    radar_lat = _over['radar_lat']
+    geo_nlon = _over['geo_nlon']
+    geo_nlat = _over['geo_nlat']
+    output_path = _over['output_path']
     from radar_wind_dealiasing.cli import (
         _read_griddata,
         _read_npy_array,
@@ -178,25 +246,74 @@ def process(
     return result
 
 
-if __name__ == "__main__":
-    import sys
+class RegionDealiasCli(CliBase):
+    """``region_dealias`` 的命令行。``run`` 转调 ``process``。"""
 
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    from radar_wind_dealiasing.cli.region_dealias import process
-
-    # 测试数据路径：仅使用单层仰角样例，避免大体扫文件进入仓库
-    base_dir = Path(__file__).resolve().parents[1] / "test_data" / "region_dealias"
-    data_dir = base_dir / "cli_input"
-    velocity_path = str(data_dir / "velocity_sweep0.nc")
-    gatefilter_path = str(data_dir / "grid_gatefilter_mask_sweep0.npy")
-    output_path = str(base_dir / "cli_output" / "region_dealias_cli.nc")
-
-    process(
-        velocity_path,
-        gatefilter_path=gatefilter_path,
-        data_name="corrected_velocity_cli",
-        output_path=output_path,
+    prog = "python cli/region_dealias.py"
+    description = (
+        "基于区域连通关系的径向速度退模糊。\n"
+        "必填路径由命令行传入。省略的可选项保持函数默认值；"
+        "仍为 None 的项可从 --config 或 resource/conf.ini 填补。\n"
+        "--gatefilter false 关闭自动过滤；none 启用 moment 自动过滤。"
+        "提供 --gatefilter-path 时以掩码为准。"
     )
+    epilog = (
+        "示例（在本包目录执行）:\n"
+        "  python cli/region_dealias.py --help\n"
+        "  python cli/region_dealias.py --velocity-path PATH --output-path OUT.nc\n"
+        "  python -m cli.region_dealias --velocity-path PATH --gatefilter none --config resource/conf.ini\n"
+    )
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--velocity-path", required=True, metavar="PATH", help="待退模糊速度场 NetCDF。必填。")
+        parser.add_argument("--ref-velocity-path", default=None, metavar="PATH", help="参考速度场。")
+        parser.add_argument("--gatefilter", default=None, choices=("false", "none"), help="false 关闭自动过滤（默认）；none 启用 moment 自动过滤。")
+        parser.add_argument("--gatefilter-path", default=None, metavar="PATH", help="布尔掩码 .npy。优先于 --gatefilter。")
+        parser.add_argument("--refl-path", default=None, metavar="PATH", help="moment 过滤用反射率。")
+        parser.add_argument("--ncp-path", default=None, metavar="PATH", help="moment 过滤用 NCP。")
+        parser.add_argument("--rhv-path", default=None, metavar="PATH", help="moment 过滤用 RhoHV。")
+        parser.add_argument("--interval-splits", dest="interval_splits", type=int, default=None, help="Nyquist 区间初始分段数。省略则用 3。")
+        parser.add_argument("--interval-limits", dest="interval_limits", type=_csv_floats, default=None, help="自定义速度分段边界，逗号分隔。")
+        parser.add_argument("--skip-between-rays", dest="skip_between_rays", type=int, default=None, help="跨射线最大过滤间隔。省略则用 100。")
+        parser.add_argument("--skip-along-ray", dest="skip_along_ray", type=int, default=None, help="沿径向最大过滤间隔。省略则用 100。")
+        self.add_optional_bool(parser, "--centered", help_true="展开圈数居中到 0 附近。", help_false="不居中展开圈数。省略则用函数默认值 true。")
+        parser.add_argument("--nyquist-velocity", dest="nyquist_velocity", type=float, default=None, help="显式 Nyquist 速度。省略则从速度场属性读取。")
+        parser.add_argument("--min-ncp", dest="min_ncp", type=float, default=None, help="NCP 下限。省略则用 0.5。")
+        parser.add_argument("--min-rhv", dest="min_rhv", type=float, default=None, help="RhoHV 下限。")
+        parser.add_argument("--min-refl", dest="min_refl", type=float, default=None, help="反射率下限。省略则用 -20。")
+        parser.add_argument("--max-refl", dest="max_refl", type=float, default=None, help="反射率上限。省略则用 100。")
+        self.add_optional_bool(parser, "--rays-wrap-around", help_true="方位向首尾视为相邻。", help_false="方位向首尾不视为相邻。省略则按 scan_type 推断。")
+        self.add_optional_bool(parser, "--keep-original", help_true="被过滤格点保留原始速度。", help_false="被过滤格点输出缺测。省略则用函数默认值 false。")
+        self.add_optional_bool(parser, "--set-limits", help_true="写入 valid_min/valid_max。", help_false="不写 valid_min/valid_max。省略则用函数默认值 true。")
+        parser.add_argument("--data-name", default=None, help="输出 DataArray 名称。省略则用 corrected_velocity。")
+        parser.add_argument("--radar-lon", dest="radar_lon", type=float, default=None, help="雷达经度。")
+        parser.add_argument("--radar-lat", dest="radar_lat", type=float, default=None, help="雷达纬度。")
+        parser.add_argument("--elevation-deg", dest="elevation_deg", type=float, default=None, help="仰角（度）。省略则用 0。")
+        parser.add_argument("--geo-resolution-deg", dest="geo_resolution_deg", type=float, default=None, help="规则经纬网格分辨率（度）。省略则用 0.01。")
+        parser.add_argument("--geo-nlon", dest="geo_nlon", type=int, default=None, help="规则经纬网格经向格点数。")
+        parser.add_argument("--geo-nlat", dest="geo_nlat", type=int, default=None, help="规则经纬网格纬向格点数。")
+        self.add_optional_bool(parser, "--auto-remap-to-latlon", help_true="重映射到规则经纬网格。", help_false="不重映射。省略则用函数默认值 false。")
+        parser.add_argument("--output-path", default=None, metavar="PATH", help="输出 NetCDF。省略则只返回内存结果。")
+        parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
+
+    def run(self, **params) -> int:
+        gatefilter = params.pop("gatefilter", None)
+        kwargs = {key: value for key, value in params.items() if value is not None}
+        if gatefilter == "false":
+            kwargs["gatefilter"] = False
+        elif gatefilter == "none":
+            kwargs["gatefilter"] = None
+        process(**kwargs)
+        return 0
+
+
+def region_dealias_cli(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口。直接运行本文件与 ``python -m cli.region_dealias`` 都进这里。"""
+    return RegionDealiasCli().main(argv)
+
+
+main = region_dealias_cli
+
+
+if __name__ == "__main__":
+    raise SystemExit(region_dealias_cli())
