@@ -1,0 +1,4 @@
+numpy>=1.26.1
+pandas>=2.0.0
+meteva_base
+matplotlib>=3.5.0

@@ -1,0 +1,316 @@
+{
+  "package_id": "00temp/review_bad_sample",
+  "generated_at": "2026-10-19T18:19:00",
+  "sections": [
+    {
+      "name": "structure",
+      "findings": [
+        {
+          "rule_id": "MISSING_REQUIRED_DIR",
+          "severity": "blocker",
+          "path": "00temp/review_bad_sample/nbs",
+          "message": "缺少必要目录: nbs",
+          "line": null,
+          "evidence": ""
+        }
+      ],
+      "metrics": {},
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "syntax",
+      "findings": [
+        {
+          "rule_id": "PYTHON_SYNTAX_ERROR",
+          "severity": "blocker",
+          "path": "00temp/review_bad_sample/cli/broken_cli.py",
+          "message": "invalid syntax",
+          "line": 1,
+          "evidence": ""
+        }
+      ],
+      "metrics": {},
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "plugins",
+      "findings": [
+        {
+          "rule_id": "PLUGIN_EMPTY_PROCESS",
+          "severity": "blocker",
+          "path": "00temp/review_bad_sample/src/bad_plugin.py:BrokenDemoPlugin",
+          "message": "process 为空实现",
+          "line": 10,
+          "evidence": ""
+        }
+      ],
+      "metrics": {
+        "concrete_plugin_count": 1
+      },
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "flake8",
+      "findings": [
+        {
+          "rule_id": "FLAKE8",
+          "severity": "warning",
+          "path": "00temp/review_bad_sample/cli/broken_cli.py",
+          "message": "E999 SyntaxError: invalid syntax",
+          "line": 1,
+          "evidence": ""
+        }
+      ],
+      "metrics": {},
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "docstrings",
+      "findings": [
+        {
+          "rule_id": "DOCSTRING_MISSING",
+          "severity": "warning",
+          "path": "00temp/review_bad_sample/src/bad_plugin.py",
+          "message": "公开 module 缺少 docstring",
+          "line": 1,
+          "evidence": ""
+        },
+        {
+          "rule_id": "DOCSTRING_MISSING",
+          "severity": "warning",
+          "path": "00temp/review_bad_sample/src/bad_plugin.py:PostProcessingPlugin",
+          "message": "公开 class 缺少 docstring",
+          "line": 1,
+          "evidence": ""
+        },
+        {
+          "rule_id": "DOCSTRING_MISSING",
+          "severity": "warning",
+          "path": "00temp/review_bad_sample/src/bad_plugin.py:PostProcessingPlugin.process",
+          "message": "公开 method 缺少 docstring",
+          "line": 2,
+          "evidence": ""
+        },
+        {
+          "rule_id": "DOCSTRING_MISSING",
+          "severity": "warning",
+          "path": "00temp/review_bad_sample/src/bad_plugin.py:BrokenDemoPlugin",
+          "message": "公开 class 缺少 docstring",
+          "line": 6,
+          "evidence": ""
+        },
+        {
+          "rule_id": "DOCSTRING_MISSING",
+          "severity": "warning",
+          "path": "00temp/review_bad_sample/src/bad_plugin.py:BrokenDemoPlugin.process",
+          "message": "公开 method 缺少 docstring",
+          "line": 10,
+          "evidence": ""
+        }
+      ],
+      "metrics": {
+        "public_api_total": 5,
+        "missing_docstring": 5
+      },
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "dependencies",
+      "findings": [
+        {
+          "rule_id": "DEP_NO_MANIFEST",
+          "severity": "warning",
+          "path": "00temp/review_bad_sample",
+          "message": "未找到任何依赖清单（requirements.txt / pyproject.toml / environment.yml / setup.py），换机器无法复现环境",
+          "line": null,
+          "evidence": ""
+        }
+      ],
+      "metrics": {
+        "manifests": [],
+        "declared_count": 0,
+        "unconstrained": false,
+        "python_requires": [],
+        "python_version_files": [],
+        "third_party_imports": [],
+        "repo_internal_imports": [],
+        "undeclared": [],
+        "undeclared_uncertain": false,
+        "unused_declared": [],
+        "conflicts": [],
+        "marker_splits": []
+      },
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "meb_grid",
+      "findings": [
+        {
+          "rule_id": "MEB_GRID_NOT_USED",
+          "severity": "warning",
+          "path": "00temp/review_bad_sample/src",
+          "message": "未检测到 meb 数据格式的任何信号（无 meb 导入/接口调用，注解中无 xr.DataArray / pandas.DataFrame，也未见 meb 时空坐标）；算法入参出参应采用 meb 数据格式",
+          "line": null,
+          "evidence": "static heuristic"
+        }
+      ],
+      "metrics": {
+        "meb_grid_required": true,
+        "io_kind": "unknown",
+        "shape_hint": "",
+        "meb_imports": [],
+        "meb_apis_seen": [],
+        "grid_annotations": [],
+        "station_annotations": [],
+        "grid_dim_hits": "0/6",
+        "grid_attr_hits": "0/6",
+        "station_column_hits": "0/6",
+        "name_hints": [],
+        "process_total": 1,
+        "process_entries": [
+          {
+            "where": "00temp/review_bad_sample/src/bad_plugin.py:BrokenDemoPlugin.process",
+            "verdict": "none",
+            "reason": "方法内外均未见 meb 数据格式信号",
+            "line": "10"
+          }
+        ],
+        "accepts_plain_array": [],
+        "evidence_outside_src": []
+      },
+      "skipped": false,
+      "skip_reason": ""
+    },
+    {
+      "name": "execution",
+      "findings": [
+        {
+          "rule_id": "EXEC_PYTEST_FAILED",
+          "severity": "blocker",
+          "path": "00temp/review_bad_sample/test",
+          "message": "pytest 未全部通过",
+          "line": null,
+          "evidence": "F                                                                        [100%]\n================================== FAILURES ===================================\n_____________________________ test_known_failure ______________________________\ntest\\test_known_fail.py:2: in test_known_failure\n    assert False, \"异常样例：故意失败\"\nE   AssertionError: 异常样例：故意失败\nE   assert False\n=========================== short test summary info ===========================\nFAILED test/test_known_fail.py::test_known_failure - AssertionError: 异常样例...\n1 failed in 0.16s\n"
+        }
+      ],
+      "metrics": {
+        "runs": [
+          {
+            "kind": "pytest",
+            "command": [
+              "C:\\Users\\38144\\AppData\\Local\\Temp\\local-review-venv-wwdqtd_o\\Scripts\\python.exe",
+              "-m",
+              "pytest",
+              "D:\\workspace\\test\\00temp\\review_bad_sample\\test",
+              "-q",
+              "--tb=short",
+              "-p",
+              "no:cacheprovider"
+            ],
+            "exit_code": 1,
+            "elapsed_sec": 0.88,
+            "log_tail": "F                                                                        [100%]\n================================== FAILURES ===================================\n_____________________________ test_known_failure ______________________________\ntest\\test_known_fail.py:2: in test_known_failure\n    assert False, \"异常样例：故意失败\"\nE   AssertionError: 异常样例：故意失败\nE   assert False\n=========================== short test summary info ===========================\nFAILED test/test_known_fail.py::test_known_failure - AssertionError: 异常样例...\n1 failed in 0.16s\n"
+          }
+        ],
+        "venv": "C:\\Users\\38144\\AppData\\Local\\Temp\\local-review-venv-wwdqtd_o",
+        "python": "C:\\Users\\38144\\AppData\\Local\\Temp\\local-review-venv-wwdqtd_o\\Scripts\\python.exe",
+        "venv_reused": false,
+        "site_packages": "inherited",
+        "base_python": "D:\\workspace\\test\\.venv\\Scripts\\python.exe",
+        "required_libs": {
+          "numpy": "present",
+          "pytest": "installed",
+          "meteva_base": "installed"
+        },
+        "env": {
+          "python": "3.11.5",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "pytest": "9.1.1",
+          "libs": {
+            "numpy": "2.3.5",
+            "meteva_base": "0.3.1.1",
+            "pandas": "2.3.3",
+            "xarray": "2025.12.0",
+            "scipy": "1.17.1",
+            "matplotlib": "3.10.8",
+            "netCDF4": "1.7.2"
+          }
+        },
+        "venv_removed": true,
+        "venv_disposition": "removed"
+      },
+      "skipped": false,
+      "skip_reason": ""
+    }
+  ],
+  "llm": {
+    "risk_level": "high",
+    "overview": "该算法包为故意构造的异常测试样本，存在多处严重缺陷。代码层面：CLI入口存在语法错误导致无法运行；核心插件`BrokenDemoPlugin.process`为空实现（仅pass），且未遵循MEB数据格式规范（无输入校验、无输出返回）；缺少必要的依赖清单和文档字符串。测试层面：包含故意失败的测试用例。整体质量极低，不具备任何实际业务价值或可维护性。",
+    "meb_verdict": {
+      "verdict": "no",
+      "input": "入参未采用MEB数据格式。代码中process方法使用*args, **kwargs接收任意参数，未对输入的xarray.DataArray或pandas.DataFrame进行类型检查或维度/列名校验，不符合MEB规范。",
+      "output": "出参未采用MEB数据格式。PostProcessingPlugin返回None，BrokenDemoPlugin.process直接pass（隐式返回None），未返回符合MEB规范的网格DataArray或站点DataFrame。",
+      "issues": [
+        "process方法完全空实现，未处理任何逻辑，也未返回MEB数据格式结果。",
+        "入参未做MEB格式校验，直接接受任意参数，存在运行时风险。"
+      ],
+      "basis": "src/bad_plugin.py:10"
+    },
+    "findings": [
+      {
+        "severity": "high",
+        "category": "execution",
+        "path": "00temp/review_bad_sample/cli/broken_cli.py",
+        "title": "CLI入口语法错误",
+        "detail": "main函数定义存在语法错误（def main(:），导致模块无法导入或执行。",
+        "evidence": "cli/broken_cli.py:1"
+      },
+      {
+        "severity": "high",
+        "category": "semantics",
+        "path": "00temp/review_bad_sample/src/bad_plugin.py",
+        "title": "核心插件process为空实现",
+        "detail": "BrokenDemoPlugin.process方法仅包含pass语句，无任何业务逻辑，且未返回有效结果。",
+        "evidence": "src/bad_plugin.py:10-11"
+      },
+      {
+        "severity": "medium",
+        "category": "docs",
+        "path": "00temp/review_bad_sample/src/bad_plugin.py",
+        "title": "关键类与方法缺失文档字符串",
+        "detail": "PostProcessingPlugin、BrokenDemoPlugin及其process方法均缺少docstring，不利于维护和理解。",
+        "evidence": "src/bad_plugin.py:1-12"
+      },
+      {
+        "severity": "medium",
+        "category": "other",
+        "path": "00temp/review_bad_sample",
+        "title": "缺少依赖清单文件",
+        "detail": "未找到requirements.txt等依赖声明文件，环境复现困难。",
+        "evidence": "static check"
+      },
+      {
+        "severity": "low",
+        "category": "execution",
+        "path": "00temp/review_bad_sample/test",
+        "title": "测试用例故意失败",
+        "detail": "test_known_fail.py中包含assert False，导致pytest运行失败。",
+        "evidence": "test/test_known_fail.py:2"
+      }
+    ],
+    "markdown_body": "## 改进建议\n\n1. **修复语法错误**：立即修正`cli/broken_cli.py`中的`def main(:`语法错误。\n2. **实现核心逻辑**：在`BrokenDemoPlugin.process`中实现具体的数据处理逻辑，确保输入符合MEB格式，并返回正确的MEB格式结果。\n3. **补充文档**：为所有公开类和公共方法添加详细的docstring，说明参数、返回值及业务逻辑。\n4. **添加依赖管理**：创建`requirements.txt`或`pyproject.toml`，明确声明项目依赖。\n5. **清理测试**：移除故意失败的测试用例，或将其标记为expected failure（如果确实是测试框架的一部分）。",
+    "skipped": false,
+    "model": "qwen3.7-flash-2026-07-15",
+    "llm_config_path": "D:\\workspace\\test\\local_review\\llm.toml"
+  },
+  "summary": {
+    "blocker_count": 4,
+    "warning_count": 8
+  }
+}

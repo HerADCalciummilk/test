@@ -1,0 +1,9 @@
+{
+  "t_coarse": "https://www.showdoc.com.cn/server/api/attachment/visitFile?sign=eaed2c6a53a793e02baeb9114391e3f5&file=file.jpg",
+  "z_coarse": "https://www.showdoc.com.cn/server/api/attachment/visitFile?sign=3ad0bdabb638da81ee937384c280991c&file=file.jpg",
+  "gamma": "https://www.showdoc.com.cn/server/api/attachment/visitFile?sign=21bde88cb168cf790135a64a0de8ed64&file=file.jpg",
+  "z_fine": "https://www.showdoc.com.cn/server/api/attachment/visitFile?sign=2da32776d113e8e6bf319501ffe23d3c&file=file.jpg",
+  "t_before": "https://www.showdoc.com.cn/server/api/attachment/visitFile?sign=5af459078d34d3ec1b42d64c8b3e3ca1&file=file.jpg",
+  "t_after": "https://www.showdoc.com.cn/server/api/attachment/visitFile?sign=db86a898d5a11380a7312bfc9f7119df&file=file.jpg",
+  "t_delta": "https://www.showdoc.com.cn/server/api/attachment/visitFile?sign=b6803a14160f1dc8b79658a32d5fda94&file=file.jpg"
+}

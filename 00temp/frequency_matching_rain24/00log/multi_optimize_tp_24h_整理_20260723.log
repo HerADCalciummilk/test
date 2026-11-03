@@ -1,0 +1,113 @@
+================================================================================
+算法整理日志 — 24小时降水频率匹配订正（multi_optimize_tp_24h）
+================================================================================
+整理日期   : 2026-07-23
+算法代号   : multi_optimize_tp_24h（由 optimize_tp_24h 更名）
+仓库目录   : 00temp/multi_optimize_tp_24h/
+整理阶段   : 原始算法入仓整理（src 划分、共享 utils、process/CLI、多进程调度、清单登记、更名）
+贡献人     : 马劲松（程序作者）；整理登记
+原始来源   : optimize_TP_24H / optimize_tp_24h（见 docs；绝对路径待补）
+仓库索引   : 仓库根 00log/multi_optimize_tp_24h.md
+================================================================================
+说明：一次「原始算法整理过程」对应本文件一份日志；中间数据见 00temp/；
+      清单见 NIMM_list.md。仍有问题目录与事项见第四节「需人工补充」。
+================================================================================
+
+一、目录映射（现结构）
+--------------------------------------------------------------------------------
+  主程序 / 可调度入口 → src/correct_tp_24h.py
+                        process(plugin, is_multi, pro_count, rpt_times)
+                        mainProcess(parafile) 兼容旧名
+                        __main__ 直接 process(...) 传参
+  CLI 路由           → cli/__main__.py
+                        argparse → process；中文 --help / 示例
+                        参数：--plugin / --rpt-list / --is-multi / --pro-count
+  算法核心 src/      →
+    cal_similarity.py      历史—当前模式相似度
+    cal_optical_flow.py    光流 / 拉格朗日平流
+    cal_frequency_match.py 分位数频率匹配
+    cal_slice_tp.py        切片内光流 + 频率匹配
+    interpolation.py       Cressman / 双线性插值
+  本包工具 src/utils/ → config / data_proc / data_save / util_env / logger / verify
+                        （经根 utils/__init__.py 合并；from utils.xxx import ...）
+  共享插件           → 00temp/utils/multipro_plugin.py、data_prepare_plugin.py
+                        （与删前本地副本换行规范化后内容一致，已删本地）
+  运行配置           → resource/optimize_tp_24.ini、resource/plugin/*.json、
+                        sta.m3、mask010.nc
+  单元测试           → test/test_multi_optimize_tp_24h.py
+                        （含调度任务集与原 Pool 等价测试）
+  程序说明           → docs/multi_optimize_tp_24h_程序说明.md、README.md
+                        nbs/multi_optimize_tp_24h_说明.ipynb
+  整理清单           → NIMM_list.md
+  整理中间数据       → 00temp/multi_optimize_tp_24h/（本包内 00temp 子目录）
+  整理过程日志       → 00log/（本文件；一次整理过程对应一份）
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 区分核心算法与工具：工具迁入 src/utils
+  [x] 共享 multipro / data_prepare：删本地副本，统一用 00temp/utils
+  [x] logger / util_env 迁入 src/utils；根 utils 仅路径合并
+  [x] 抽出 process(...)；保留 mainProcess 兼容；非法 raise 改为 ValueError
+  [x] 外层多进程：原 Pool.starmap → SimpleParallelTool
+      （任务粒度仍为本算法「起报×时效」，非照搬 mait 结构；单任务仍进 correctTP_24）
+  [x] CLI 调度 process；补充中文参数说明与示例（plugin/rpt-list/is-multi/pro-count）
+  [x] 目录/代号更名为 multi_optimize_tp_24h
+  [x] 新增/同步 NIMM_list.md、00temp/、本日志及仓库根 00log 摘要
+
+三、试跑记录
+--------------------------------------------------------------------------------
+  通过:
+    python -m cli --help
+    python -m pytest test/test_multi_optimize_tp_24h.py -q
+      → 含 test_schedule_matches_legacy_pool_tasks（任务集与原 Pool 一致）
+    from utils.multipro_plugin / data_prepare_plugin → 加载自 00temp/utils
+    from correct_tp_24h import process
+
+  未验证 / 需数据环境:
+    完整业务路径端到端订正
+    → 配置 plugin JSON 与起报后建议:
+      python -m cli --plugin=resource/plugin/ecmwf.json
+      python -m cli --rpt-list=YYYYMMDDHH --is-multi true --pro-count 8
+      python src/correct_tp_24h.py
+
+四、仍存在问题（需人工补充）★
+--------------------------------------------------------------------------------
+  下列目录/事项仍有缺口，需人工处理后再更新本日志或新建下一份整理 log：
+
+  [ ] 贡献人 / 原始绝对路径完整登记（本日志页眉「原始来源」）
+  [ ] resource/ 样例与输出体积大 → 正式入库前筛选；勿放入 00temp 大文件
+  [ ] test/test_compare_version.py 硬编码外盘路径 → 可配置或移出 CI
+  [ ] resource/plugin/*.json 业务绝对路径 → 按部署环境修改
+  [ ] 尚未迁入正式 NIMM/ 目录（当前仅在 00temp/multi_optimize_tp_24h/）
+  [ ] 完整业务端到端未在本环境复跑；改造前后数值对比未归档
+  [ ] 00temp/multi_optimize_tp_24h/ 仅 .gitkeep 占位 → 有对照中间文件时放入并记日志
+  [ ] nbs 内容是否仍写旧代号/入口 → 人工核对
+
+五、调用方式（正式）
+--------------------------------------------------------------------------------
+  模块调度:
+    from correct_tp_24h import process
+    process(plugin="resource/plugin/ecmwf.json",
+            is_multi=True, pro_count=8,
+            rpt_times=["2025100100", "2025100112"])
+
+  直跑（改 src/correct_tp_24h.py 的 __main__ 传参）:
+    python src/correct_tp_24h.py
+
+  命令行:
+    python -m cli --help
+    python -m cli --plugin=resource/plugin/ecmwf.json
+    python -m cli --rpt-list=2025100100,2025100112 --is-multi true --pro-count 8
+
+六、规范目录说明（本仓库约定）
+--------------------------------------------------------------------------------
+  00temp/       存放算法整理过程中的中间数据
+                （本算法：包内 00temp/multi_optimize_tp_24h/）
+  00log/        存放原始算法整理过程日志；一次整理过程对应一个 log（本文件）；
+                并记录哪些目录/事项仍有问题、需人工补充
+  NIMM_list.md  以表格记录已整理算法：算法种类、功能、更新时间、贡献人、
+                各目录位置、仍存在问题等
+
+================================================================================
+日志结束 — 下次整理请新建 00log/<算法代号>_整理_<YYYYMMDD>.log
+================================================================================

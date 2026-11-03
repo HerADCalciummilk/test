@@ -1,0 +1,5 @@
+{
+  "tp_model": "/data/cpvs/DataBase/MOD/ECMWF/tp/model/{rpt:%Y%m%d}/{rpt:%Y%m%d%H}.{dtime:03d}",
+  "tp_obs": "/data/cpvs/DataBase/MOD/ECMWF/tp/obs/{rpt:%Y%m%d}/{rpt:%y%m%d%H}.000",
+  "correct_tp_outpath": "/data/PRODUCT/rain24/ECMWF/{rpt:%Y%m%d%H}/{rpt:%Y%m%d%H}.{dtime:03d}"
+}

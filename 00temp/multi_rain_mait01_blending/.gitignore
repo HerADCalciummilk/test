@@ -1,0 +1,21 @@
+# 整理过程中间数据（保留目录结构与 README）
+00temp/**/*
+!00temp/README.md
+!00temp/**/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.idea/
+
+# 业务运行日志（由 mait_1.ini log_file 写出）
+log/
+
+# 本地验证输出
+verify_results*.csv
+verify_results.h5
+ts_*.png

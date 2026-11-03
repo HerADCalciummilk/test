@@ -1,0 +1,24 @@
+<xarray.DataArray 'air_temperature' (member: 1, level: 1, time: 1, dtime: 1,
+                                     lat: 51, lon: 51)> Size: 10kB
+array([[[[[[11.9, 11.1,  9.9, ..., 15.4, 15.5, 16.6],
+           [13.2, 12.9, 11.6, ..., 15.9, 15.6, 16.4],
+           [12.7, 11.5,  9.2, ..., 15.6, 15.1, 15.7],
+           ...,
+           [-1.1, -0.6,  0.1, ..., 14.8, 14.3, 14.4],
+           [-0.9, -0.6, -0.5, ..., 16.3, 15.8, 15.9],
+           [ 0. , -0.2, -0.7, ..., 16.4, 16.4, 16.1]]]]]],
+      shape=(1, 1, 1, 1, 51, 51), dtype=float32)
+Coordinates:
+  * member   (member) <U5 20B 'data0'
+  * level    (level) float32 4B 0.0
+  * time     (time) datetime64[ns] 8B 2026-10-10
+  * dtime    (dtime) int32 4B 0
+  * lat      (lat) float64 408B 28.0 28.1 28.2 28.3 28.4 ... 32.7 32.8 32.9 33.0
+  * lon      (lon) float64 408B 103.0 103.1 103.2 103.3 ... 107.8 107.9 108.0
+Attributes:
+    units:        ℃
+    model_var:    
+    dtime_units:  hour
+    level_type:   isobaric
+    time_type:    UT
+    time_bounds:  [np.int64(0), np.int64(0)]

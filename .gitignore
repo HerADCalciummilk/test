@@ -20,3 +20,53 @@ __pycache__/
 
 # 压缩包
 *.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.7z
+*.rar
+
+# 虚拟环境 venv
+venv/
+.venv/
+.env/
+.env.local/
+.env.development.local/
+.env.test.local/
+.env.production.local/
+.venv/
+
+# 数据 / 二进制场（勿提交；含大小写扩展名）
+**/*.nc
+**/*.NC
+**/*.csv
+**/*.CSV
+**/*.m4
+**/*.m3
+**/*.grb2
+**/*.GRB2
+**/*.grib2
+**/*.GRIB2
+**/*.idx
+**/*.png
+**/*.PNG
+**/*.jpg
+**/*.JPG
+**/*.jpeg
+**/*.h5
+**/*.H5
+**/*.hdf5
+**/*.bin
+**/*.dat
+**/*.npy
+**/*.npz
+**/hrcldas_tair/
+**/resource/case_output/
+**/resource/cmpas*/
+**/resource/ec_*/
+
+# cursor配置
+.cursorrules
+.cursor/

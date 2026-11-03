@@ -1,0 +1,5 @@
+{
+  "tp_model": "/data/mnt/107_sm_model/rain24/ecmwf/{rpt:%Y%m%d}/{rpt:%Y%m%d%H}.{dtime:03d}",
+  "tp_obs": "/data/mnt/107_Observation/r24/sfc/{rpt:%y%m%d%H}.000",
+  "correct_tp_outpath": "/data/code/nimm_pip_repos/multi_optimize_tp_24h/resource/output/rain24/ecmwf/{rpt:%Y%m%d%H}/{rpt:%Y%m%d%H}.{dtime:03d}"
+}

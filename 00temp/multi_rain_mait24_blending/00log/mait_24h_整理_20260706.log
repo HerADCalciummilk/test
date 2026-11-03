@@ -1,0 +1,52 @@
+================================================================================
+算法整理日志
+================================================================================
+算法名称    : MAIT 24h 降水自适应集成
+整理批次    : 20260706-001
+开始时间    : 2026-07-06
+操作人      : （待填）
+================================================================================
+
+【1. 原始来源】
+- 来源路径/服务器: 107 服务器实时运行版本（反编译 Python 版，见 README.md）
+- 原始版本/分支: Mait24 小时 Python 版
+
+【2. 整理步骤记录】
+[x] 代码拷贝与目录规划
+[x] 依赖与配置梳理（resource/mait_24.ini、para_24.ini 等）
+[x] 模块拆分（src/、utils/、src/utils/ 经 extend_path 合并）
+[x] 命令行入口（cli/ → src/mait_24h.py、cli/verify.py）
+[x] 单元测试（test/test_run_context.py、test/test_mait_24h_cli_flow.py 等）
+[ ] 文档与 NIMM_list.md 全面同步
+
+【3. 迁入仓库目录对照】
+| 功能           | 正式路径 |
+|----------------|----------|
+| 主程序         | `src/mait_24h.py` |
+| 插件/算法      | `src/mait_24_plugin.py`、`src/mait_24_plugin_util.py` |
+| 核心工具       | `src/utils/util_new.py`、`util_env.py`、`util_context.py`、`util_mask_file.py` |
+| 通用工具       | `utils/multipro_plugin.py`、`base_plugin.py`、`data_prepare_plugin.py` 等 |
+| 配置与资源     | `resource/mait_24.ini`、`para_24.ini`、`para_24_background.ini`、`mask010.nc` 等 |
+| 检验           | `cli/verify.py` |
+| 命令行         | `cli/__main__.py`（`python -m cli` / `python -m cli verify`） |
+| 说明文档       | `docs/MAIT_24H_程序说明.md`、`nbs/mait_24h_说明.ipynb` |
+
+【4. 试跑记录】
+- 试跑命令: `python -m cli --help`；`python -m pytest test/test_run_context.py test/test_mait_24h_cli_flow.py`
+- 结果摘要: CLI 与核心单元测试通过（11 项）
+
+【5. 仍存在问题 — 需人工补充】
+| 序号 | 目录/文件 | 问题描述 | 优先级 | 负责人 | 状态 |
+|------|-----------|----------|--------|--------|------|
+| 1 | `docs/`、`nbs/`、`README.md` | 仍引用旧名 `mait_24h_cli.py`、`mai_24_plugin_context.py`、`mait_24_verify.py` | 中 | | 待处理 |
+| 2 | `resource/data/` | 部分为本地试跑样例数据，生产路径需在部署环境核对 | 低 | | 待处理 |
+| 3 | `utils/data_distribute_pulgin.py` | 文件名拼写 pulgin，扩展插件未纳入主流程验证 | 低 | | 待处理 |
+| 4 | `00temp/` | 本次整理中间文件目录已建，历史中间数据待归档或清理 | 低 | | 待处理 |
+
+【6. 备注】
+- `utils` 包通过 `utils/__init__.py` 的 extend_path 合并 `src/utils/`，后者勿添加 `__init__.py`。
+
+
+================================================================================
+日志结束
+================================================================================

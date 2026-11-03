@@ -1,0 +1,7 @@
+{
+  "lat_min": 16.0,
+  "lat_max": 59.0,
+  "lon_min": 71.0,
+  "lon_max": 139.0,
+  "note": "intersection of EC/obs/HGT with margin; fill |v|>1e5 -> nan"
+}

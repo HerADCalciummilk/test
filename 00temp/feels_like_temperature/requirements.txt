@@ -1,0 +1,11 @@
+# feels_like_temperature 运行 CLI / 算法所需依赖（精简）
+# 需要 Python >= 3.9（推荐 3.10/3.11）；勿在 3.7 上安装
+#
+# 用法（venv 内）:
+#   pip install -U pip
+#   pip install -r requirements.txt
+
+meteva_base>=0.3.0
+cf-units
+numpy
+xarray

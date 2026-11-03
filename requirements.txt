@@ -1,0 +1,43 @@
+﻿# NIMM algo repo - all pip dependencies for container smoke (ASCII-only for Windows pip/GBK)
+#
+# Includes former core + extra sets:
+#   core:  meteva_base, meteva, numpy, xarray, pandas, scipy, netCDF4, h5py, cf-units, matplotlib
+#   extra: pyproj, cartopy (regrid); statsmodels, numba (emos); pygam (samos)
+#
+# Not included: iris, opencv, scikit-image, clize, geopandas, eccodes, business .so, etc.
+#
+# Requires: Python >= 3.9 (recommend 3.10/3.11). Do not install on 3.7.
+#
+# --- Download on a machine with internet (linux wheels for container py311) ---
+#   mkdir wheels
+#   pip download -r requirements.txt -d wheels ^
+#       --python-version 311 ^
+#       --platform manylinux2014_x86_64 ^
+#       --only-binary=:all:
+#   If some packages lack binary wheels, retry without --only-binary=:all:
+#   or use --platform manylinux_2_17_x86_64
+#   Zip wheels -> wheels.zip and copy into the container.
+#
+# --- Install inside container (venv activated) ---
+#   cd ~/NIMM_pip_repos
+#   unzip -o wheels.zip
+#   pip install ./wheels/*.whl
+#   python -c "import meteva_base,meteva,xarray,numpy,scipy,pandas,netCDF4,h5py,cf_units,matplotlib,pyproj,cartopy,statsmodels,pygam,numba; print('deps ok')"
+#
+
+meteva_base>=0.3.0
+meteva
+numpy
+xarray
+pandas
+scipy
+netCDF4
+h5py
+cf-units
+matplotlib
+python-dateutil
+pyproj
+cartopy
+statsmodels
+pygam
+numba

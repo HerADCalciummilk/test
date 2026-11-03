@@ -1,0 +1,51 @@
+================================================================================
+算法整理日志 — 阵风系数（gust_factor）
+================================================================================
+整理日期   : 2026-09-04
+算法代号   : gust_factor
+仓库目录   : gust_factor/
+整理阶段   : 原始算法入仓整理（process/CLI、util_env、登记清单、文档与烟测）
+贡献人     : （待补）
+原始来源   : GustFactorForNimm/（gust_param_analysis.py + gust_param_analysis_cli.py）
+================================================================================
+说明：一次「原始算法整理过程」对应本文件一份日志；中间数据见 00temp/；
+      清单见 NIMM_list.md。仍有问题见第四节「需人工补充」。
+================================================================================
+
+一、目录映射
+--------------------------------------------------------------------------------
+  gust_param_analysis.py      → src/gust_factor.py（算法核 + process，无独立 runner）
+  gust_param_analysis_cli.py  → cli/__main__.py + process 调度逻辑
+  gust_factor/*.csv|*.nc|json  → resource/test_data、resource/sample、resource/
+  （新增）                    → util_env / ini / docs / nbs / test / 00log / 00temp
+  格点读写                    → meteva_base.read/write_griddata_from/to_nc
+                               （原示例用 xarray.open_dataset / to_netcdf）
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] NIMM 目录：cli / docs / nbs / src / resource / test / utils
+  [x] process 置于 src/gust_factor.py（不强制 runner）
+  [x] resource/gust_factor.ini；util_env 解析
+  [x] 文档含：算法说明 / 原理 / 实现方法 / 应用 / 调用
+  [x] 代码文档字符串、方法注释、关键行间注释
+  [x] 布局 / util_env / 烟测脚手架；样例数据迁入 resource/
+
+三、试跑记录
+--------------------------------------------------------------------------------
+  建议验证:
+    cd gust_factor
+    python -m cli --help
+    python -m pytest test/ -q
+    python -m cli --mode=all
+
+四、仍存在问题（需人工补充）★
+--------------------------------------------------------------------------------
+  [ ] 贡献人 / 原始绝对路径完整登记
+  [ ] 与 GustFactorForNimm 业务输出对照
+  [ ] requirements 版本锁定
+  [ ] 00temp/gust_factor/ 仅占位
+
+五、备注
+--------------------------------------------------------------------------------
+  原始目录 GustFactorForNimm/ 对照保留，验证后可归档。
+================================================================================

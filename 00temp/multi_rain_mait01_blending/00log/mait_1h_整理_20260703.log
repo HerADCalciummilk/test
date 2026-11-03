@@ -1,0 +1,144 @@
+================================================================================
+算法整理日志 — MAIT 1h 降水自适应集成
+================================================================================
+整理日期   : 2026-07-03
+最后扫描   : 2026-07-03 16:35（全量目录扫描，非 git diff；仓库未初始化 git）
+算法代号   : mait_1h
+仓库目录   : mait_1h/
+整理阶段   : NIMM 标准化格式改造（源码重组 + CLI 接入 + 检验拆分 + 工具模块归位）
+贡献人     : 待补充
+原始来源   : 待补充（请填写原脚本/工程路径或版本号）
+================================================================================
+
+一、目录映射（原 → 现）
+--------------------------------------------------------------------------------
+  主入口           → src/mait_1h.py（原 mait_1h_cli.py 已合并/更名）
+  命令行路由       → cli/__main__.py
+  预报集成 CLI     → src/mait_1h.py（Clize）
+  检验 CLI         → cli/verify.py（原 src/mait_1_verify.py）
+  TS 融合/插值     → src/mait_1_plugin.py
+  读数/background  → src/mait_1_plugin_util.py
+  运行上下文       → src/utils/util_context.py（原 utils/mai_1_plugin_context.py）
+  配置解析         → src/utils/util_env.py（自 utils/ 迁入）
+  I/O / Micaps/FM  → src/utils/util_new.py（自 utils/ 迁入）
+  插件基类/多进程  → utils/base_plugin.py、utils/multipro_plugin.py（留根目录）
+  检验数据准备     → utils/data_prepare_plugin.py
+  数据分发（辅）   → utils/data_distribute_pulgin.py
+  运行配置         → resource/mait_1.ini、resource/para*.ini、resource/sta.info
+  程序说明         → docs/MAIT_1H_程序说明.md
+  原理 notebook    → nbs/mait_1h_说明.ipynb
+  单元测试         → test/test_run_context.py
+  批量业务脚本     → test/mait_1_nimm_test.py、test/test_mait_1h.py
+  整理清单         → NIMM_list.md
+  整理中间数据     → 00temp/mait_1h/
+  整理过程日志     → 00log/（本文件）
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 主流程统一为 src/mait_1h.py，Clize CLI（python -m cli / python src/mait_1h.py）
+  [x] 检验模块迁入 cli/verify.py，子命令：prepare / result / ts / plot-dt
+  [x] cli/__main__.py 路由：verify → cli.verify；其余 → src/mait_1h.py
+  [x] util_env.py、util_new.py 自根 utils/ 迁入 src/utils/
+  [x] mai_1_plugin_context.py 重命名为 util_context.py，全项目 import 已改
+  [x] RunContext / build_run_context 接入 RunProcess._setup_context
+  [x] _bootstrap_paths：src 优先于根 utils，根 utils/ 以扁平 import 加载插件
+  [x] test/test_mait_1h.py、test/mait_1_nimm_test.py：mait_1h_cli → mait_1h，path 引导对齐
+  [x] test/test_run_context.py 三项单元测试通过（2026-07-03 复验）
+  [x] 建立 NIMM 规范目录：00temp/、00log/、NIMM_list.md、.gitignore
+  [x] resource/mask010.dat、mask010.nc 已存在于 resource/
+
+三、文件变更扫描（2026-07-03）
+--------------------------------------------------------------------------------
+  【新增】
+    cli/__init__.py、cli/__main__.py、cli/verify.py
+    src/utils/__init__.py、src/utils/util_env.py、src/utils/util_new.py、src/utils/util_context.py
+    00temp/README.md、00temp/mait_1h/.gitkeep
+    00log/README.md、00log/mait_1h_整理_20260703.log
+    NIMM_list.md、.gitignore
+
+  【自根 utils/ 迁出（原路径不再存在）】
+    utils/util_env.py      → src/utils/util_env.py
+    utils/util_new.py      → src/utils/util_new.py
+    utils/mai_1_plugin_context.py → src/utils/util_context.py（并改名）
+
+  【删除 / 不再存在】
+    src/mait_1_verify.py（功能合并至 cli/verify.py）
+    test/test_20260601.py（当前目录中已不存在，可能为早期本地脚本）
+
+  【源码 import 引用（已对齐，扫描通过）】
+    src/mait_1h.py          → utils.util_context / util_env / util_new；multipro_plugin
+    src/mait_1_plugin.py    → utils.util_context / util_new；base_plugin
+    src/mait_1_plugin_util.py → utils.util_context / util_new
+    src/utils/util_new.py   → utils.util_context
+    cli/verify.py           → data_prepare_plugin（延迟 import）
+    utils/data_prepare_plugin.py → multipro_plugin
+    test/test_run_context.py → utils.util_context / util_env
+
+  【文档 / 注释仍引用旧路径（未改）】
+    docs/MAIT_1H_程序说明.md     — mait_1h_cli.py、src/mait_1_verify.py、utils/util_*
+    nbs/mait_1h_说明.ipynb       — 同上
+    nbs/.../mait_1h_说明-checkpoint.ipynb — 同上
+    src/mait_1h.py 模块 docstring — 仍写 src/mait_1h_cli.py
+
+  【缓存残留（可清理，不影响运行）】
+    cli/__pycache__/mait_1_verify.cpython-38.pyc
+    src/utils/__pycache__/mai_1_plugin_context.cpython-38.pyc
+    utils/__pycache__/util_env.cpython-38.pyc、util_new.cpython-38.pyc 等
+
+四、仍存在问题（需人工补充）
+--------------------------------------------------------------------------------
+  [ ] 贡献人、原始代码来源路径 — NIMM_list.md 与本日志待补
+  [ ] requirements-cli.txt 缺失 — docs 引用但仓库中无此文件
+  [ ] 文档与 docstring 路径未同步 — 见第三节「文档仍引用旧路径」清单
+  [ ] 双 utils 包并存 — src/utils/（核心）与根 utils/（插件）依赖 _bootstrap_paths
+  [ ] 业务数据路径 — local.ini / para_1.ini、background.ini 中为生产绝对路径，离线无法跑通主流程
+  [ ] test/test_ob.py、test/test_ob_fo.py、test/test_verify_cma3km.py — 依赖外部数据/路径，
+      非标准单元测试；pytest 全量收集可能报错
+  [ ] beta npy 权重链 — mait_1.ini 配 beta_path_template，主 TS 融合路径未用 npy 链
+  [ ] notebook §8 改造前后对比 — 需在新目录结构下重新验证
+  [ ] 生产 para_ini — 本地默认 resource/local.ini，生产建议 para_1.ini
+  [ ] 仓库未初始化 git — 无法通过 git diff 追踪变更，建议后续 init 并首次提交
+
+五、验证记录（2026-07-03 16:35 复验）
+--------------------------------------------------------------------------------
+  通过:
+    python src/mait_1h.py --help
+    python -m cli --help
+    python -m cli verify --help
+    python -m pytest test/test_run_context.py -q   → 3 passed
+
+  模块 import 抽检（bootstrap 后）:
+    mait_1h / mait_1_plugin / util_context / util_env / util_new / cli.verify → OK
+
+  未验证 / 需数据环境:
+    python -m cli --time-inputs=<起报>
+    python -m cli verify ts --h5-file=...
+    python -m cli verify prepare --para-file=...
+    test/mait_1_nimm_test.py 批量起报
+
+六、当前仓库目录树（核心文件，不含 .idea / __pycache__）
+--------------------------------------------------------------------------------
+  mait_1h/
+  ├── 00log/          README.md, mait_1h_整理_20260703.log
+  ├── 00temp/         README.md, mait_1h/.gitkeep
+  ├── cli/            __main__.py, verify.py
+  ├── docs/           MAIT_1H_程序说明.md
+  ├── nbs/            mait_1h_说明.ipynb
+  ├── resource/       mait_1.ini, para*.ini, para_1_background.ini,
+  │                   sta.info, mask010.dat, mask010.nc, ...
+  ├── src/            mait_1h.py, mait_1_plugin.py, mait_1_plugin_util.py
+  │   └── utils/      util_context.py, util_env.py, util_new.py
+  ├── test/           test_run_context.py, test_mait_1h.py, mait_1_nimm_test.py,
+  │                   test_verify_cma3km.py, test_ob.py, test_ob_fo.py
+  ├── utils/          base_plugin.py, multipro_plugin.py,
+  │                   data_prepare_plugin.py, data_distribute_pulgin.py
+  ├── NIMM_list.md
+  └── .gitignore
+
+七、中间数据（00temp/mait_1h/）
+--------------------------------------------------------------------------------
+  当前为空（仅 .gitkeep）。整理对照样本、HDF、迁移备份请放入此目录。
+
+================================================================================
+日志结束 — 下次整理请新建 00log/<算法代号>_整理_<YYYYMMDD>.log
+================================================================================

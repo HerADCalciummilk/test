@@ -1,0 +1,18 @@
+{
+  "grid": {
+    "lon_start": 70.0,
+    "lon_end": 140.0,
+    "lat_start": 0.0,
+    "lat_end": 60.0,
+    "dlon": 0.1,
+    "dlat": 0.1,
+    "expand": 1.0,
+    "background_stride": 5,
+    "short_lon_edges": [70.0, 75.0, 85.0, 95.0, 105.0, 115.0, 125.0, 135.0, 140.0],
+    "short_lat_edges": [0.0, 5.0, 15.0, 25.0, 35.0, 45.0, 55.0, 60.0],
+    "long_lon_edges": [70.0, 140.0],
+    "long_lat_edges": [0.0, 60.0]
+  }
+}
+
+

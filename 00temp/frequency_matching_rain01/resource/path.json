@@ -1,0 +1,20 @@
+{
+  "default": "ecmwf",
+  "configs": {
+    "ecmwf": {
+      "model_template": "/data/mnt/84_sm_model/rain01/ecmwf/YYYYMMDD/YYYYMMDDHH.VVV",
+      "fact_template": "D:/workspace/test/00temp/frequency_matching_rain01/resource/data/R01_national/sfc/YYYYMMDD/h01_YYYYMMDDHH00.m3",
+      "output_template": "D:/workspace/test/00temp/frequency_matching_rain01/resource/data/output/ecmwf_cli_test/YYYYMMDD/YYYYMMDDHH.VVV"
+    },
+    "grapes_3km": {
+      "model_template": "/data/mnt/84_sm_model/rain01/grapes_3km/YYYYMMDD/YYYYMMDDHH.VVV",
+      "fact_template": "/data/mnt/107_Observation/R01_national/sfc/YYYYMMDD/h01_YYYYMMDDHH00.m3",
+      "output_template": "/data/code/nimm_pip_repos/multi_qpf_fm_rain01/resource/data/output/rain01/grapes_3km_nimm/YYYYMMDD/YYYYMMDDHH.VVV"
+    }
+  }
+}
+
+
+
+
+

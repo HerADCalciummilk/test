@@ -1,0 +1,53 @@
+================================================================================
+算法整理日志 — 站点高差订正
+================================================================================
+整理日期   : 2026-07-31
+算法代号   : station_height_difference_correction
+仓库目录   : 00temp/station_height_difference_correction/
+整理阶段   : NIMM 标准化目录结构整理
+贡献人     : 郭云谦、王亭波
+原始来源   : D:\workspace\improver\dz_rescaling（原包名 `dz_rescaling`）
+================================================================================
+
+一、目录映射（原 → 现）
+--------------------------------------------------------------------------------
+  核心算法             → src/dz_rescaling.py（EstimateDzRescaling、ApplyDzRescaling）
+  模块工具             → src/utils/_sta.py（站点表列校验与对齐）
+  插件基类             → utils/base_plugin.py（BasePlugin / PostProcessingPlugin）
+  CLI                  → cli/dsc_estimate_dz_rescaling.py、cli/dsc_apply_dz_rescaling.py
+  文档                 → docs/dz_rescaling.md、docs/station_height_difference_correction.md
+  notebook             → nbs/dz_rescaling_validation.ipynb
+  测试                 → test/test_dz_rescaling_unit.py
+  算法清单             → NIMM_list.md（本目录）
+  算法中间数据         → 00temp/station_height_difference_correction/
+  算法整理日志         → 00log/station_height_difference_correction_整理_20260731.log
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 自 improver/dz_rescaling 同步 src/、utils/、cli/、test/、docs/、nbs/
+  [x] 模块名保持 station_height_difference_correction；包内绝对导入未改算法计算骨架
+  [x] 建立算法内 00log/、00temp/、NIMM_list.md、.gitignore；空 resource/
+  [x] 未同步 test_data/（约 3.07MB、21 文件）；缺官方样例时 CLI 冒烟会跳过；CLI 直跑缺样例时提示而不崩溃
+  [x] 原算法目录 pytest：27 passed（improver venv，2026-07-31）
+  [x] 中间目录 pytest：26 passed, 1 skipped（2026-07-31；缺 test_data 时 CLI 冒烟跳过）
+
+三、仍存在问题 — 需人工补充
+--------------------------------------------------------------------------------
+  [ ] 入库路径：补充至 NIMM/04single_calibration/ 时需调整为仓库正式包路径
+  [ ] BasePlugin：正式入库时评估是否改为仓库统一基类
+  [ ] test_data：样例是否纳入 NIMM_pip_testdata / 正式仓库，后续决定
+  [ ] resource/：当前为空；正式入库时确认是否需要
+
+四、验证记录
+--------------------------------------------------------------------------------
+  原目录  : 27 passed（improver venv，2026-07-31）
+  中间目录: 26 passed, 1 skipped（2026-07-31）
+================================================================================
+
+五、2026-08-05 模块更名
+--------------------------------------------------------------------------------
+  [x] 中间目录与导入包名：dz_rescaling → station_height_difference_correction
+  [x] 类名保留：EstimateDzRescaling、ApplyDzRescaling
+  [x] 源文件 src/dz_rescaling.py 与 CLI 脚本名未改
+  [x] 原始路径仍为 D:\workspace\improver\dz_rescaling
+================================================================================

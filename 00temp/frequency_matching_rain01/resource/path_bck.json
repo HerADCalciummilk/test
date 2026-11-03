@@ -1,0 +1,19 @@
+{
+  "default": "ecmwf",
+  "configs": {
+    "ecmwf": {
+      "model_template": "/data/mnt/84_sm_model/rain01/ecmwf/YYYYMMDD/YYYYMMDDHH.VVV",
+      "fact_template": "/data/mnt/107_Observation/R01_national/sfc/YYYYMMDD/h01_YYYYMMDDHH00.m3",
+      "output_template": "/data/mnt/234data1/GUO_data/250825_smqpf/rain01/ecmwf_V2/YYYYMMDD/YYYYMMDDHH.VVV"
+    },
+    "grapes_3km": {
+      "model_template": "/data/mnt/84_sm_model/rain01/grapes_3km/YYYYMMDD/YYYYMMDDHH.VVV",
+      "fact_template": "/data/mnt/107_Observation/R01_national/sfc/YYYYMMDD/h01_YYYYMMDDHH00.m3",
+      "output_template": "/data/mnt/234data1/GUO_data/250825_smqpf/rain01/grapes_3km_V2/YYYYMMDD/YYYYMMDDHH.VVV"
+    }
+  }
+}
+
+
+
+

@@ -1,0 +1,116 @@
+================================================================================
+算法整理日志 — 逐1小时降水频率匹配订正（multi_qpf_fm_rain01）
+================================================================================
+整理日期   : 2026-07-23
+算法代号   : multi_qpf_fm_rain01（整理中由 qpf_fm_rain01 更名）
+仓库目录   : 00temp/multi_qpf_fm_rain01/
+整理阶段   : 原始算法入仓整理（src 结构、CLI/process 分离、共享 utils、登记清单）
+贡献人     : 曹勇（程序横幅）；整理登记待补全
+原始来源   : 原版 QPFFrequencyMatch_Rain01（见 docs/multi_qpf_fm_rain01_算法说明.md）
+仓库索引   : 仓库根 00log/multi_qpf_fm_rain01.md
+================================================================================
+说明：一次「原始算法整理过程」对应本文件一份日志；中间数据见 00temp/；
+      清单见 NIMM_list.md。仍有问题目录与事项见第五节「需人工补充」。
+================================================================================
+
+一、目录映射（现结构）
+--------------------------------------------------------------------------------
+  主程序 / 可调度入口 → src/runner.py
+                        process(...) 调度流水线；__main__ 直接传参
+  CLI 路由           → cli/__main__.py（argparse → runner.process；中文 --help）
+  算法核心 src/proc/ →
+    ensemble.py          TS+BIAS 相似个例评分与排序
+    optical_flow.py      光流风场估计
+    rain_extrapolation.py 半拉格朗日降水平流
+    frequency_match.py   CDF 分位数频率匹配
+    spatial_analysis.py  Cressman 插值、站点约束
+  本包工具 src/utils/ → types.py / verify.py / log.py / string_process.py
+                        util_env.py / util_paths.py
+                        （经根 utils/__init__.py 合并；from utils.xxx import ...）
+  共享插件           → 00temp/utils/multipro_plugin.py、data_prepare_plugin.py
+                        （根 utils 仅合并路径；包内不放副本）
+  运行配置           → resource/qpf_fm.ini、path.json、config.json、
+                        sta.info、mask010.dat
+  单元测试           → test/test_multi_qpf_fm_rain01.py、
+                        test_runner_config.py、test_util_env.py
+  程序说明           → docs/multi_qpf_fm_rain01_算法说明.md、README.md
+                        nbs/qpf_fm_rain01_说明.ipynb（旧名 notebook，待人工同步）
+  整理清单           → NIMM_list.md
+  整理中间数据       → 00temp/multi_qpf_fm_rain01/（本包内 00temp 子目录）
+  整理过程日志       → 00log/（本文件；一次整理过程对应一份）
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 明确主程序为 src/runner.py，梳理 src/proc、src/utils 职责
+  [x] 抽出 process(data_key, run_times, sample_workers, block_workers,
+      fixed_seed, is_multi, pro_count) 供外部模块调用
+  [x] __main__ 改为直接 process(...) 传参（不再依赖 argv）
+  [x] cli/__main__.py 改为 import process；支持旧位置参数 + 命名参数；中文 --help
+  [x] 外层多起报并行对齐 mait：is_multi / pro_count + SimpleParallelTool
+  [x] 共享 utils：删除本地 multipro_plugin / data_prepare_plugin 副本，
+      统一使用 00temp/utils（已核对 data_prepare 与删前本地字节一致；
+      主流程 runner 不调用 data_prepare，订正结果不受影响）
+  [x] 算法专用工具迁入 src/utils；根 utils/__init__.py 仅路径合并
+  [x] 目录/算法代号由 qpf_fm_rain01 更名为 multi_qpf_fm_rain01
+  [x] 新增/同步 README.md、NIMM_list.md、00temp/、本日志及仓库根 00log 摘要
+  [x] 保留 runner.main(argv) 兼容旧调用
+
+三、试跑记录
+--------------------------------------------------------------------------------
+  通过:
+    python -m cli --help
+    python -m pytest test/test_runner_config.py \
+      test/test_multi_qpf_fm_rain01.py test/test_util_env.py -q
+      → 8 passed
+    from utils.multipro_plugin / utils.data_prepare_plugin
+      → 加载自 00temp/utils/...
+
+  未验证 / 需数据环境:
+    完整业务路径下端到端订正、多进程 is_multi
+    → 配置 resource/qpf_fm.ini 与 path 后建议执行:
+      python src/runner.py
+      python -m cli ecmwf YYYYMMDDHHMM
+      python -m cli ecmwf YYYYMMDDHHMM --is-multi --pro-count 4
+
+四、仍存在问题（需人工补充）★
+--------------------------------------------------------------------------------
+  下列目录/事项仍有缺口，需人工处理后再更新本日志或新建下一份整理 log：
+
+  [ ] 贡献人 / 原始绝对路径完整登记（本日志「贡献人」「原始来源」）
+  [ ] docs/、nbs/ 中旧入口或旧代号文案（如 notebook 文件名仍含 qpf_fm_rain01；
+      「cli 转调 runner」等表述）→ 人工核对并同步
+  [ ] requirements.txt 文档提及但包内缺失 → 按 numpy/meteva 等补全并入库
+  [ ] resource/data/ 运行样例体积大 → 正式入库前筛选最小集；勿放入 00temp 大文件
+  [ ] 尚未迁入正式 NIMM/ 目录（当前仅在 00temp/multi_qpf_fm_rain01/）
+  [ ] 完整业务端到端未在本环境复跑；改造前后数值对比未归档
+  [ ] 00temp/multi_qpf_fm_rain01/ 仅 .gitkeep 占位 → 有对照中间文件时放入并记日志
+  [ ] nbs/ 说明 notebook 文件名/内容未随 multi_ 更名同步
+
+五、调用方式（正式）
+--------------------------------------------------------------------------------
+  模块调度:
+    from runner import process
+    process(data_key="ecmwf", run_times=["202604081130"],
+            is_multi=False, pro_count=4)
+
+  直跑（改 src/runner.py 的 __main__ 传参）:
+    python src/runner.py
+
+  命令行:
+    python -m cli --help
+    python -m cli ecmwf 202604081130
+    python -m cli --data-key ecmwf --start 202604081130 --end 202604081800
+    python -m cli ecmwf 202604081130 --is-multi --pro-count 4
+
+六、规范目录说明（本仓库约定）
+--------------------------------------------------------------------------------
+  00temp/       存放算法整理过程中的中间数据
+                （本算法：包内 00temp/multi_qpf_fm_rain01/）
+  00log/        存放原始算法整理过程日志；一次整理过程对应一个 log（本文件）；
+                并记录哪些目录/事项仍有问题、需人工补充
+  NIMM_list.md  以表格记录已整理算法：算法种类、功能、更新时间、贡献人、
+                各目录位置、仍存在问题等
+
+================================================================================
+日志结束 — 下次整理请新建 00log/<算法代号>_整理_<YYYYMMDD>.log
+================================================================================

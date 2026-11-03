@@ -1,0 +1,17 @@
+# 整理过程中间数据（保留目录结构与 README）
+00temp/**/*
+!00temp/README.md
+!00temp/**/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.idea/
+
+# 本地验证临时输出
+*_tmp.nc
+cli_test_tmp.nc

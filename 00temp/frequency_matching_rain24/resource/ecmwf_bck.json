@@ -1,0 +1,5 @@
+{
+  "tp_model": "\\\\10.20.90.107\\sm_model\\rain24\\ecmwf\\{rpt:%Y%m%d}\\{rpt:%Y%m%d%H}.{dtime:03d}",
+  "tp_obs": "\\\\10.20.90.107\\Observation\\r24\\sfc\\{rpt:%y%m%d%H}.000",
+  "correct_tp_outpath": "\\\\10.28.16.186\\data\\temp\\0823_rain24_test\\st_qpf\\rain24\\ecmwf\\{rpt:%Y%m%d%H}\\{rpt:%Y%m%d%H}.{dtime:03d}"
+}

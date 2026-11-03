@@ -1,0 +1,87 @@
+================================================================================
+算法整理日志 — MAIT 24h 降水自适应集成
+================================================================================
+整理日期   : 2026-07-23
+算法代号   : mait_24h / multi_rain_mait24_blending
+仓库目录   : 00temp/multi_rain_mait24_blending/
+整理阶段   : 入口职责分离（CLI → cli；mait_24h 仅 process + __main__ 传参）
+贡献人     : 郝书剑、赵如奇、杨宸源（算法包清单）；原始整理另见仓库根 00log
+前次日志   : 00log/mait_24h_整理_20260706.log（NIMM 标准化初整）
+原始来源   : D:\temp\202301_zhinengwangge\20230206_unitycode\NIMM_pip_repos\TEMP\260625\mait_24h
+================================================================================
+
+一、目录映射（现结构）
+--------------------------------------------------------------------------------
+  算法核心           → src/mait_24_plugin.py、src/mait_24_plugin_util.py
+  可调度执行入口     → src/mait_24h.py（process / RunProcess）
+  直跑入口           → src/mait_24h.py 的 if __name__ == "__main__"（直接给 process 传参）
+  CLI 路由           → cli/__main__.py（Clize → mait_24h.process；含参数中文说明）
+  检验 CLI           → cli/verify.py（python -m cli verify ...）
+  运行上下文/配置/IO → src/utils/util_context.py、util_env.py、util_new.py、util_mask_file.py
+  多进程/插件基类    → utils/multipro_plugin.py、utils/base_plugin.py（经 utils/__init__ 合并 00temp/utils）
+  单元/业务测试      → test/test_run_context.py、test/test_mait_24h_cli_flow.py、test/test_mait_24h.py
+  程序说明           → docs/MAIT_24H_程序说明.md、nbs/mait_24h_说明.ipynb
+  运行配置           → resource/mait_24.ini、para_24.ini、para_24_background.ini
+  整理清单           → NIMM_list.md（算法包内）
+  整理中间数据       → 00temp/mait_24h/
+  整理过程日志       → 00log/（本文件；一次整理过程对应一份）
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 将 Clize 命令行解析从 src/mait_24h.py 迁至 cli/__main__.py
+  [x] src/mait_24h.py 仅保留可调度 process / RunProcess，供外部模块 import
+  [x] src/mait_24h.py 的 __main__ 改为直接 process(...) 传参运行
+      （对齐 multi_wind_fft_blending / multi_weather_phenom_grid_12h）
+  [x] cli 不再 subprocess 转发 src/mait_24h.py，改为 import process 后解析参数调用
+  [x] CLI 各参数补充独立中文 :param 说明（--help 可见）
+  [x] 保留 python -m cli verify ... 检验子命令
+  [x] 同步本日志、NIMM_list.md、00temp/ 说明
+
+三、试跑记录
+--------------------------------------------------------------------------------
+  通过:
+    python -m cli --help
+      → 可见各参数中文说明（time-inputs / predict-valid-list / is-multi 等）
+    from mait_24h import process 可正常导入
+
+  未验证 / 需数据环境:
+    完整业务 Micaps 路径下的端到端试跑、多进程 is_multi
+    → 部署环境配置 para_24.ini / background 后建议执行:
+      python src/mait_24h.py
+      python -m cli --time-inputs=YYYYMMDDHHMM --predict-valid-list=36,60,84
+      python -m pytest test/ -q
+
+四、仍存在问题（需人工补充）★
+--------------------------------------------------------------------------------
+  [ ] docs/、nbs/、README 中仍可能写旧入口（mait_24h_cli、CLI 在 src 内、Clize 在主程序等）→ 人工核对
+  [ ] 生产数据路径不在仓库内；部署时配置 para_24.ini 与 background
+  [ ] resource/ 中备份配置、样例 h5、图片等，正式入库前建议筛选最小资源集
+  [ ] 扩展插件（如 data_distribute）未纳入主流程 CI（可选）
+  [ ] 尚未补充到正式 NIMM/05blending/ 目录
+  [ ] 未做完整业务数据试跑与结果对比
+  [ ] 00temp/mait_24h/ 仅占位，整理对照中间文件待按需归档或清理
+
+五、调用方式（正式）
+--------------------------------------------------------------------------------
+  模块调度:
+    from mait_24h import process
+    process(time_inputs=["202605240800"], predict_valid_list=[36, 60, 84],
+            is_multi=False, pro_count=4)
+
+  直跑 mait_24h.py（改 __main__ 传参）:
+    python src/mait_24h.py
+
+  命令行:
+    python -m cli --help
+    python -m cli --time-inputs=202605240800 --predict-valid-list=36,60,84
+    python -m cli verify --h5-file=...
+
+六、规范目录说明（本仓库约定）
+--------------------------------------------------------------------------------
+  00temp/          存放算法整理过程中的中间数据（本算法：00temp/mait_24h/）
+  00log/           存放原始算法整理过程日志；一次整理过程对应一个 log（本文件）
+  NIMM_list.md     以表格记录已整理算法：种类、功能、更新时间、贡献人、目录、待办
+
+================================================================================
+日志结束 — 下次整理请新建 00log/<算法代号>_整理_<YYYYMMDD>.log
+================================================================================

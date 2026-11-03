@@ -1,0 +1,57 @@
+================================================================================
+算法整理日志 — 格点→格点双线性插值（interp_gg_linear）
+================================================================================
+整理日期   : 2026-09-02
+算法代号   : interp_gg_linear
+仓库目录   : interp_gg_linear/
+整理阶段   : 原始算法入仓整理（runner/CLI、util_env、登记清单、文档与烟测）
+贡献人     : （待补）
+原始来源   : 仓库根 utils/interp_gg_pulgin.py（interp_gg_linear / InterpGGLinearPlugin）
+================================================================================
+
+一、目录映射
+--------------------------------------------------------------------------------
+  主程序             → src/runner.py（process → interp_gg_linear → 写 Micaps4）
+  算法核心           → src/interp_gg_linear.py
+  CLI                → cli/__main__.py
+  本包工具           → src/utils/util_env.py
+  共享路径合并       → utils/__init__.py → ../../utils + src/utils
+  运行配置           → resource/interp_gg_linear.ini
+  单元测试           → test/test_layout.py、test_util_env.py、test_linear_smoke.py
+  程序说明           → docs/、README.md、nbs/（同结构：原理/实现/参数/使用/CLI）
+  整理清单           → NIMM_list.md
+  整理中间数据       → 00temp/interp_gg_linear/
+  整理过程日志       → 00log/（本文件）
+  不设 scripts/      → 与 interp_sg_cressman / grid_stat_merge 一致
+
+二、本次已完成
+--------------------------------------------------------------------------------
+  [x] 从共享插件抽出独立算法包：src/interp_gg_linear.py + runner.process
+  [x] cli/__main__.py：中文 --help；覆盖 grid/output/grid-template/domain 等
+  [x] util_env 读 ini；根 utils 合并共享 base_plugin
+  [x] README / NIMM_list / docs / nbs 同步说明（无 scripts）
+  [x] 00log / 00temp / test 脚手架
+
+三、试跑记录
+--------------------------------------------------------------------------------
+  建议验证:
+    cd interp_gg_linear
+    python -m cli --help
+    python -m pytest test/ -q
+
+  端到端（需真实格点；并指定目标网格）:
+    python -m cli --grid=... --domain=... --output=...
+
+四、仍存在问题（需人工补充）★
+--------------------------------------------------------------------------------
+  [ ] 贡献人 / 原始绝对路径完整登记
+  [ ] resource/ 演示格点样例未入库
+  [ ] 业务路径端到端未复跑
+  [ ] 与 ../../utils/interp_gg_pulgin.py 双份算法同步策略
+  [ ] requirements 版本锁定
+  [ ] 00temp/interp_gg_linear/ 仅占位
+
+五、备注
+--------------------------------------------------------------------------------
+  共享 interp_gg_pulgin 可继续被其他算法包 import；本仓库作为独立可调度产品。
+================================================================================

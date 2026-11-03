@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.idea/
+
+# 本地验证临时输出
+*_tmp.nc
+cli_test_tmp.nc

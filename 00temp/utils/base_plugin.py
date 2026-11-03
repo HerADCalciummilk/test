@@ -1,0 +1,69 @@
+from abc import ABC, abstractmethod
+from collections.abc import Iterable
+"""Module containing plugin base class."""
+class BasePlugin(ABC):
+    """An abstract class for IMPROVER plugins.
+    Subclasses must be callable. We preserve the process
+    method by redirecting to __call__.
+    """
+
+    def __call__(self, *args, **kwargs):
+        """Makes subclasses callable to use process
+        Args:
+            *args:
+                Positional arguments.
+            **kwargs:
+                Keyword arguments.
+        Returns:
+            Output of self.process()
+        """
+        return self.process(*args, **kwargs)
+
+    @abstractmethod
+    def process(self, *args, **kwargs):
+        """Abstract class for rest to implement."""
+        pass
+
+
+class PostProcessingPlugin(BasePlugin):
+    """An abstract class for IMPROVER post-processing plugins.
+    Makes generalised changes to metadata relating to post-processing.
+    """
+    @staticmethod
+    def post_processed_title(cube):
+        """Updates title attribute on output cube to include
+        "Post-Processed"
+        """
+        from improver.metadata.constants.attributes import MANDATORY_ATTRIBUTE_DEFAULTS
+
+        default_title = MANDATORY_ATTRIBUTE_DEFAULTS["title"]
+        if (
+            "title" in cube.attributes.keys()
+            and cube.attributes["title"] != default_title
+            and "Post-Processed" not in cube.attributes["title"]
+        ):
+            title = cube.attributes["title"]
+            cube.attributes["title"] = f"Post-Processed {title}"
+
+
+    def __call__(self, *args, **kwargs):
+        """Makes subclasses callable to use process
+        Args:
+            *args:
+                Positional arguments.
+            **kwargs:
+                Keyword arguments.
+
+        Returns:
+            Output of self.process() with updated title attribute
+        """
+        from iris.cube import Cube
+
+        result = super().__call__(*args, **kwargs)
+        if isinstance(result, Cube):
+            self.post_processed_title(result)
+        elif isinstance(result, Iterable) and not isinstance(result, str):
+            for item in result:
+                if isinstance(item, Cube):
+                    self.post_processed_title(item)
+        return result
