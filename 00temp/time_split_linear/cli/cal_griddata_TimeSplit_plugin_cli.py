@@ -41,8 +41,8 @@ class CalGriddataTimeSplitPluginCli(CliBase):
     )
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("--input-fh", default=None, help="Input leads start,stop,step. Empty ini value raises.")
-        parser.add_argument("--output-fh", default=None, help="Output leads start,stop,step. Empty ini value raises.")
+        parser.add_argument("--input-fh", default=None, help="Input leads start,stop,step. Stop is included. Empty ini value raises.")
+        parser.add_argument("--output-fh", default=None, help="Output leads start,stop,step. Stop is included. Empty ini value raises.")
         parser.add_argument("--interp-method", default=None, help="Interpolation. Preset slinear.")
         parser.add_argument("--input-fmt", default=None, help="Input path template. Empty ini value raises.")
         parser.add_argument("--time", default=None, help="Issue time. Empty ini value raises.")

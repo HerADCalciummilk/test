@@ -19,8 +19,8 @@ if not hasattr(_meb_stat, "os"):
 class TimeSplit(PostProcessingPlugin):
     """把粗时效格点插值成细时效格点。
 
-    输入、输出时效都用 ``[起点, 终点, 步长]`` 表示，并由 ``numpy.arange`` 展开。
-    ``arange`` 不含终点，例如 ``[0, 9, 3]`` 得到时效 ``0, 3, 6``。
+    输入、输出时效都用 ``[起点, 终点, 步长]`` 表示，终点包含在结果中。
+    例如 ``[0, 9, 3]`` 得到时效 ``0, 3, 6, 9``。
     """
 
     def __init__(self,
@@ -38,8 +38,8 @@ class TimeSplit(PostProcessingPlugin):
 
         Args:
             model_id_attr: 来源模式标识，本算法不使用。
-            input_fh_list: 输入时效 ``[起点, 终点, 步长]``，终点不包含在结果中。
-            output_fh_list: 输出时效 ``[起点, 终点, 步长]``，终点不包含在结果中。
+            input_fh_list: 输入时效 ``[起点, 终点, 步长]``，终点包含在结果中。
+            output_fh_list: 输出时效 ``[起点, 终点, 步长]``，终点包含在结果中。
             interp_method: 传给 ``DataArray.interp`` 的插值方法，默认 ``slinear``。
             output_fmt: 输出路径模板。为空时不写文件。
             uv_fmt: V 分量路径模板。为空时不做风速合成，``input_fmt`` 按原要素插值。
@@ -48,9 +48,9 @@ class TimeSplit(PostProcessingPlugin):
             io_method: 读网格的函数。为空时使用 ``meteva_base.read_griddata_from_nc``。
         """
         self.model_id_attr = model_id_attr
-        # 终点不入列，读文件和写文件都使用这里展开后的时效。
-        self.input_fh_list = np.arange(input_fh_list[0],input_fh_list[1],input_fh_list[2])
-        self.output_fh_list = np.arange(output_fh_list[0],output_fh_list[1],output_fh_list[2])
+        # 右边界加 1，使终点进入时效序列，且不会多走出一个步长。
+        self.input_fh_list = np.arange(input_fh_list[0],input_fh_list[1]+1,input_fh_list[2])
+        self.output_fh_list = np.arange(output_fh_list[0],output_fh_list[1]+1,output_fh_list[2])
         self.interp_method = interp_method
         self.output_fmt = output_fmt
         self.uv_fmt = uv_fmt
