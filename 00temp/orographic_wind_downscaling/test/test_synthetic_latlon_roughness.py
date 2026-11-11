@@ -139,7 +139,7 @@ def test_synthetic_latlon_inferred_ppres_matches_explicit_reference() -> None:
         ppres=case["ppres_m"],
         z0=case["z0"],
     )
-    expected = ref.process(case["wind"])
+    expected, expected_hc = ref.process(case["wind"])
 
     auto = RoughnessCorrection(
         case["a_over_s"],
@@ -149,14 +149,21 @@ def test_synthetic_latlon_inferred_ppres_matches_explicit_reference() -> None:
         MODRES_M,
         z0=case["z0"],
     )
-    result = auto.process(case["wind"])
+    result, result_hc = auto.process(case["wind"])
 
     assert auto.ppres == pytest.approx(case["ppres_m"], rel=1e-10, abs=1e-6)
     assert isinstance(result, xr.DataArray)
     assert result.dims == ("member", "level", "time", "dtime", "lat", "lon")
+    assert result_hc.name == "height_correction"
     np.testing.assert_allclose(
         np.asarray(result.values, dtype=np.float64),
         np.asarray(expected.values, dtype=np.float64),
+        atol=COMPARE_ATOL,
+        rtol=0.0,
+    )
+    np.testing.assert_allclose(
+        np.asarray(result_hc.values, dtype=np.float64),
+        np.asarray(expected_hc.values, dtype=np.float64),
         atol=COMPARE_ATOL,
         rtol=0.0,
     )
@@ -173,7 +180,7 @@ def test_synthetic_latlon_matches_frozen_expected_field() -> None:
         MODRES_M,
         z0=case["z0"],
     )
-    result = plugin.process(case["wind"])
+    result, _hc = plugin.process(case["wind"])
     values = np.asarray(result.values, dtype=np.float64).reshape(-1)
 
     # 由同种子合成数据 + 显式 ppres 路径固化；若算法或推断改变应失败。
@@ -210,7 +217,7 @@ def test_synthetic_latlon_wrong_degree_ppres_differs() -> None:
     wrong_ppres = float(np.mean([dlat, dlon]))  # 约 0.05，量纲错误
     assert wrong_ppres < 1.0
 
-    good = RoughnessCorrection(
+    good, _ = RoughnessCorrection(
         case["a_over_s"],
         case["sigma"],
         case["pporo"],
@@ -218,7 +225,7 @@ def test_synthetic_latlon_wrong_degree_ppres_differs() -> None:
         MODRES_M,
         z0=case["z0"],
     ).process(case["wind"])
-    bad = RoughnessCorrection(
+    bad, _ = RoughnessCorrection(
         case["a_over_s"],
         case["sigma"],
         case["pporo"],

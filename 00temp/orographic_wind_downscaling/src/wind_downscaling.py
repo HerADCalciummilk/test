@@ -25,11 +25,15 @@ from orographic_wind_downscaling.utils.utils import rebuild_to_meb_griddata
 # 真实缺测数据指示符
 RMDI = -32767.0
 
-# 用于确定参考高度的尺度参数（扰动衰减阈值）
+# 用于确定参考高度的尺度参数（扰动衰减阈值）ε；Vosper/Clark 默认 0.04
 ABSOLUTE_CORRECTION_TOL = 0.04
 
-# 用于确定参考高度的缩放参数
+# 参考高度上限相对半峰谷高度的倍数
 HREF_SCALE = 2.0
+
+# 波数裁剪：dx_max = DX_MAX_FACTOR * 模式分辨率；dx_min = DX_MIN_FACTOR * 后处理分辨率
+DX_MAX_FACTOR = 3.0
+DX_MIN_FACTOR = 0.5
 
 # 冯·卡门常数
 VONKARMAN = 0.4
@@ -144,6 +148,11 @@ class RoughnessCorrectionUtilities:
         modoro: ndarray,
         ppres: float,
         modres: float,
+        *,
+        absolute_correction_tol: float = ABSOLUTE_CORRECTION_TOL,
+        href_scale: float = HREF_SCALE,
+        dx_max_factor: float = DX_MAX_FACTOR,
+        dx_min_factor: float = DX_MIN_FACTOR,
     ) -> None:
         """
         初始化粗糙度订正与高度订正的参数。
@@ -165,13 +174,31 @@ class RoughnessCorrectionUtilities:
             浮点型（Float）—— 后处理网格的网格单元边长。
         modres:
             浮点型（Float）—— 模式网格的网格单元边长。
+        absolute_correction_tol:
+            扰动衰减阈值 ε，默认 0.04。主要影响粗糙度订正参考高度。
+        href_scale:
+            参考高度相对半峰谷高度的上限倍数，默认 2.0。减小可压低 RC 作用厚度。
+        dx_max_factor:
+            ``dx_max = dx_max_factor * modres``，默认 3.0。影响波数下限裁剪。
+        dx_min_factor:
+            ``dx_min = dx_min_factor * ppres``，默认 0.5。影响波数上限裁剪。
         """
         # 存储输入参数
         self.a_over_s = a_over_s  # 地形轮廓粗糙度
         self.z_0 = z_0  # 植被粗糙度长度
         self.pporo = pporo  # 后处理网格地形高度
         self.modoro = modoro  # 模式网格地形高度（已插值至后处理网格）
-        
+        self.absolute_correction_tol = float(absolute_correction_tol)
+        self.href_scale = float(href_scale)
+        self.dx_max_factor = float(dx_max_factor)
+        self.dx_min_factor = float(dx_min_factor)
+        if self.absolute_correction_tol <= 0.0 or self.absolute_correction_tol >= 1.0:
+            raise ValueError("absolute_correction_tol 必须落在 (0, 1)。")
+        if self.href_scale <= 0.0:
+            raise ValueError("href_scale 必须为正。")
+        if self.dx_max_factor <= 0.0 or self.dx_min_factor <= 0.0:
+            raise ValueError("dx_max_factor 与 dx_min_factor 必须为正。")
+
         # 计算半峰谷高度（half peak to trough height）
         self.h_over_2 = self.sigma2hover2(sigma)
         
@@ -183,8 +210,8 @@ class RoughnessCorrectionUtilities:
             self.z_0[z_0 <= 0] = Z0M_SEA
         
         # 计算最小和最大水平尺度
-        self.dx_min = ppres / 2.0  # 后处理网格无法解析的更小尺度
-        self.dx_max = 3.0 * modres  # 模式网格已解析的更大尺度
+        self.dx_min = self.dx_min_factor * ppres
+        self.dx_max = self.dx_max_factor * modres
         
         # 计算地形波数（k = 2*pi / L）
         self.wavenum = self._calc_wav()
@@ -346,8 +373,8 @@ class RoughnessCorrectionUtilities:
         返回值：
             二维浮点型数组（float32）—— 粗糙度订正的参考高度
         """
-        # 计算尺度参数 alpha（基于 ABSOLUTE_CORRECTION_TOL）
-        alpha = -np.log(ABSOLUTE_CORRECTION_TOL)
+        # 计算尺度参数 alpha（基于 absolute_correction_tol / ε）
+        alpha = -np.log(self.absolute_correction_tol)
         
         # 初始化可调参数和参考高度数组，默认值为缺测值
         tunable_param = np.full(self.wavenum.shape, RMDI, dtype=np.float32)
@@ -368,8 +395,8 @@ class RoughnessCorrectionUtilities:
         # 确保参考高度不低于 1.0 米
         h_ref[h_ref < 1.0] = 1.0
         
-        # 限制参考高度不超过半峰谷高度的 HREF_SCALE 倍
-        h_ref = np.minimum(h_ref, HREF_SCALE * self.h_over_2)
+        # 限制参考高度不超过半峰谷高度的 href_scale 倍
+        h_ref = np.minimum(h_ref, self.href_scale * self.h_over_2)
         
         # 再次确保参考高度不低于 1.0 米
         h_ref[h_ref < 1.0] = 1.0
@@ -659,7 +686,12 @@ class RoughnessCorrectionUtilities:
         expon[mult > 0.0001] = np.exp(-mult[mult > 0.0001])
         
         # 计算高度订正附加项：hc_add = exp(-z*k) * u(href) * (h_at0*k) * onemfrac
-        hc_add = expon * u_a[:, :, np.newaxis] * ml2[:, :, np.newaxis] * onemfrac
+        hc_add = (
+            expon
+            * u_a[:, :, np.newaxis]
+            * ml2[:, :, np.newaxis]
+            * onemfrac
+        )
         
         # 对非掩码区域的高度订正附加项设为 0
         hc_add[~mask, :] = 0
@@ -679,7 +711,11 @@ class RoughnessCorrectionUtilities:
         delt_z[self.hcmask] = self.pporo[self.hcmask] - self.modoro[self.hcmask]
         return delt_z
 
-    def do_rc_hc_all(self, hgrid: ndarray, uorig: ndarray) -> ndarray:
+    def do_rc_hc_all(
+        self,
+        hgrid: ndarray,
+        uorig: ndarray,
+    ) -> Tuple[ndarray, ndarray]:
         """
         用于调用高度订正（HC）和粗糙度订正（RC）的函数。
 
@@ -692,7 +728,9 @@ class RoughnessCorrectionUtilities:
 
         返回值
         ----------
-        三维浮点型数组（float32）—— 经粗糙度订正（RC）和高度订正（HC）后的风速值
+        ``(订正风速, hc_add)``：
+        - 订正风速：经 RC + HC 且非负截断后的三维场；
+        - ``hc_add``：高度订正附加项（截断前），与风速同形。
 
         参考文献：
         Friedrich, M. M., 2016
@@ -741,7 +779,7 @@ class RoughnessCorrectionUtilities:
         # 确保风速非负（高度订正在后处理网格地形低于模式网格时可能为负）
         result[result < 0.0] = 0
         
-        return result.astype(np.float32)
+        return result.astype(np.float32), hc_add.astype(np.float32)
 
 
 class RoughnessCorrection(PostProcessingPlugin):
@@ -752,9 +790,9 @@ class RoughnessCorrection(PostProcessingPlugin):
     1. 统一输入数据结构（`numpy.ndarray` / `xarray.DataArray`）。
     2. 校验辅助场与风速场的空间一致性。
     3. 按“批次维 + (level, lat, lon)”切片循环调用核心订正计算。
-    4. 重组输出结构：
-       - `numpy.ndarray` 输入返回 `numpy.ndarray`；
-       - `xarray.DataArray` 输入返回按 meteva_base 约定维度重组后的 `xarray.DataArray`。
+    4. 固定返回 ``(订正风速, hc_add)``：
+       - `numpy.ndarray` 输入返回同型二元组；
+       - `xarray.DataArray` 输入返回按 meteva_base 约定维度重组后的二元组。
 
     维度约定：
     - 算法内部计算阶段按 `(level, lat, lon)` 组织三维风速切片。
@@ -792,6 +830,11 @@ class RoughnessCorrection(PostProcessingPlugin):
         modres: float,
         ppres: Optional[float] = None,
         z0: Optional[Union[np.ndarray, xr.DataArray]] = None,
+        *,
+        absolute_correction_tol: float = ABSOLUTE_CORRECTION_TOL,
+        href_scale: float = HREF_SCALE,
+        dx_max_factor: float = DX_MAX_FACTOR,
+        dx_min_factor: float = DX_MIN_FACTOR,
     ) -> None:
         """
         初始化 RoughnessCorrection 类。
@@ -815,6 +858,14 @@ class RoughnessCorrection(PostProcessingPlugin):
             当 `pporo` 为 DataArray 时可不传；当 `pporo` 为 ndarray 时必须显式传入。
         z0 : np.ndarray 或 xr.DataArray, 形状 (lat, lon)，可选
             植被粗糙度长度（米）。若为None，则跳过粗糙度订正步骤。
+        absolute_correction_tol : float, default 0.04
+            扰动衰减阈值 ε，影响粗糙度订正参考高度。
+        href_scale : float, default 2.0
+            参考高度相对半峰谷高度的上限倍数。
+        dx_max_factor : float, default 3.0
+            ``dx_max = dx_max_factor * modres``。
+        dx_min_factor : float, default 0.5
+            ``dx_min = dx_min_factor * ppres``。
         """
         # 存储输入参数
         self.a_over_s = self._to_lat_lon_array(a_over_s, "a_over_s")
@@ -823,7 +874,8 @@ class RoughnessCorrection(PostProcessingPlugin):
         # - DataArray 输入时，可从投影米制或真经纬坐标推断 ppres（始终为米）；
         # - ndarray 输入时，要求外部显式提供 ppres。
         if isinstance(pporo, xr.DataArray):
-            pporo = meb.checkout_griddata(pporo)
+            # 地形可超出 meteva 默认 [-1000, 1000]，不能把高山改成缺测。
+            pporo = meb.checkout_griddata(pporo, valid_val=(-np.inf, np.inf, np.nan))
             if ppres is None:
                 ppres = self.infer_grid_resolution_from_coords(pporo)
             self.pporo = np.asarray(pporo.values, dtype=np.float32).squeeze()
@@ -840,6 +892,10 @@ class RoughnessCorrection(PostProcessingPlugin):
         self.z0 = None if z0 is None else self._to_lat_lon_array(z0, "z0")
         self.modres = modres  # 模式原始平均分辨率
         self.ppres = float(ppres)  # 后处理网格分辨率
+        self.absolute_correction_tol = float(absolute_correction_tol)
+        self.href_scale = float(href_scale)
+        self.dx_max_factor = float(dx_max_factor)
+        self.dx_min_factor = float(dx_min_factor)
 
     @staticmethod
     def _to_lat_lon_array(
@@ -848,7 +904,9 @@ class RoughnessCorrection(PostProcessingPlugin):
     ) -> np.ndarray:
         """将辅助场统一为二维 `(lat, lon)` 数组。"""
         if isinstance(field, xr.DataArray):
-            normalized = meb.checkout_griddata(field, is_single=True)
+            normalized = meb.checkout_griddata(
+                field, is_single=True, valid_val=(-np.inf, np.inf, np.nan)
+            )
             values = np.asarray(normalized.values.squeeze(), dtype=np.float32)
         else:
             values = np.asarray(field, dtype=np.float32)
@@ -1016,7 +1074,7 @@ class RoughnessCorrection(PostProcessingPlugin):
         self,
         wind_speed: Union[np.ndarray, xr.DataArray],
         height_grid: Optional[np.ndarray] = None,
-    ) -> Union[np.ndarray, xr.DataArray]:
+    ) -> Union[Tuple[np.ndarray, np.ndarray], Tuple[xr.DataArray, xr.DataArray]]:
         """
         对风速进行地形粗糙度订正和高度订正。
 
@@ -1038,10 +1096,12 @@ class RoughnessCorrection(PostProcessingPlugin):
 
         返回值
         ----------
-        np.ndarray 或 xr.DataArray
-            经修正后的风速结果。
-            - 输入为 np.ndarray 时返回 np.ndarray；
-            - 输入为 xr.DataArray 时返回按 meteva_base 维度重组的 xr.DataArray。
+        ``(订正风速, hc_add)``
+            - 订正风速：``u_out = max(u_RC + hc_add, 0)``；
+            - ``hc_add``：高度订正附加项（截断前），与订正风速同型。
+            输入为 np.ndarray 时二者均为 np.ndarray；
+            输入为 xr.DataArray 时二者均为重组后的 DataArray
+            （``hc_add.name='height_correction'``）。
         """
         template_da: Optional[xr.DataArray] = None
 
@@ -1067,6 +1127,7 @@ class RoughnessCorrection(PostProcessingPlugin):
                 wind_speed = np.asarray([wind_speed])
                 ndim = wind_speed.ndim
 
+            wind_speed = np.asarray(wind_speed, dtype=np.float32)
             axes = list(range(ndim))
             level_axis = axes[-3]
             lat_axis = axes[-2]
@@ -1123,11 +1184,16 @@ class RoughnessCorrection(PostProcessingPlugin):
         rc_utils = RoughnessCorrectionUtilities(
             self.a_over_s, self.sigma, self.z0,
             self.pporo, self.modoro,
-            self.ppres, self.modres
+            self.ppres, self.modres,
+            absolute_correction_tol=self.absolute_correction_tol,
+            href_scale=self.href_scale,
+            dx_max_factor=self.dx_max_factor,
+            dx_min_factor=self.dx_min_factor,
         )
 
         # 初始化输出数组
         out_2d = np.zeros_like(wind_2d, dtype=np.float32)
+        hc_2d = np.zeros_like(wind_2d, dtype=np.float32)
 
         # 处理每个批量元素
         for i in range(total_batch):
@@ -1135,18 +1201,19 @@ class RoughnessCorrection(PostProcessingPlugin):
             # 转置为 (lat, lon, levels) 格式，以适应核心订正例程
             u_3d = np.transpose(u_slice, (1, 2, 0))
             # 执行粗糙度订正和高度订正
-            result_3d = rc_utils.do_rc_hc_all(hgrid_for_rc, u_3d)
+            result_3d, hc_3d = rc_utils.do_rc_hc_all(hgrid_for_rc, u_3d)
             # 转回 (levels, lat, lon) 格式
-            result_slice = np.transpose(result_3d, (2, 0, 1))
-            # 存储结果
-            out_2d[i] = result_slice
+            out_2d[i] = np.transpose(result_3d, (2, 0, 1))
+            hc_2d[i] = np.transpose(hc_3d, (2, 0, 1))
 
         # 恢复批量维度的原始形状
         out_t = out_2d.reshape(wind_t.shape)
+        hc_t = hc_2d.reshape(wind_t.shape)
 
         # 反转转置，恢复原始维度顺序
         inv_order = [new_order.index(i) for i in axes]
         output = np.transpose(out_t, inv_order)
+        hc_output = np.transpose(hc_t, inv_order)
 
         if template_da is not None:
             result_da = rebuild_to_meb_griddata(
@@ -1157,6 +1224,13 @@ class RoughnessCorrection(PostProcessingPlugin):
             )
             # 保留 standard_name=wind_speed 的语义，同时补充处理后变量的可读描述。
             result_da.attrs["long_name"] = "downscaled wind speed"
-            return result_da
+            hc_da = rebuild_to_meb_griddata(
+                hc_output,
+                template_da,
+                name="height_correction",
+                units=template_da.attrs.get("units"),
+            )
+            hc_da.attrs["long_name"] = "orographic height correction"
+            return result_da, hc_da
 
-        return output
+        return output, hc_output

@@ -92,11 +92,12 @@ class TestRoughnessCorrection:
     def test_basic_rc_hc(self, dummy_data, roughness_correction):
         """测试基础粗糙度和高度修正，使用默认的level/lat/lon轴。"""
         # 使用1D高度网格
-        corrected1 = roughness_correction.process(dummy_data['wind_speed'], dummy_data['height_1d'])
+        corrected1, hc1 = roughness_correction.process(dummy_data['wind_speed'], dummy_data['height_1d'])
 
         # 验证输出形状
         assert corrected1.shape == dummy_data[
             'wind_speed'].shape, f"输出形状不匹配: {corrected1.shape} != {dummy_data['wind_speed'].shape}"
+        assert hc1.shape == corrected1.shape
 
         # 验证输出值
         assert not np.isnan(corrected1).any(), "输出包含 NaN 值"
@@ -121,11 +122,13 @@ class TestRoughnessCorrection:
         wind_speed_grid = wind_speed_grid.transpose('member', 'time', 'dtime', 'level', 'lat', 'lon')
 
         # 处理数据
-        corrected2 = roughness_correction.process(wind_speed_grid, dummy_data['height_1d'])
+        corrected2, hc2 = roughness_correction.process(wind_speed_grid, dummy_data['height_1d'])
 
         # 验证输出形状：DataArray 输入返回 meteva_base 六维结构
         expected_shape = (1, 5, 1, 6, 3, 4)
         assert corrected2.shape == expected_shape, f"输出形状不匹配: {corrected2.shape} != {expected_shape}"
+        assert hc2.shape == expected_shape
+        assert hc2.name == "height_correction"
 
         # 验证输出值
         assert not np.isnan(corrected2).any(), "输出包含 NaN 值"
@@ -134,11 +137,12 @@ class TestRoughnessCorrection:
     def test_with_3d_height(self, dummy_data, roughness_correction):
         """测试使用3D高度网格"""
         # 使用3D高度网格
-        corrected = roughness_correction.process(dummy_data['wind_speed'], dummy_data['height_3d'])
+        corrected, hc = roughness_correction.process(dummy_data['wind_speed'], dummy_data['height_3d'])
 
         # 验证输出形状
         assert corrected.shape == dummy_data[
             'wind_speed'].shape, f"输出形状不匹配: {corrected.shape} != {dummy_data['wind_speed'].shape}"
+        assert hc.shape == corrected.shape
 
         # 验证输出值
         assert not np.isnan(corrected).any(), "输出包含 NaN 值"
@@ -166,11 +170,12 @@ class TestRoughnessCorrection:
         )
 
         # 处理数据
-        corrected = rc.process(dummy_data['wind_speed'], dummy_data['height_1d'])
+        corrected, hc = rc.process(dummy_data['wind_speed'], dummy_data['height_1d'])
 
         # 验证输出形状
         assert corrected.shape == dummy_data[
             'wind_speed'].shape, f"输出形状不匹配: {corrected.shape} != {dummy_data['wind_speed'].shape}"
+        assert hc.shape == corrected.shape
 
         # 验证输出值
         assert not np.isnan(corrected).any(), "输出包含 NaN 值"
@@ -198,11 +203,35 @@ class TestRoughnessCorrection:
             modres=4000.0,
             ppres=1000.0,
         )
-        corrected = rc.process(wind_speed, height_1d)
+        corrected, hc = rc.process(wind_speed, height_1d)
 
         assert corrected.shape == wind_speed.shape
+        assert hc.shape == wind_speed.shape
         assert not np.isnan(corrected).any()
         assert (corrected >= 0).all()
+
+    def test_always_returns_height_correction(self, dummy_data, roughness_correction):
+        """process 固定返回 (订正风速, hc_add)。"""
+        wind = dummy_data["wind_speed"]
+        corrected, hc = roughness_correction.process(wind, dummy_data["height_1d"])
+        assert corrected.shape == wind.shape
+        assert hc.shape == wind.shape
+        assert np.isfinite(hc).all()
+        assert (corrected >= 0).all()
+
+        wind_reshaped = wind[np.newaxis, :, np.newaxis, :, :, :].transpose(0, 3, 2, 1, 4, 5)
+        grid0 = meb.grid(
+            [70, 77.5, 2.5],
+            [60, 70, 5],
+            dtime_list=[0, 1, 2, 3, 4, 5],
+            level_list=dummy_data["height_1d"],
+        )
+        wind_da = meb.grid_data(grid0, wind_reshaped)
+        after_da, hc_da = roughness_correction.process(wind_da)
+        assert hc_da.name == "height_correction"
+        assert hc_da.attrs.get("long_name") == "orographic height correction"
+        assert hc_da.shape == after_da.shape
+        assert np.isfinite(hc_da.values).all()
 
 
 if __name__ == '__main__':

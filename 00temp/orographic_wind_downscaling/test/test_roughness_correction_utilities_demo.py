@@ -31,9 +31,10 @@ def test_roughness_correction_utilities_demo_smoke():
         modres=4000.0,
     )
 
-    result = rc_utils.do_rc_hc_all(height_1d, wind_speed)
+    result, hc_add = rc_utils.do_rc_hc_all(height_1d, wind_speed)
 
     assert result.shape == wind_speed.shape
+    assert hc_add.shape == wind_speed.shape
     assert np.isfinite(result).all()
     assert (result >= 0.0).all()
 

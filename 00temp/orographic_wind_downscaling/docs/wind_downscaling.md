@@ -2,15 +2,145 @@
 
 ## 1. 模块概述
 
-`wind_downscaling.py` 模块实现了基于地形粗糙度和高度的风速订正算法，用于提高风速预报的空间分辨率和准确性。该模块包含三个主要类：
+本包风速降尺度分两步：
+
+1. **粗糙度计算**（`src/roughness.py`）：由高分辨率 DEM 与模式网格地形统计 `sigma`、`a_over_s`。
+2. **风速订正**（`src/wind_downscaling.py`）：用辅料对风速做粗糙度订正（RC）与高度订正（HC）。
+
+衔接：
+
+```text
+细网格 DEM + 模式网格地形
+        → RoughnessCalculation → sigma, a_over_s（细网格）
+        → RoughnessCorrection(a_over_s, sigma, pporo, modoro, ...)
+        → (订正风速, hc_add)
+```
+
+`wind_downscaling.py` 主要类：
 
 - `FrictionVelocity`：计算大气边界层中的摩擦速度
 - `RoughnessCorrectionUtilities`：提供粗糙度订正和高度订正的核心功能
-- `RoughnessCorrection`：高级接口，封装了上述功能，支持多维度输入数据
+- `RoughnessCorrection`：高级接口；固定返回 `(订正风速, hc_add)`
 
-## 2. 核心类分析
+## 2. RoughnessCalculation 与 AncRoughnessCli
 
-### 2.1 FrictionVelocity 类
+### 2.1 功能描述
+
+`RoughnessCalculation` 由**高分辨率 DEM**与**模式网格地形**统计订正辅料：
+
+- `sigma`：模式格点中心窗口内高度总体标准差（米）
+- `a_over_s`（轮廓粗糙度）：窗口内东西 / 南北截面上升段高度增量除以截面长度后的平均（无量纲）
+
+输出与高分辨率 DEM **同网格**，供 `RoughnessCorrection` 使用。命令行见 `cli/roughness_cli.py`（`AncRoughnessCli`）。
+
+**约束**：`model_orography` 必须仍是模式分辨率网格（只用其 `lat`/`lon` 定义格点），不能是已插到细网格的场。
+
+对每个模式格点：
+
+1. 在细网格上取以其为中心、边长 ≈ 模式格距 / 细网格格距的窗口（如 0.2° / 0.01° → 20）。
+2. 窗口须完整落在细网格内且高度全部有效，否则该模式格点记为缺测。
+3. 完整窗口上计算 `sigma` 与轮廓粗糙度。
+4. 缺测模式格点先在模式网格上由周围有效点线性填补（凸包外最近邻），再插回细网格。
+
+### 2.2 输入参数
+
+| 参数名 | 类型 | 是否必填 | 说明 | 单位 |
+| --- | --- | --- | --- | --- |
+| `orography` | `xr.DataArray` | 是 | 高分辨率地形高度，须带一维递增 `lat`/`lon` | `m` |
+| `model_orography` | `xr.DataArray` | 是 | 模式网格地形；只用经纬网格，不用高度值做统计 | `m` |
+
+### 2.3 输出
+
+| 返回值 | 类型 | 说明 | 单位 |
+| --- | --- | --- | --- |
+| `sigma` | `xr.DataArray` | 与细网格同形；`name='standard_deviation_of_height_in_grid_cell'` | `m` |
+| `a_over_s` | `xr.DataArray` | 与细网格同形；`name='silhouette_roughness'` | 无量纲（`1`） |
+
+`process` **固定**返回 `(sigma, a_over_s)`。
+
+### 2.4 主要方法
+
+| 方法 | 作用 |
+| --- | --- |
+| `window_size` | 由模式/细网格格距比得到中心窗口边长（格点数） |
+| `cell_height_std` | 模式格点窗口高度总体标准差 → 填补 → 插到细网格 |
+| `cell_silhouette` | 模式格点窗口轮廓粗糙度 → 填补 → 插到细网格 |
+| `window_silhouette` | 单窗口：东西、南北上坡增量 / 截面长度后平均 |
+| `fill_model_field` | 模式网格缺测线性填补（凸包外最近邻） |
+| `to_fine_grid` | 模式场线性插到细网格（范围外取最近模式格点） |
+
+### 2.5 算法要点
+
+**窗口边长**
+
+```text
+nlat ≈ round(Δlat_model / Δlat_fine)
+nlon ≈ round(Δlon_model / Δlon_fine)
+```
+
+**sigma**：完整窗口内高度的总体标准差。
+
+**轮廓粗糙度（单窗口）**：
+
+- 东西向：上坡高度增量之和 / 东西向截面长度（米，含 `cos(lat)`）
+- 南北向：上坡高度增量之和 / 南北向截面长度（米）
+- `a/s = mean(有效方向的比值)`
+
+长度换算使用 `METRES_PER_DEGREE ≈ 111195`（1° 对应弧长近似）。
+
+`pporo` 一般为细网格目标地形；`modoro` 为插到细网格的模式地形高度（与本步「模式网格地形」不同：后者只提供模式 lat/lon 网格）。
+
+### 2.6 使用方法
+
+```python
+from pathlib import Path
+import meteva_base as meb
+from orographic_wind_downscaling.src.roughness import RoughnessCalculation
+
+CROP = Path("orographic_wind_downscaling/resource/data/example_crop")
+orography = meb.read_griddata_from_nc(str(CROP / "fine_orography.nc"))
+model_orography = meb.read_griddata_from_nc(str(CROP / "model_orography_grid.nc"))
+
+sigma, a_over_s = RoughnessCalculation().process(orography, model_orography)
+# 或 RoughnessCalculation()(orography, model_orography)
+print(sigma.name, a_over_s.name)
+```
+
+### 2.7 CLI：`AncRoughnessCli`
+
+脚本：`cli/roughness_cli.py`
+
+```bash
+python cli/roughness_cli.py \
+  --orography-path PATH \
+  --model-orography-path MODEL.nc \
+  [--sigma-output-path SIGMA.nc] \
+  [--silhouette-output-path AOS.nc]
+```
+
+```python
+from cli.roughness_cli import AncRoughnessCli
+
+AncRoughnessCli.call(
+    orography_path="PATH",
+    model_orography_path="MODEL.nc",
+    sigma_output_path="SIGMA.nc",
+    silhouette_output_path="AOS.nc",
+)
+```
+
+`AncRoughnessCli.call` 返回退出码 `0`；需要场对象时读输出 nc，或调用模块内 `process(...)`（返回 `(sigma, silhouette)`）。
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `orography_path` | 是 | 高分辨率地形 nc（米） |
+| `model_orography_path` | 是 | 模式网格地形 nc |
+| `sigma_output_path` | 否 | 高度标准差输出路径；省略不写 |
+| `silhouette_output_path` | 否 | 轮廓粗糙度输出路径；省略不写 |
+
+## 3. 风速订正核心类分析
+
+### 3.1 FrictionVelocity 类
 
 #### FrictionVelocity 功能描述
 
@@ -79,7 +209,7 @@ print(ustar.shape)      # (101, 101)
 print(ustar.dtype)      # float32
 ```
 
-### 2.2 RoughnessCorrectionUtilities 类
+### 3.2 RoughnessCorrectionUtilities 类
 
 #### RoughnessCorrectionUtilities 功能描述
 
@@ -103,7 +233,7 @@ print(ustar.dtype)      # float32
 | --- | --- | --- | --- |
 | `sigma2hover2` | sigma: 二维浮点型数组 | 二维浮点型数组 | 计算半峰谷高度 |
 | `calc_roughness_correction` | hgrid: 三维或一维浮点型数组 uold: 三维浮点型数组 mask: 二维布尔型数组 | 三维浮点型数组 | 执行粗糙度订正 |
-| `do_rc_hc_all` | hgrid: 一维或三维浮点型数组 uorig: 三维浮点型数组 | 三维浮点型数组 | 同时执行粗糙度订正和高度订正 |
+| `do_rc_hc_all` | hgrid: 一维或三维浮点型数组 uorig: 三维浮点型数组 | `(订正风速, hc_add)` 二元组 | 同时执行粗糙度订正和高度订正；`hc_add` 为截断前高度订正附加项 |
 
 #### RoughnessCorrectionUtilities 算法原理
 
@@ -149,10 +279,10 @@ rc_utils = RoughnessCorrectionUtilities(
 )
 
 # 执行粗糙度和高度订正
-final_wind = rc_utils.do_rc_hc_all(height_grid, wind_speed)
+final_wind, hc_add = rc_utils.do_rc_hc_all(height_grid, wind_speed)
 ```
 
-### 2.3 RoughnessCorrection 类
+### 3.3 RoughnessCorrection 类
 
 #### RoughnessCorrection 功能描述
 
@@ -181,15 +311,17 @@ final_wind = rc_utils.do_rc_hc_all(height_grid, wind_speed)
 
 | 方法名 | 输入参数 | 输出结果 | 描述 |
 | --- | --- | --- | --- |
-| `process` | wind_speed: np.ndarray 或 xr.DataArray height_grid: np.ndarray，可选 | np.ndarray 或 xr.DataArray | 对风速进行地形粗糙度订正和高度订正 |
+| `process` | wind_speed: np.ndarray 或 xr.DataArray；height_grid: np.ndarray，可选 | `(订正风速, hc_add)` | 对风速做 RC + HC；`hc_add` 为高度订正附加项（截断前） |
 | `infer_grid_resolution_from_coords` | `data: xr.DataArray` | `float` | 从坐标估算网格分辨率（米）：投影米制直接取间距；真经纬将度间距换算为米 |
+
+合成式：`u_out = max(u_RC + hc_add, 0)`。粗糙度订正替换近地廓线；高度订正为加性项；最后非负截断。
 
 #### 输出表（当前版本）
 
-| 输入类型 | 输出类型 | 输出维度约定 |
+| 输入类型 | 输出 | 维度约定 |
 | --- | --- | --- |
-| `wind_speed` 为 `np.ndarray` | `np.ndarray` | 与输入风速数组同结构（批次维 + `level, lat, lon`） |
-| `wind_speed` 为 `xr.DataArray` | `xr.DataArray` | 按 meteva_base 六维重组：`member, level, time, dtime, lat, lon` |
+| `wind_speed` 为 `np.ndarray` | `(ndarray, ndarray)` | 二者与输入风速同结构（批次维 + `level, lat, lon`） |
+| `wind_speed` 为 `xr.DataArray` | `(DataArray, DataArray)` | 二者均为 meteva_base 六维；`hc_add.name='height_correction'` |
 
 #### RoughnessCorrection 算法原理
 
@@ -200,7 +332,7 @@ final_wind = rc_utils.do_rc_hc_all(height_grid, wind_speed)
 3. 若 `pporo` 为 DataArray 且未显式提供 `ppres`，自动按坐标估算后处理网格分辨率（米）；真经纬输入会将度间距换算为米（东西向按代表纬度 `cos(lat)` 缩放）。
 4. 组织高度网格（支持一维公共高度层或三维空间变化高度层）。
 5. 将输入整理为“批次维 + (level, lat, lon)”并逐批次调用核心订正。
-6. 还原为输入对应结构；若输入为 DataArray，则按标准维度重组装为 DataArray 输出。
+6. 还原为输入对应结构，并固定返回 `(订正风速, hc_add)`；若输入为 DataArray，则二者均按标准维度重组。
 
 #### RoughnessCorrection 使用方法
 
@@ -217,40 +349,40 @@ plugin = RoughnessCorrection(
     z0=z0
 )
 
-# 执行风速订正
-corrected_wind = plugin.process(wind_speed, height_levels)
+# 执行风速订正：固定返回订正风速与高度订正量
+corrected_wind, hc_add = plugin.process(wind_speed, height_levels)
 ```
 
-## 3. 核心算法原理
+## 4. 核心算法原理
 
-### 3.1 摩擦速度计算
+### 4.1 摩擦速度计算
 
 摩擦速度是表征近地面大气湍流强度的特征速度尺度，反映了地表对大气运动的摩擦拖拽作用。计算基于对数风速廓线方程，适用于中性大气条件下的边界层风速分布。
 
-### 3.2 粗糙度订正
+### 4.2 粗糙度订正
 
 粗糙度订正是将参考高度以下的风速廓线替换为随高度对数增长的廓线，边界条件为：
 
 - 参考高度 h_ref 处的风速为原始参考风速 uhref
 - 植被粗糙度长度 z_0 处的风速为 0
 
-### 3.3 高度订正
+### 4.3 高度订正
 
 高度订正是考虑地形高度差对风速的影响，扰动项随高度呈指数衰减。垂直偏移量 h_at0 越大（未解析的地形越高），扰动程度越显著。扰动越平缓（扰动的水平尺度越大），高度订正量越小。
 
-### 3.4 波数计算
+### 4.4 波数计算
 
 波数是表征地形特征尺度的重要参数，由半峰谷高度和地形轮廓粗糙度计算得出，用于确定参考高度和高度订正的衰减率。
 
-## 4. 数据流程
+## 5. 数据流程
 
-1. **输入数据准备**：收集地形轮廓粗糙度、高度标准差、植被粗糙度长度等辅助数据
+1. **输入数据准备**：收集地形轮廓粗糙度、高度标准差、植被粗糙度长度等辅助数据（`sigma` / `a_over_s` 可由第 2 节 `RoughnessCalculation` 从 DEM 与模式网格地形生成）
 2. **参数计算**：计算半峰谷高度、波数、参考高度等中间参数
 3. **掩码生成**：生成高度订正和粗糙度订正的掩码
-4. **风速订正**：执行粗糙度订正和高度订正
-5. **结果处理**：处理输出数据，确保风速非负
+4. **风速订正**：执行粗糙度订正和高度订正，得到 `u_RC` 与 `hc_add`
+5. **结果处理**：`u_out = max(u_RC + hc_add, 0)`，并与 `hc_add` 一并返回
 
-## 5. 代码优化建议
+## 6. 代码优化建议
 
 1. **错误处理增强**：添加更多的输入参数验证，提高代码的健壮性
 2. **性能优化**：对于大规模数据，可以考虑使用 NumPy 的向量化操作替代循环
@@ -258,7 +390,7 @@ corrected_wind = plugin.process(wind_speed, height_levels)
 4. **单元测试**：增加更多的单元测试，覆盖边界情况
 5. **模块化**：将一些重复的代码提取为单独的函数，提高代码的可维护性
 
-## 6. 参考文献
+## 7. 参考文献
 
 1. Robinson, D. (2008). *UM 辅助文件制作*（统一模式文档 73 号）
 2. Howard, T. & Clark, P. (2007). 地形对风速影响的研究
@@ -267,7 +399,7 @@ corrected_wind = plugin.process(wind_speed, height_levels)
 5. Friedrich, M. M. (2016). *Wind Downscaling Program* (Internal Met Office Report)
 6. 英国皇冠地产官网发布的《Virtual Met Mast Version 1 Methodology and Verification》（虚拟气象塔1.0版方法学与验证）报告
 
-## 7. 输入输出示例
+## 8. 输入输出示例
 
 ### 示例1：`numpy.ndarray` 输入与输出
 
@@ -298,9 +430,9 @@ plugin = RoughnessCorrection(
     z0=z0,
 )
 
-corrected_wind = plugin.process(wind_speed=wind_speed, height_grid=height_levels)
-print(type(corrected_wind))       # <class 'numpy.ndarray'>
-print(corrected_wind.shape)       # (9, 101, 101)
+corrected_wind, hc_add = plugin.process(wind_speed=wind_speed, height_grid=height_levels)
+print(type(corrected_wind), type(hc_add))  # ndarray, ndarray
+print(corrected_wind.shape, hc_add.shape)  # (9, 101, 101), (9, 101, 101)
 ```
 
 ### 示例2：`xarray.DataArray` 输入与输出（meteva_base 六维）
@@ -349,23 +481,24 @@ plugin = RoughnessCorrection(
     z0=aux_6d * 0.5 + 0.01,
 )
 
-corrected_da = plugin.process(wind_speed=wind_speed_da)
-print(type(corrected_da))         # <class 'xarray.core.dataarray.DataArray'>
-print(corrected_da.dims)          # ('member', 'level', 'time', 'dtime', 'lat', 'lon')
-print(corrected_da.shape)         # (1, 9, 1, 1, 101, 101)
+corrected_da, hc_da = plugin.process(wind_speed=wind_speed_da)
+print(corrected_da.dims, hc_da.name)  # 六维；height_correction
+print(corrected_da.shape, hc_da.shape)  # (1, 9, 1, 1, 101, 101)
 ```
 
 ### 输出约定
 
-- 当 `wind_speed` 输入为 `numpy.ndarray` 时，`process` 返回 `numpy.ndarray`。
-- 当 `wind_speed` 输入为 `xarray.DataArray` 时，`process` 返回 `xarray.DataArray`（按 meteva_base 六维组织）。
+- `process` **固定**返回 `(订正风速, hc_add)`。
+- 当 `wind_speed` 为 `numpy.ndarray` 时，二者均为同结构 `ndarray`。
+- 当 `wind_speed` 为 `xarray.DataArray` 时，二者均为 meteva_base 六维 `DataArray`；`hc_add.name='height_correction'`。
 - 辅助场 `a_over_s / sigma / pporo / modoro / z0` 均支持 `numpy.ndarray` 与 `xarray.DataArray`；其中 `xarray` 输入会先进行网格格式校验。
+- CLI `dsc_wind_downscaling` 写盘时仅使用订正风速，忽略 `hc_add`。
 
-## 8. CLI 应用
+## 9. CLI 应用
 
-示例脚本：`orographic_wind_downscaling/cli/dsc_wind_downscaling.py`
+粗糙度辅料 CLI 见第 2.7 节 `AncRoughnessCli`。风速订正示例脚本：`orographic_wind_downscaling/cli/dsc_wind_downscaling.py`。
 
-### 8.1 运行方式
+### 9.1 运行方式
 
 PowerShell 示例：
 
@@ -424,7 +557,7 @@ pytest orographic_wind_downscaling/test/test_official_wind_downscaling.py
 
 原 Iris 插件不能在纯经纬网格上直接重跑。
 
-### 8.2 `process()` 参数说明
+### 9.2 `process()` 参数说明
 
 | 参数 | 是否必填 | 说明 | 单位/格式 |
 | --- | --- | --- | --- |
@@ -445,10 +578,6 @@ pytest orographic_wind_downscaling/test/test_official_wind_downscaling.py
 2. 若输入不是 meteva_base 网格数据格式，请先运行 `python orographic_wind_downscaling/cli/preprocess_test_data.py`（写出方案一 `cli_input/` 与方案二 `cli_input/latlon/`）。
 3. `--output-height-level` 与 `--output-height-level-units` 建议配套使用；只给单位不指定高度时，单位参数不会生效。
 
-## 9. 总结
+## 10. 总结
 
-`wind_downscaling.py` 模块提供了一套完整的风速降尺度算法，通过考虑地形粗糙度和高度对风速的影响，提高了风速预报的空间分辨率和准确性。该模块设计合理，功能完善，支持多维度输入数据，适用于处理大规模的气象数据。
-
-模块的核心算法基于对数风速廓线方程和地形波数计算，通过粗糙度订正和高度订正确保了风速在不同地形条件下的准确性。同时，高级接口 `RoughnessCorrection` 类提供了便捷的使用方式，使得风速订正过程更加模块化和易于集成到现有系统中。
-
-通过合理使用该模块，可以显著提高风速预报的质量，为气象预报、风能评估等应用提供更加准确的风速数据。
+先用 `RoughnessCalculation` / `AncRoughnessCli` 从细网格 DEM 与模式网格地形得到 `sigma`、`a_over_s`；再用 `RoughnessCorrection` 做风速订正：RC 替换近地廓线，HC 叠加 `hc_add`，再非负截断，固定返回 `(订正风速, hc_add)`。

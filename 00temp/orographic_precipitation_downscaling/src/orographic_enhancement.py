@@ -542,12 +542,20 @@ class OrographicEnhancement(BasePlugin):
         n_cols: int,
         n_rows: int,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """把块内回溯距离换成上游格点索引，并限制在全域范围内。"""
+        """把块内回溯距离换成上游格点索引，并限制在全域范围内。
+
+        全程 float32，避免 ``arange`` 整型与 ``0.0`` 把 (length, ny, nx) 抬成 float64。
+        非有限距离处 ``dist_safe=0``，索引落回当前格点。
+        """
         _, n_chunk, _ = distance.shape
-        xpos, ypos = np.meshgrid(np.arange(n_cols), np.arange(y0, y0 + n_chunk))
-        finite = np.isfinite(distance)
-        x_source = np.around(np.where(finite, xpos - distance * sin_wind_dir, xpos)).astype(np.int32)
-        y_source = np.around(np.where(finite, ypos - distance * cos_wind_dir, ypos)).astype(np.int32)
+        xpos = np.arange(n_cols, dtype=np.float32)[None, None, :]
+        ypos = np.arange(y0, y0 + n_chunk, dtype=np.float32)[None, :, None]
+        sin = np.asarray(sin_wind_dir, dtype=np.float32)[None, :, :]
+        cos = np.asarray(cos_wind_dir, dtype=np.float32)[None, :, :]
+        dist = np.asarray(distance, dtype=np.float32)
+        dist_safe = np.where(np.isfinite(dist), dist, np.float32(0.0))
+        x_source = np.rint(xpos - dist_safe * sin).astype(np.int32)
+        y_source = np.rint(ypos - dist_safe * cos).astype(np.int32)
         np.clip(x_source, 0, n_cols - 1, out=x_source)
         np.clip(y_source, 0, n_rows - 1, out=y_source)
         return x_source, y_source
@@ -578,9 +586,9 @@ class OrographicEnhancement(BasePlugin):
             np.abs(sin_wind_dir) > np.abs(cos_wind_dir),
             np.abs(sin_wind_dir),
             np.abs(cos_wind_dir),
-        )
+        ).astype(np.float32, copy=False)
         upstream_roi = self.upstream_range_of_influence_km / self.grid_spacing_km
-        max_roi = (upstream_roi * max_sin_cos).astype(int)
+        max_roi = (upstream_roi * max_sin_cos).astype(np.int32)
         if np.max(max_roi) <= 0:
             return point_orogenh.astype(np.float32)
         length = int(np.max(max_roi))
@@ -588,30 +596,36 @@ class OrographicEnhancement(BasePlugin):
         # 扩散尺度由风速和云寿命共同决定，二者越大，上游影响越远。
         stddev = (wind_speed * self.cloud_lifetime_s / grid_spacing_m).astype(np.float32)
         variance = np.square(stddev)
-        # 1 km 中国区约 4301×6801。整域 (length, ny, nx) 峰值到数 GiB；
-        # 按行分块，块内公式与整域一次计算相同。
+        # 上游贡献需分配 (length, ny, nx) 三维缓冲；大网格整域一次计算峰值内存过高。
+        # 按行分块，块内公式与整域一次计算相同。行块高度按单块 float32 三维缓冲预算自适应：
+        # row_chunk = clip(budget / (length * nx * 4), 下限 8, 上限 256)；
+        # 预算指单个 (length, row_chunk, nx) 数组，不是循环内全部临时数组之和。
         ny, nx = wind_speed.shape
         weighted_values = np.zeros((ny, nx), dtype=np.float32)
         sum_of_weights = np.zeros((ny, nx), dtype=np.float32)
-        row_chunk = 256
+        point = np.asarray(point_orogenh, dtype=np.float32)
+        max_chunk_bytes = 64 * 1024 * 1024
+        row_chunk = max(8, min(256, max_chunk_bytes // (max(length, 1) * nx * 4)))
+        half = np.float32(-0.5)
         for y0 in range(0, ny, row_chunk):
             y1 = min(ny, y0 + row_chunk)
             dist = self._upstream_distances(max_roi[y0:y1], max_sin_cos[y0:y1], length)
             x_source, y_source = self._upstream_source_index(
                 dist, sin_wind_dir[y0:y1], cos_wind_dir[y0:y1], y0, nx, ny
             )
-            source_values = point_orogenh[y_source, x_source]
+            source_values = point[y_source, x_source]
             var = variance[y0:y1]
-            finite = np.isfinite(dist)
-            value_weight = np.where(
-                finite & (var > 0),
-                np.exp((-0.5 * np.square(dist)) / var),
-                np.float32(0.0),
-            ).astype(np.float32, copy=False)
-            sum_of_weights[y0:y1] = np.sum(value_weight, axis=0)
-            weighted_values[y0:y1] = np.sum(source_values * value_weight, axis=0).astype(
-                np.float32
+            usable = np.isfinite(dist) & (var > 0)
+            # 无效处 dist/var 置安全值，整段保持 float32，最后再掩回 0
+            dist_u = np.where(usable, dist, np.float32(0.0))
+            var_b = np.where(var > 0, var, np.float32(1.0))
+            value_weight = np.exp(half * np.square(dist_u) / var_b).astype(np.float32, copy=False)
+            value_weight = np.where(usable, value_weight, np.float32(0.0)).astype(
+                np.float32, copy=False
             )
+            sum_of_weights[y0:y1] = np.sum(value_weight, axis=0)
+            weighted_values[y0:y1] = np.sum(source_values * value_weight, axis=0)
+            del dist, x_source, y_source, source_values, value_weight, dist_u, usable
         valid_mask = moving_mask & (sum_of_weights > 0)
         weighted_values[valid_mask] = self.efficiency_factor * (
             weighted_values[valid_mask] / sum_of_weights[valid_mask]

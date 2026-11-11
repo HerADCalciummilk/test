@@ -82,7 +82,7 @@ def test_official_roughness_correction_matches_kgo_and_original() -> None:
         MODEL_RESOLUTION,
         z0=auxiliary["vegetative_roughness"],
     )
-    result = plugin.process(wind_speed)
+    result, _hc_add = plugin.process(wind_speed)
     result_values = _to_spatial_values(result)
     kgo_values = _to_spatial_values(kgo)
     original_values = _to_spatial_values(original)

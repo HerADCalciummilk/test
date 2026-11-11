@@ -179,10 +179,11 @@ class TestRoughnessCorrectionUtilities:
         height_1d = wind_data['height_1d']
         
         # 使用 1D 高度网格
-        result = utilities.do_rc_hc_all(height_1d, wind_speed)
+        result, hc_add = utilities.do_rc_hc_all(height_1d, wind_speed)
         
         # 验证输出形状
         assert result.shape == wind_speed.shape
+        assert hc_add.shape == wind_speed.shape
         
         # 验证输出值
         assert not np.isnan(result).any()

@@ -56,7 +56,13 @@ def process(
     output_path: Optional[str] = None,
     *,
     output_height_level: Optional[float] = None,
-    output_height_level_units: str = "m", config=None) -> xr.DataArray:
+    output_height_level_units: str = "m",
+    absolute_correction_tol: Optional[float] = None,
+    href_scale: Optional[float] = None,
+    dx_max_factor: Optional[float] = None,
+    dx_min_factor: Optional[float] = None,
+    config=None,
+) -> xr.DataArray:
     """风速降尺度处理流程。
 
     参数
@@ -81,6 +87,9 @@ def process(
         若指定，则从结果中提取该高度层。
     output_height_level_units : str, default="m"
         ``output_height_level`` 的单位。
+    absolute_correction_tol, href_scale, dx_max_factor, dx_min_factor : float, optional
+        原方法内硬编码常数的外置；省略时用模块默认（与 IMPROVER 一致）。
+        HC 偏大时优先试增大 ``dx_max_factor``；RC 偏强时再调 ``absolute_correction_tol`` / ``href_scale``。
 
     返回
     -------
@@ -92,12 +101,26 @@ def process(
         "vegetative_roughness_path": (vegetative_roughness_path, "str"),
         "output_path": (output_path, "str"),
         "output_height_level": (output_height_level, "float"),
+        "absolute_correction_tol": (absolute_correction_tol, "float"),
+        "href_scale": (href_scale, "float"),
+        "dx_max_factor": (dx_max_factor, "float"),
+        "dx_min_factor": (dx_min_factor, "float"),
     })
     vegetative_roughness_path = _over['vegetative_roughness_path']
     output_path = _over['output_path']
     output_height_level = _over['output_height_level']
-    from orographic_wind_downscaling.src.wind_downscaling import RoughnessCorrection
-        
+    absolute_correction_tol = _over['absolute_correction_tol']
+    href_scale = _over['href_scale']
+    dx_max_factor = _over['dx_max_factor']
+    dx_min_factor = _over['dx_min_factor']
+    from orographic_wind_downscaling.src.wind_downscaling import (
+        RoughnessCorrection,
+        ABSOLUTE_CORRECTION_TOL,
+        HREF_SCALE,
+        DX_MAX_FACTOR,
+        DX_MIN_FACTOR,
+    )
+
     _unbounded = (-np.inf, np.inf, np.nan)
 
     if output_height_level_units and output_height_level is None:
@@ -139,8 +162,16 @@ def process(
         standard_orography,
         model_resolution,
         z0=vegetative_roughness,
+        absolute_correction_tol=(
+            ABSOLUTE_CORRECTION_TOL
+            if absolute_correction_tol is None
+            else float(absolute_correction_tol)
+        ),
+        href_scale=HREF_SCALE if href_scale is None else float(href_scale),
+        dx_max_factor=DX_MAX_FACTOR if dx_max_factor is None else float(dx_max_factor),
+        dx_min_factor=DX_MIN_FACTOR if dx_min_factor is None else float(dx_min_factor),
     )
-    result = plugin.process(wind_speed)
+    result, _hc_add = plugin.process(wind_speed)
 
     result = result.astype(np.float32, copy=False)
     result.name = wind_speed.name or result.name or "wind_speed"
@@ -241,6 +272,34 @@ class DscWindDownscalingCli(CliBase):
         parser.add_argument("--output-path", default=None, metavar="PATH", help="输出 NetCDF。省略则不写文件。")
         parser.add_argument("--output-height-level", dest="output_height_level", type=float, default=None, help="若指定，则从结果中提取该高度层。")
         parser.add_argument("--output-height-level-units", dest="output_height_level_units", default=None, help="output_height_level 的单位。省略则用 m。")
+        parser.add_argument(
+            "--absolute-correction-tol",
+            dest="absolute_correction_tol",
+            type=float,
+            default=None,
+            help="扰动衰减阈值 ε，默认 0.04。",
+        )
+        parser.add_argument(
+            "--href-scale",
+            dest="href_scale",
+            type=float,
+            default=None,
+            help="参考高度相对半峰谷高度上限倍数，默认 2.0。",
+        )
+        parser.add_argument(
+            "--dx-max-factor",
+            dest="dx_max_factor",
+            type=float,
+            default=None,
+            help="dx_max = factor * modres，默认 3.0。",
+        )
+        parser.add_argument(
+            "--dx-min-factor",
+            dest="dx_min_factor",
+            type=float,
+            default=None,
+            help="dx_min = factor * ppres，默认 0.5。",
+        )
         parser.add_argument("--config", default=None, metavar="PATH", help="运行配置 ini，传给 process。相对路径按本包目录解析。省略则用 resource/conf.ini。")
 
     def run(self, **params) -> int:
