@@ -19,17 +19,14 @@ PRESET: Dict[str, Any] = {
     "module": "timesplit",
     "interp_method": "slinear",
     "is_fill0": False,
-    "ntime": 10,
-    "is_min": True,
+    "is_min": False,
     "index": "dtime",
 }
 
 _MODULE_ALIASES = {
     "time_split": "timesplit",
-    "hour_to_min": "hourtomin",
-    "readdata": "read",
 }
-_MODULES = ("timesplit", "hourtomin", "read")
+_MODULES = ("timesplit",)
 
 
 def clear_ini_cache() -> None:
@@ -90,11 +87,6 @@ def _opt_str(section: str, key: str, preset: str) -> str:
     return preset if raw is None else raw
 
 
-def _opt_int(section: str, key: str, preset: int) -> int:
-    raw = _raw(section, key)
-    return preset if raw is None else int(raw)
-
-
 def _opt_bool(section: str, key: str, preset: bool) -> bool:
     raw = _raw(section, key)
     if raw is None:
@@ -124,12 +116,19 @@ def _require(name: str, explicit: Optional[str], section: str, key: str) -> str:
     return raw
 
 
+def _timesplit_index(index: Optional[str]) -> str:
+    resolved = index.strip() if not _missing(index) else _opt_str("timesplit", "index", str(PRESET["index"]))
+    if resolved not in ("dtime", "time"):
+        raise ValueError("index 只支持 dtime 或 time")
+    return resolved
+
+
 def resolve_module(module: Optional[str] = None) -> str:
     if _missing(module):
         module = _raw("cli", "module") or str(PRESET["module"])
     name = _MODULE_ALIASES.get(str(module).strip(), str(module).strip())
     if name not in _MODULES:
-        raise ValueError("module 未指定或无效。请传 --module，可选 timesplit、hourtomin、read")
+        raise ValueError("module 未指定或无效。请传 --module，可选 timesplit")
     return name
 
 
@@ -142,15 +141,10 @@ def resolve_args(
     time: Optional[str] = None,
     output_fmt: Optional[str] = None,
     uv_fmt: Optional[str] = None,
-    delta_hour: Optional[str] = None,
+    delta: Optional[str] = None,
     is_fill0: Optional[bool] = None,
-    ntime: Optional[int] = None,
     is_min: Optional[bool] = None,
     index: Optional[str] = None,
-    file_path: Optional[str] = None,
-    file_time: Optional[str] = None,
-    glon: Optional[str] = None,
-    glat: Optional[str] = None,
     config: Optional[str] = None,
 ) -> Dict[str, Any]:
     """补齐命令行参数。``config`` 给出时改读该 ini，返回前恢复默认文件。其余参数含义不变。"""
@@ -166,15 +160,10 @@ def resolve_args(
             time=time,
             output_fmt=output_fmt,
             uv_fmt=uv_fmt,
-            delta_hour=delta_hour,
+            delta=delta,
             is_fill0=is_fill0,
-            ntime=ntime,
             is_min=is_min,
             index=index,
-            file_path=file_path,
-            file_time=file_time,
-            glon=glon,
-            glat=glat,
         )
     finally:
         if config:
@@ -190,39 +179,12 @@ def _resolve_args(
     time: Optional[str] = None,
     output_fmt: Optional[str] = None,
     uv_fmt: Optional[str] = None,
-    delta_hour: Optional[str] = None,
+    delta: Optional[str] = None,
     is_fill0: Optional[bool] = None,
-    ntime: Optional[int] = None,
     is_min: Optional[bool] = None,
     index: Optional[str] = None,
-    file_path: Optional[str] = None,
-    file_time: Optional[str] = None,
-    glon: Optional[str] = None,
-    glat: Optional[str] = None,
 ) -> Dict[str, Any]:
     name = resolve_module(module)
-    if name == "hourtomin":
-        resolved_index = index.strip() if not _missing(index) else _opt_str("hourtomin", "index", str(PRESET["index"]))
-        if resolved_index not in ("dtime", "time"):
-            raise ValueError("index 只支持 dtime 或 time")
-        hour_interp = interp_method.strip() if not _missing(interp_method) else _opt_str(
-            "hourtomin", "interp_method", str(PRESET["interp_method"])
-        )
-        return {
-            "module": name,
-            "ntime": _opt_int("hourtomin", "ntime", int(PRESET["ntime"])) if ntime is None else int(ntime),
-            "is_min": _opt_bool("hourtomin", "is_min", bool(PRESET["is_min"])) if is_min is None else bool(is_min),
-            "index": resolved_index,
-            "interp_method": hour_interp,
-        }
-    if name == "read":
-        return {
-            "module": name,
-            "file_path": _require("file_path", file_path, "read", "file_path"),
-            "file_time": _require("file_time", file_time, "read", "file_time"),
-            "glon": _require("glon", glon, "read", "glon"),
-            "glat": _require("glat", glat, "read", "glat"),
-        }
     interp = interp_method.strip() if not _missing(interp_method) else _opt_str(
         "timesplit", "interp_method", str(PRESET["interp_method"])
     )
@@ -235,6 +197,8 @@ def _resolve_args(
         "time": _require("time", time, "timesplit", "time"),
         "output_fmt": _optional(output_fmt, "timesplit", "output_fmt"),
         "uv_fmt": _optional(uv_fmt, "timesplit", "uv_fmt"),
-        "delta_hour": _optional(delta_hour, "timesplit", "delta_hour"),
+        "delta": _optional(delta, "timesplit", "delta"),
         "is_fill0": _opt_bool("timesplit", "is_fill0", bool(PRESET["is_fill0"])) if is_fill0 is None else bool(is_fill0),
+        "is_min": _opt_bool("timesplit", "is_min", bool(PRESET["is_min"])) if is_min is None else bool(is_min),
+        "index": _timesplit_index(index),
     }
