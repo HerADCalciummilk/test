@@ -1,8 +1,8 @@
 # CLI
 
 在本包目录执行 `python -m cli`。用 `--module` 选择 `idw`、`idw_delta`、`gaussian`、`kriging`、`cressman`（`total` 为 `idw` 旧别名）。
-`idw` / `idw_delta` 均走 `InterpSgIdw`；`gaussian` 走 `InterpSgDeltaGaussian`；`kriging` 走 `InterpSgKriging`；`cressman` 走 `InterpSgCressman`。
-`idw` / `gaussian` / `kriging` 的 `--background` 为偏差订正；`cressman` 的 `--background` 为初估场。
+`idw` / `idw_delta` 均走 `InterpSgIdw`；`gaussian` 走 `InterpSgGaussian`；`kriging` 走 `InterpSgKriging`；`cressman` 走 `InterpSgCressman`。
+`idw` / `gaussian` / `kriging` 的 `--background` 为偏差订正；`cressman` 的 `--background` 为逐步订正初估场。
 没写的参数先读 `resource/conf.ini`，再没有则用预设。`sta` 和 `grid` 为空时报错。
 
 ```bash

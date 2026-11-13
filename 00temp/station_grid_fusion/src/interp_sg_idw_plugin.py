@@ -50,17 +50,17 @@ class InterpSgIdw(PostProcessingPlugin):
 
     def __init__(
         self,
-        model_id_attr: Optional[str] = None,
         effectR: Optional[int] = 1000,
         nearNum: Optional[int] = 8,
         decrease: Optional[int] = 2,
         gaussian: bool = False,
+        outer_value: Optional[float] = None,
     ):
-        self.model_id_attr = model_id_attr
         self.effectR = effectR
         self.nearNum = nearNum
         self.decrease = decrease
         self.gaussian = bool(gaussian)
+        self.outer_value = outer_value
 
     def process(self, sta0, grid, background=None):
         """站点→格点插值。
@@ -93,7 +93,7 @@ class InterpSgIdw(PostProcessingPlugin):
 
             # 可选：背景场偏差订正（插值对象变为 obs - bg）
             if background is not None:
-                bg = meb.interp_gg_linear(background, grid=grid2)
+                bg = meb.interp_gg_linear(background, grid=grid2, outer_value=self.outer_value)
                 sta_use = sta.copy()
                 bg_at_sta = meb.interp_gs_linear(bg, sta)
                 sta_use.iloc[:, -1] = sta.iloc[:, -1] - bg_at_sta.iloc[:, -1]

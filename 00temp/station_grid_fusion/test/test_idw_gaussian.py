@@ -4,11 +4,11 @@
 
 if __name__ == "__main__":
     import meteva_base as meb
-    from interp_sg_delta_gaussian_plugin import InterpSgDeltaGaussian
+    from interp_sg_gaussian_plugin import InterpSgGaussian
 
     sta = meb.read_stadata_from_csv(r"/data/code/nimm/demo_data/input/sta_grid_interp/sta.csv")
     grid = meb.read_griddata_from_nc(r"/data/code/nimm/demo_data/input/sta_grid_interp/grid.nc")
     grid_info = meb.get_grid_of_data(grid)
 
-    result = InterpSgDeltaGaussian(halfR=20).process(sta, grid_info, background=grid)
+    result = InterpSgGaussian(halfR=20).process(sta, grid_info, background=grid)
     print(result)

@@ -8,8 +8,8 @@
 
 - `InterpSgIdw`：站点→格点 IDW。`background=None` 时直接插值；给出背景场时先算偏差再插值并叠加。`gaussian=False` 为纯 IDW（`effectR` 为硬截断半径：超距填 0）；`gaussian=True` 为 IDW×高斯（`effectR` 作高斯半径）。原 `InterpSgIdwDelta` / `InterpSgTotal` 已并入本类。
 - `InterpSgKriging`：局部普通克里金（OK）。每个格点用 `nearNum` 个近邻站建方程组；变异函数可选 spherical / exponential / gaussian；`sill` / `range_` 可自动估计。同样支持可选 `background` 偏差订正。
-- `InterpSgDeltaGaussian`：最近邻 × 高斯半径扩散。`process(sta, grid, background=None)` 与 IDW 对齐；有背景先算偏差再叠回，无背景直接插站点值。
-- `InterpSgCressman`：按 `r_list` 逐步 Cressman 订正。`process(sta, grid, background=None)`；背景作初估场（对齐后改写半径内格点），与 IDW 的偏差订正语义不同。
+- `InterpSgGaussian`：最近邻 × 高斯半径扩散。`process(sta, grid, background=None)` 与 IDW 对齐；有背景先算偏差再叠回，无背景直接插站点值。
+- `InterpSgCressman`：经典 Cressman 逐步订正。`process(sta, grid, background=None)`；背景作初估场，每一扫用 `obs − 当前分析场` 做增量，按 `r_list` 由大到小更新。
 - `interp_station_to_grid_renew.py`：保留旧函数式实现与批处理示例。
 
 ## 目录结构
@@ -72,9 +72,9 @@ python -m cli --module cressman --sta <sta.csv> --grid <grid.nc> --background <b
 ```
 
 ```python
-from station_grid_fusion.src import InterpSgDeltaGaussian
+from station_grid_fusion.src import InterpSgGaussian
 
-result = InterpSgDeltaGaussian(halfR=20).process(sta, grid_info, background=bg)
+result = InterpSgGaussian(halfR=20).process(sta, grid_info, background=bg)
 ```
 
 ```python

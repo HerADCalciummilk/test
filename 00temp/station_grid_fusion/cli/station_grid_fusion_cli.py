@@ -79,7 +79,7 @@ class StationGridFusionCli(CliBase):
         parser.add_argument(
             "--background",
             default=None,
-            help="可选背景场 nc。idw/kriging/gaussian 为偏差订正；cressman 为初估场。省略则读 ini",
+            help="可选背景场 nc。idw/kriging/gaussian 为偏差订正；cressman 为逐步订正初估场。省略则读 ini",
         )
         parser.add_argument("--effect-r", type=int, default=None, help="影响/高斯半径。省略则读对应节，预设 1000")
         parser.add_argument("--near-num", type=int, default=None, help="最邻近站点数。省略则读对应节")
@@ -180,12 +180,12 @@ class StationGridFusionCli(CliBase):
                     gaussian=True,
                 ).process(sta_data, grid_info, background=grid_data)
             elif module_name == "gaussian":
-                from interp_sg_delta_gaussian_plugin import InterpSgDeltaGaussian
+                from interp_sg_gaussian_plugin import InterpSgGaussian
 
                 background_data = None
                 if cfg["background"]:
                     background_data = meb.read_griddata_from_nc(cfg["background"])
-                result = InterpSgDeltaGaussian(halfR=cfg["half_r"]).process(
+                result = InterpSgGaussian(halfR=cfg["half_r"]).process(
                     sta_data, grid_info, background=background_data
                 )
             elif module_name == "kriging":

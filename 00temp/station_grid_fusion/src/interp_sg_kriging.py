@@ -53,12 +53,12 @@ class InterpSgKriging(PostProcessingPlugin):
 
     def __init__(
         self,
-        model_id_attr: Optional[str] = None,
         model: VariogramModel = "spherical",
         sill: Optional[float] = None,
         range_: Optional[float] = None,
         nugget: float = 0.0,
         nearNum: int = 20,
+        outer_value: Optional[float] = None,
     ):
         if model not in ("spherical", "exponential", "gaussian"):
             raise ValueError("model 仅支持 spherical / exponential / gaussian")
@@ -66,13 +66,13 @@ class InterpSgKriging(PostProcessingPlugin):
             raise ValueError("nearNum 必须 >= 1")
         if float(nugget) < 0.0:
             raise ValueError("nugget 不能为负")
-        self.model_id_attr = model_id_attr
         self.model = model
         self.sill = sill
         self.range_ = range_
         self.nugget = float(nugget)
         self.nearNum = int(nearNum)
-
+        self.outer_value = outer_value
+        
     @staticmethod
     def _variogram(
         h: np.ndarray,
@@ -242,7 +242,7 @@ class InterpSgKriging(PostProcessingPlugin):
 
             # 可选：背景场偏差订正
             if background is not None:
-                bg = meb.interp_gg_linear(background, grid=grid2)
+                bg = meb.interp_gg_linear(background, grid=grid2, outer_value=self.outer_value)
                 sta_use = sta.copy()
                 sta_use.iloc[:, -1] = (
                     sta.iloc[:, -1] - meb.interp_gs_linear(bg, sta).iloc[:, -1]

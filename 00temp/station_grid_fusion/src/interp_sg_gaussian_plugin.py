@@ -21,7 +21,7 @@ from scipy.spatial import cKDTree
 from utils.base_plugin import PostProcessingPlugin
 
 
-class InterpSgDeltaGaussian(PostProcessingPlugin):
+class InterpSgGaussian(PostProcessingPlugin):
     """最近邻 × 高斯半径扩散。
 
     - ``background is None``：直接插值站点值。
@@ -32,17 +32,19 @@ class InterpSgDeltaGaussian(PostProcessingPlugin):
     halfR :
         高斯半径；超过该距离的格点权重置 0。
         距离单位与球面笛卡尔坐标一致（米量级）。
+    outer_value :
+        背景场双线性插值越界填充值，传给 ``interp_gg_linear``。
     """
 
     def __init__(
         self,
-        model_id_attr: Optional[str] = None,
         halfR: Optional[int] = 20,
+        outer_value: Optional[float] = None,
     ):
         if halfR is not None and int(halfR) <= 0:
             raise ValueError("halfR 必须大于 0")
-        self.model_id_attr = model_id_attr
         self.halfR = 20 if halfR is None else int(halfR)
+        self.outer_value = outer_value
 
     def process(self, sta0, grid, background=None):
         """站点→格点最近邻高斯插值。
@@ -74,7 +76,7 @@ class InterpSgDeltaGaussian(PostProcessingPlugin):
 
             # 可选：背景场偏差订正（插值对象变为 obs - bg）
             if background is not None:
-                bg = meb.interp_gg_linear(background, grid=grid2)
+                bg = meb.interp_gg_linear(background, grid=grid2, outer_value=self.outer_value)
                 sta_use = sta.copy()
                 bg_at_sta = meb.interp_gs_linear(bg, sta)
                 sta_use.iloc[:, -1] = sta.iloc[:, -1] - bg_at_sta.iloc[:, -1]
