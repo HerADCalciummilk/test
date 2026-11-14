@@ -88,6 +88,6 @@ result = InterpSgCressman(r_list=[60000, 40000, 20000], nearNum=100).process(
 
 ## 注意事项
 
-1. 依赖 `meteva_base`、`numpy`、`scipy`，以及共享 `utils.base_plugin`。
+1. 依赖 `meteva_base`、`numpy`、`scipy`、同级 `grid_grid_fusion.InterpGgLinear`（背景场对齐），以及共享 `utils.base_plugin`。结果场 `attrs` 继承自输入站点。
 2. 示例路径可能仍含旧绝对路径，正式测试前请替换。
 3. 原始目录未提供独立测试数据；示例脚本在 `test/`，notebook 在 `nbs/`。

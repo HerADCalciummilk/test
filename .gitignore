@@ -66,6 +66,7 @@ venv/
 **/resource/case_output/
 **/resource/cmpas*/
 **/resource/ec_*/
+**/*.json
 
 # cursor配置
 .cursorrules

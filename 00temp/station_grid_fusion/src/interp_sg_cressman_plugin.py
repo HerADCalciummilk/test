@@ -19,6 +19,9 @@
 """
 from __future__ import annotations
 
+import copy
+import os
+import sys
 from typing import Optional, Sequence
 
 import meteva_base as meb
@@ -26,6 +29,22 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from utils.base_plugin import PostProcessingPlugin
+
+
+def _ensure_grid_grid_fusion_on_path() -> None:
+    """将同级子模块 ``grid_grid_fusion`` 的根与 ``src`` 追加到 sys.path。"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    temp_root = os.path.normpath(os.path.join(here, "..", ".."))
+    gg_root = os.path.join(temp_root, "grid_grid_fusion")
+    gg_src = os.path.join(gg_root, "src")
+    for p in (gg_root, gg_src):
+        if os.path.isdir(p) and p not in sys.path:
+            sys.path.append(p)
+
+
+_ensure_grid_grid_fusion_on_path()
+
+from interp_gg_linear_plugin import InterpGgLinear  # noqa: E402
 
 _DEFAULT_R_LIST = (60000.0, 40000.0, 20000.0)
 
@@ -43,7 +62,7 @@ class InterpSgCressman(PostProcessingPlugin):
     nearNum :
         每个格点参与加权的近邻站点数上限。
     outer_value :
-        背景场双线性插值越界填充值，传给 ``interp_gg_linear``。
+        背景场对齐越界填充值，传给 ``InterpGgLinear``。
     """
 
     def __init__(
@@ -73,7 +92,7 @@ class InterpSgCressman(PostProcessingPlugin):
             background: 可选背景初估场；给出时先对齐到目标网格再订正。
 
         Returns:
-            各 member/level/time/dtime 切片拼接后的格点场。
+            各 member/level/time/dtime 切片拼接后的格点场；``attrs`` 继承自 ``sta0``。
         """
         sta1 = meb.sele_by_para(sta0, drop_IV=True)
         sta_list = meb.split(sta1, ["member", "level", "time", "dtime"])
@@ -119,9 +138,13 @@ class InterpSgCressman(PostProcessingPlugin):
             # 初估场
             ana_grd = meb.basicdata.grid_data(grid2)
             if background is not None:
-                ana_grd = meb.interp_gg_linear(
-                    background, grid=grid2, outer_value=self.outer_value
+                ana_grd = InterpGgLinear(outer_value=self.outer_value).process(
+                    background, grid2
                 )
+                if ana_grd is None:
+                    raise ValueError(
+                        "背景场对齐失败：目标网格超出背景范围时请设置 outer_value"
+                    )
             ana_dat = np.asarray(ana_grd.values, dtype=float).flatten()
             obs = np.asarray(sta.values[:, -1], dtype=float)
 
@@ -150,4 +173,6 @@ class InterpSgCressman(PostProcessingPlugin):
             grd.name = data_name[0]
             grd_list.append(grd)
 
-        return meb.concat(grd_list)
+        grd_all = meb.concat(grd_list)
+        grd_all.attrs = copy.deepcopy(sta0.attrs)
+        return grd_all

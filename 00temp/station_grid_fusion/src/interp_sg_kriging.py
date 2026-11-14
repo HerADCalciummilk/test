@@ -18,6 +18,9 @@
 """
 from __future__ import annotations
 
+import copy
+import os
+import sys
 from typing import Literal, Optional
 
 import numpy as np
@@ -25,6 +28,22 @@ from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 
 from utils.base_plugin import PostProcessingPlugin
+
+
+def _ensure_grid_grid_fusion_on_path() -> None:
+    """将同级子模块 ``grid_grid_fusion`` 的根与 ``src`` 追加到 sys.path。"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    temp_root = os.path.normpath(os.path.join(here, "..", ".."))
+    gg_root = os.path.join(temp_root, "grid_grid_fusion")
+    gg_src = os.path.join(gg_root, "src")
+    for p in (gg_root, gg_src):
+        if os.path.isdir(p) and p not in sys.path:
+            sys.path.append(p)
+
+
+_ensure_grid_grid_fusion_on_path()
+
+from interp_gg_linear_plugin import InterpGgLinear  # noqa: E402
 
 VariogramModel = Literal["spherical", "exponential", "gaussian"]
 
@@ -49,6 +68,8 @@ class InterpSgKriging(PostProcessingPlugin):
         块金值，``γ(0)=nugget``，须 ``>=0`` 且小于基台。
     nearNum :
         每个格点参与求解的近邻站点数。
+    outer_value :
+        背景场对齐越界填充值，传给 ``InterpGgLinear``。
     """
 
     def __init__(
@@ -72,7 +93,7 @@ class InterpSgKriging(PostProcessingPlugin):
         self.nugget = float(nugget)
         self.nearNum = int(nearNum)
         self.outer_value = outer_value
-        
+
     @staticmethod
     def _variogram(
         h: np.ndarray,
@@ -222,7 +243,7 @@ class InterpSgKriging(PostProcessingPlugin):
             background: 可选背景场；给出时走偏差订正（插偏差后叠回背景）。
 
         Returns:
-            与站点 member/level/time/dtime 切片拼接后的格点场。
+            与站点 member/level/time/dtime 切片拼接后的格点场；``attrs`` 继承自 ``sta0``。
         """
         import meteva_base as meb
 
@@ -242,7 +263,11 @@ class InterpSgKriging(PostProcessingPlugin):
 
             # 可选：背景场偏差订正
             if background is not None:
-                bg = meb.interp_gg_linear(background, grid=grid2, outer_value=self.outer_value)
+                bg = InterpGgLinear(outer_value=self.outer_value).process(background, grid2)
+                if bg is None:
+                    raise ValueError(
+                        "背景场对齐失败：目标网格超出背景范围时请设置 outer_value"
+                    )
                 sta_use = sta.copy()
                 sta_use.iloc[:, -1] = (
                     sta.iloc[:, -1] - meb.interp_gs_linear(bg, sta).iloc[:, -1]
@@ -277,4 +302,6 @@ class InterpSgKriging(PostProcessingPlugin):
                 grd.name = data_name[0]
             grd_list.append(grd)
 
-        return meb.concat(grd_list)
+        grd_all = meb.concat(grd_list)
+        grd_all.attrs = copy.deepcopy(sta0.attrs)
+        return grd_all

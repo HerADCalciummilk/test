@@ -170,7 +170,23 @@ def interp_sg_total(sta, to_grid, grid_background=None, **args):
     if grid_background is None:
         grid = interp_sg_idw(sta, to_grid, **args)
     else:
-        grid_background = meb.interp_gg_linear(grid_background, grid=to_grid)
+        import os
+        import sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        temp_root = os.path.normpath(os.path.join(here, "..", ".."))
+        gg_root = os.path.join(temp_root, "grid_grid_fusion")
+        gg_src = os.path.join(gg_root, "src")
+        for p in (gg_root, gg_src):
+            if os.path.isdir(p) and p not in sys.path:
+                sys.path.append(p)
+        from interp_gg_linear_plugin import InterpGgLinear
+
+        grid_background = InterpGgLinear(outer_value=0).process(grid_background, to_grid)
+        if grid_background is None:
+            raise ValueError(
+                "背景场对齐失败：目标网格超出背景范围时请设置 outer_value"
+            )
         grid = interp_sg_idw_delta(sta, grid0=grid_background, effectR =1000, nearNum=8,decrease = 2)
     return(grid)
 
