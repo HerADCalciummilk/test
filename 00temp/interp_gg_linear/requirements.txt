@@ -1,3 +1,0 @@
-numpy
-meteva
-meteva_base
