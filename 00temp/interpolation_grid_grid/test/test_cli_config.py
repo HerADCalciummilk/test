@@ -17,7 +17,6 @@ def test_defaults_come_from_ini() -> None:
     got = resolve_args(grid=r"D:\grid.nc", domain="20,50,70,140,0.1,0.1")
     assert got["module"] == "linear"
     assert got["grid"] == r"D:\grid.nc"
-    assert got["used_coords"] == "xy"
     assert got["outer_value"] == 0.0
     assert got["domain"] == [20.0, 50.0, 70.0, 140.0, 0.1, 0.1]
     assert got["grid_type"] == "nc"
@@ -45,7 +44,7 @@ def test_nearest_and_cubic_modules() -> None:
     assert nearest["module"] == "nearest"
     assert cubic["module"] == "cubic"
     assert nearest["outer_value"] == 0.0
-    assert cubic["used_coords"] == "xy"
+    assert cubic["outer_value"] == 0.0
 
 
 def test_required_grid_raises_when_empty() -> None:

@@ -2,7 +2,7 @@
 """格点→站点双三次插值。
 
 接口：``process(grd, sta)``。
-算法参考 ``utils.interpolating.interp_gs_cubic``（``used_coords=\"xy\"`` 主路径）；
+算法参考 ``utils.interpolating.interp_gs_cubic``（水平 ``xy``）；
 插值前经度预处理与 ``InterpGsLinear`` 对齐（``reset_lon_range`` /
 ``reset_global_griddata``）。
 """
@@ -18,18 +18,7 @@ from utils.base_plugin import PostProcessingPlugin
 
 
 class InterpGsCubic(PostProcessingPlugin):
-    """格点→站点双三次插值。
-
-    Parameters
-    ----------
-    used_coords :
-        插值坐标；当前仅支持 ``"xy"``。
-    """
-
-    def __init__(self, used_coords: str = "xy"):
-        if used_coords != "xy":
-            raise ValueError('used_coords 当前仅支持 "xy"')
-        self.used_coords = used_coords
+    """格点→站点双三次插值（水平 ``xy``）。"""
 
     @staticmethod
     def _cubic_f(n: int, dx: np.ndarray) -> np.ndarray:
@@ -42,20 +31,16 @@ class InterpGsCubic(PostProcessingPlugin):
             return -(dx + 1) * dx * (dx - 2) / 2
         return (dx + 1) * dx * (dx - 1) / 6
 
-    def process(self, grd, sta, used_coords=None):
+    def process(self, grd, sta):
         """格点→站点双三次插值。
 
         Args:
             grd: 源格点场。
             sta: 目标站点表。
-            used_coords: 覆盖构造参数；``None`` 用实例值。
 
         Returns:
             站点表；网格内无站点时为 ``None``。``attrs`` 继承自 ``grd``。
         """
-        coords = self.used_coords if used_coords is None else used_coords
-        if coords != "xy":
-            raise ValueError('used_coords 当前仅支持 "xy"')
         if grd is None:
             return None
 

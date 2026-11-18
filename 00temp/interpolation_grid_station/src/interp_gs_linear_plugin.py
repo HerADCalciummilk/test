@@ -67,21 +67,18 @@ class InterpGsLinear(PostProcessingPlugin):
         n = axis.size
         return (n - 1 - hi_r).astype("int16"), (n - 1 - lo_r).astype("int16"), w
 
-    def process(self, grd, sta, used_coords=None):
+    def process(self, grd, sta):
         """格点→站点双线性插值。
 
         Args:
             grd: 源格点场。
             sta: 目标站点表。
-            used_coords: 覆盖构造参数；``None`` 用实例值。
 
         Returns:
             站点表；``attrs`` 继承自 ``grd``。网格内无站点时返回 ``None``。
             ``xydt`` 且源 ``dtime`` 维长度为 1 时抛 ``ValueError``。
         """
-        coords = self.used_coords if used_coords is None else used_coords
-        if coords not in ("xy", "xyz", "xydt"):
-            raise ValueError('used_coords 当前仅支持 "xy"、"xyz" 或 "xydt"')
+        coords = self.used_coords
         if grd is None:
             return None
 

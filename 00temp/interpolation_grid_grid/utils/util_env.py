@@ -17,7 +17,6 @@ _CACHE: Optional[configparser.ConfigParser] = None
 
 PRESET: Dict[str, Any] = {
     "module": "linear",
-    "used_coords": "xy",
     "outer_value": 0.0,
 }
 
@@ -166,7 +165,6 @@ def resolve_args(
     grid: Optional[str] = None,
     grid_template: Optional[str] = None,
     output: Optional[str] = None,
-    used_coords: Optional[str] = None,
     outer_value: Optional[float] = None,
     glon: Any = None,
     glat: Any = None,
@@ -183,7 +181,6 @@ def resolve_args(
             grid=grid,
             grid_template=grid_template,
             output=output,
-            used_coords=used_coords,
             outer_value=outer_value,
             glon=glon,
             glat=glat,
@@ -214,7 +211,6 @@ def _resolve_args(
     grid: Optional[str] = None,
     grid_template: Optional[str] = None,
     output: Optional[str] = None,
-    used_coords: Optional[str] = None,
     outer_value: Optional[float] = None,
     glon: Any = None,
     glat: Any = None,
@@ -230,20 +226,7 @@ def _resolve_args(
         "output": _optional_path(output, "output", "path"),
     }
 
-    # used_coords / outer_value：优先读当前 module 节，再回退 [linear]
-    coords = (
-        used_coords.strip()
-        if not _missing(used_coords)
-        else (
-            _raw(name, "used_coords")
-            or _raw("linear", "used_coords")
-            or str(PRESET["used_coords"])
-        )
-    )
-    if coords != "xy":
-        raise ValueError('used_coords 当前仅支持 "xy"')
-    resolved["used_coords"] = coords
-
+    # outer_value：优先读当前 module 节，再回退 [linear]
     if outer_value is not None:
         resolved["outer_value"] = float(outer_value)
     else:

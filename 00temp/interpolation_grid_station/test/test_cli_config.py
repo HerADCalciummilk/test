@@ -51,7 +51,8 @@ def test_nearest_and_cubic_modules() -> None:
     cubic = resolve_args(module="cubic", grid=r"D:\grid.nc", sta=r"D:\sta.csv")
     assert nearest["module"] == "nearest"
     assert cubic["module"] == "cubic"
-    assert nearest["used_coords"] == "xy"
+    assert nearest["used_coords"] is None
+    assert cubic["used_coords"] is None
 
 
 def test_linear_allows_xydt() -> None:
@@ -64,13 +65,13 @@ def test_linear_allows_xydt() -> None:
     assert got["used_coords"] == "xydt"
 
 
-def test_nearest_rejects_xydt() -> None:
+def test_nearest_rejects_used_coords() -> None:
     with pytest.raises(ValueError, match="used_coords"):
         resolve_args(
             module="nearest",
             grid=r"D:\grid.nc",
             sta=r"D:\sta.csv",
-            used_coords="xydt",
+            used_coords="xy",
         )
 
 

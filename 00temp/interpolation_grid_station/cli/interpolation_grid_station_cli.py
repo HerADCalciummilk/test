@@ -90,7 +90,7 @@ class InterpolationGridStationCli(CliBase):
         parser.add_argument(
             "--used-coords",
             default=None,
-            help='插值坐标。linear: xy/xyz/xydt；nearest/cubic: 仅 xy。省略则读 ini，预设 xy',
+            help='插值坐标，仅 linear：xy/xyz/xydt。省略则读 ini，预设 xy',
         )
 
     def run(
@@ -140,15 +140,11 @@ class InterpolationGridStationCli(CliBase):
             elif module_name == "nearest":
                 from interp_gs_nearest_plugin import InterpGsNearest
 
-                result = InterpGsNearest(used_coords=cfg["used_coords"]).process(
-                    grd_in, sta_in
-                )
+                result = InterpGsNearest().process(grd_in, sta_in)
             elif module_name == "cubic":
                 from interp_gs_cubic_plugin import InterpGsCubic
 
-                result = InterpGsCubic(used_coords=cfg["used_coords"]).process(
-                    grd_in, sta_in
-                )
+                result = InterpGsCubic().process(grd_in, sta_in)
             else:
                 raise ValueError(f"未知 module: {module_name}")
 

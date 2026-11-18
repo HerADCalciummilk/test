@@ -45,8 +45,7 @@
 
 ### 3.1 共同约定
 
-- `used_coords` 当前仅支持 `"xy"`。
-- 源经度跨满 360°（`iscycle`）时经度取模；**纬度越界仍须** `outer_value`。
+- 水平插值；源经度跨满 360°（`iscycle`）时经度取模；**纬度越界仍须** `outer_value`。
 - 非循环场经纬越界：先插重叠区，再 `expand_to_contain_another_grid` 填外区；越界且未给 `outer_value` 时返回 `None`。
 - `member` / `level` / `time` / `dtime` 继承源场；水平网格取自目标 `grid`；`attrs` 深拷贝自源场。
 
@@ -56,8 +55,7 @@
 
 | 参数 | 位置 | 必填 | 默认 | 说明 |
 | --- | --- | --- | --- | --- |
-| `used_coords` | 构造 / `process` | 否 | `"xy"` | 仅支持水平 |
-| `outer_value` | 构造 / `process` | 条件 | `None` | 目标超出源域时的填充值 |
+| `outer_value` | 构造 | 条件 | `None` | 目标超出源域时的填充值 |
 | `grd` | `process` | 是 | — | 源格点场 |
 | `grid` | `process` | 是 | — | 目标网格 |
 
@@ -72,7 +70,7 @@ result = InterpGgLinear(outer_value=0.0).process(grd, grid)
 
 ### 3.3 `InterpGgNearest`
 
-对索引 `np.around` 取最近源格点赋值。循环场经度取模；非循环场索引钳制在有效范围。参数表与 Linear 相同（`used_coords` / `outer_value` / `grd` / `grid`）。
+对索引 `np.around` 取最近源格点赋值。循环场经度取模；非循环场索引钳制在有效范围。参数表与 Linear 相同（`outer_value` / `grd` / `grid`）。
 
 ```python
 from interp_gg_nearest_plugin import InterpGgNearest

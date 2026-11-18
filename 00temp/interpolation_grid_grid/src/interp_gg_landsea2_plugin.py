@@ -1,10 +1,18 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright (c) 2019 NMC Developers.
-# Distributed under the terms of the GPL V3 License.
-"""新版最近邻/双线性重网格插件（含可选海陆感知）。
+"""格点→格点海陆感知重网格内核（``InterpGgLandSea2``，``*-2`` 模式）。
 
-自 regrid 包 ``landsea2`` 迁入。
+接口：``process(data_in, data_in_mask, data_out_mask)``。
+由 ``InterpGgLandSea`` 在 ``nearest-2`` / ``bilinear-2`` /
+``nearest-with-mask-2`` / ``bilinear-with-mask-2`` 下委托调用；也可单独使用。
+
+算法要点
+--------
+1. 源场须为经纬度规则网格；目标可为经纬或投影网格（由 ``data_out_mask`` 定形）。
+2. 先按目标外包络裁源域，再将目标点分为域内/域外；域外填 NaN。
+3. 无掩码：四邻 ``nearest-2`` 或双线性 ``bilinear-2``。
+4. 有掩码：四邻/双线性权重中剔除地表类型不匹配的源点，并在
+   ``vicinity_radius`` 内搜索同类型邻点后重算。
+5. ``data_in_mask`` 与 ``data_in`` 分辨率可以不同。
 """
 
 from __future__ import annotations
@@ -49,28 +57,24 @@ NUM_NEIGHBOURS = 4
 
 
 class InterpGgLandSea2(PostProcessingPlugin):
-    """最近邻与双线性重网格，可选海陆掩码感知。
+    """``*-2`` 族最近邻 / 双线性重网格（可选海陆掩码）。
 
-    考虑海陆掩码时，地表类型不匹配的源点不参与目标点插值。
-    本类 ``regrid_mode`` 可选：``nearest-2``、``nearest-with-mask-2``、
-    ``bilinear-2``、``bilinear-with-mask-2``。
+    与 ``InterpGgLandSea`` 的 ``bilinear`` / ``nearest`` / ``nearest-with-mask``
+    不同，本类在一次遍历中完成邻点选取、权重与掩码订正，不经
+    ``regrid_rectilinear`` + 后处理订正路径。
+
+    Parameters
+    ----------
+    regrid_mode :
+        ``bilinear-2``、``nearest-2``、``nearest-with-mask-2``、
+        ``bilinear-with-mask-2``。后两者须提供 ``data_in_mask``。
+    vicinity_radius :
+        岸线邻域搜索半径（米），默认 ``25000``。
     """
 
     def __init__(
         self, regrid_mode: str = "bilinear-2", vicinity_radius: float = 25000.0
     ):
-        """
-        初始化类。
-
-        参数
-        ----------
-        regrid_mode :
-            重网格插值模式。可选 ``bilinear-2``、``nearest-2``、
-            ``nearest-with-mask-2``、``bilinear-with-mask-2``。
-            后两者会按海陆类型调整重网格结果。
-        vicinity_radius :
-            搜索海岸线的邻域半径，单位米。
-        """
         self.regrid_mode = regrid_mode
         self.vicinity = vicinity_radius
 
@@ -80,26 +84,18 @@ class InterpGgLandSea2(PostProcessingPlugin):
         data_in_mask: xr.DataArray | None,
         data_out_mask: xr.DataArray,
     ) -> xr.DataArray:
-        """
-        考虑海陆掩码的重网格。
+        """将 ``data_in`` 重网格到 ``data_out_mask`` 给出的目标网格。
 
-        ``data_in`` 须为经纬度规则网格；``data_in_mask`` 与 ``data_in`` 可为不同
-        分辨率；``data_out_mask`` 可为经纬度规则网格或投影网格。落在 ``data_in``
-        域外的目标点将被置为缺测（NaN）。
+        Args:
+            data_in: 源场（经纬度规则网格）。
+            data_in_mask: 源侧 ``land_binary_mask``（陆=1，海=0）；无掩码模式可为 ``None``。
+            data_out_mask: 目标侧掩码/网格模板（经纬或投影均可）。
 
-        参数
-        ----------
-        data_in :
-            待重网格的场。
-        data_in_mask :
-            源网格 ``land_binary_mask``（陆=1，海=0）；无掩码模式可为 ``None``。
-        data_out_mask :
-            目标网格 ``land_binary_mask``（陆=1，海=0）。
+        Returns:
+            重网格结果；源域外目标点为 NaN。
 
-        返回
-        -------
-        xr.DataArray
-            重网格结果。
+        Raises:
+            ValueError: ``*-with-mask-2`` 未提供 ``data_in_mask``，或 ``regrid_mode`` 非法。
         """
         data_in = meb.checkout_griddata(data_in, valid_val=(-np.inf, np.inf, np.nan))
         data_out_mask = meb.checkout_griddata(

@@ -25,42 +25,28 @@ from utils.base_plugin import PostProcessingPlugin
 
 
 class InterpGgNearest(PostProcessingPlugin):
-    """格点→格点最近邻插值。
+    """格点→格点最近邻插值（水平）。
 
     Parameters
     ----------
-    used_coords :
-        插值坐标；当前仅支持 "xy"（水平）。
     outer_value :
         目标超出源网格时的填充值；越界时必须提供，否则返回 ``None``。
     """
 
-    def __init__(
-        self,
-        used_coords: str = "xy",
-        outer_value: Optional[float] = None,
-    ):
-        if used_coords != "xy":
-            raise ValueError('used_coords 当前仅支持 "xy"')
-        self.used_coords = used_coords
+    def __init__(self, outer_value: Optional[float] = None):
         self.outer_value = outer_value
 
-    def process(self, grd, grid, used_coords=None, outer_value=None):
+    def process(self, grd, grid):
         """格点→格点最近邻插值。
 
         Args:
             grd: 源格点场。
             grid: 目标网格信息（``glon`` / ``glat`` 等）。
-            used_coords: 覆盖构造参数；``None`` 用实例值。
-            outer_value: 覆盖构造参数；``None`` 用实例值。
 
         Returns:
             插值到目标网格的格点场；``grd is None`` 或越界未给 ``outer_value`` 时为 ``None``。
         """
-        coords = self.used_coords if used_coords is None else used_coords
-        fill = self.outer_value if outer_value is None else outer_value
-        if coords != "xy":
-            raise ValueError('used_coords 当前仅支持 "xy"')
+        fill = self.outer_value
         if grd is None:
             return None
 

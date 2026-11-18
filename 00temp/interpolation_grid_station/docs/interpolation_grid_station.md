@@ -41,7 +41,7 @@
 
 ### 3.1 `InterpGsNearest`
 
-对索引 `np.round` 取最近源格点赋值。`used_coords` 仅 `"xy"`。
+对索引 `np.round` 取最近源格点赋值（固定水平）。
 
 ```python
 from interp_gs_nearest_plugin import InterpGsNearest
@@ -55,7 +55,7 @@ result = InterpGsNearest().process(grd, sta)
 
 | 参数 | 位置 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `used_coords` | 构造 / `process` | `"xy"` | `"xy"` / `"xyz"` / `"xydt"` |
+| `used_coords` | 构造 | `"xy"` | `"xy"` / `"xyz"` / `"xydt"` |
 | `grd` | `process` | — | 源格点场 |
 | `sta` | `process` | — | 目标站点（`xydt` 须含有效 `dtime`） |
 
@@ -70,7 +70,7 @@ result_dt = InterpGsLinear(used_coords="xydt").process(grd, sta)
 
 ### 3.3 `InterpGsCubic`
 
-水平双三次，邻域 `p,q ∈ {-1,0,1,2}`，边界钳制。`used_coords` 仅 `"xy"`。
+水平双三次，邻域 `p,q ∈ {-1,0,1,2}`，边界钳制（固定水平）。
 
 ```python
 from interp_gs_cubic_plugin import InterpGsCubic
@@ -95,7 +95,7 @@ python -m cli --module cubic --grid resource/2026100900.024.nc --sta resource/20
 | `--module` | `linear` / `nearest` / `cubic` |
 | `--grid` / `--sta` | 源格点、目标站点（必填，或写在 ini） |
 | `--grid-type` / `--sta-type` | `nc`\|`m4`，`csv`\|`m3`；可按扩展名推断 |
-| `--used-coords` | `linear` 支持 `xy`/`xyz`/`xydt`；其余仅 `xy` |
+| `--used-coords` | 仅 `linear`：`xy`/`xyz`/`xydt` |
 | `--output` / `--output-type` | 可选写出站点；格式按扩展名或显式指定 |
 | `--config` | 可选替换 `resource/conf.ini` |
 

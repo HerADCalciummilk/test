@@ -1,10 +1,18 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright (c) 2019 NMC Developers.
-# Distributed under the terms of the GPL V3 License.
-"""海陆感知重网格插件。
+"""格点→格点海陆感知重网格（``InterpGgLandSea`` / ``AdjustLandSeaPoints``）。
 
-自 regrid 包 ``landsea`` 迁入。
+接口：``InterpGgLandSea.process(data, target_grid, regridded_title=None)``。
+无掩码模式走规则网格最近邻/双线性；``*-with-mask`` 在最近邻后再用
+``AdjustLandSeaPoints`` 订正岸线附近类型错配；``*-2`` / ``*-with-mask-2``
+委托 ``InterpGgLandSea2``。
+
+算法要点
+--------
+1. ``bilinear`` / ``nearest``：``regrid_rectilinear`` 到目标网格。
+2. ``nearest-with-mask``：先最近邻，再按源/目标 ``land_binary_mask`` 在邻域内
+   用同类型最近源点替换错配格点。
+3. ``*-2`` 族：权重/邻域与掩码在 ``InterpGgLandSea2`` 内一次完成。
+4. 源域外行为由 ``extrapolation_mode``（``nan`` / ``extrapolate`` / ``error``）控制。
 """
 
 from __future__ import annotations
@@ -36,11 +44,25 @@ DEFAULT_TITLE = "unknown"
 
 
 class InterpGgLandSea(PostProcessingPlugin):
-    """最近邻与双线性重网格，可选海陆掩码感知。
+    """最近邻 / 双线性重网格，可选海陆掩码感知。
 
-    考虑海陆掩码时，地表类型不匹配的源点不参与目标点插值。例如在最近邻
-    海陆感知模式下，重网格后的陆点总是取自源网格陆点，海点总是取自源网格
-    海点。
+    启用掩码时，地表类型不匹配的源点不参与目标点插值：陆点只取源陆、海点
+    只取源海。无掩码的 ``bilinear`` / ``nearest`` 与带 ``-2`` 后缀的模式均可
+    通过本类统一调度。
+
+    Parameters
+    ----------
+    regrid_mode :
+        ``bilinear``、``nearest``、``nearest-with-mask``、``bilinear-2``、
+        ``nearest-2``、``nearest-with-mask-2``、``bilinear-with-mask-2``。
+        含 ``*-with-mask*`` 时须提供 ``landmask``。
+    extrapolation_mode :
+        源域外填充：``nan``（默认）、``extrapolate``、``error``；
+        历史别名 ``mask`` / ``nanmask`` 归一为 ``nan``。
+    landmask :
+        源网格 ``land_binary_mask``（陆=1，海=0）；掩码模式必需。
+    landmask_vicinity :
+        岸线邻域搜索半径（米），默认 ``25000``。
     """
 
     REGRID_REQUIRES_LANDMASK = {
@@ -60,26 +82,6 @@ class InterpGgLandSea(PostProcessingPlugin):
         landmask: Optional[xr.DataArray] = None,
         landmask_vicinity: float = 25000,
     ):
-        """
-        初始化重网格参数。
-
-        参数
-        ----------
-        regrid_mode :
-            重网格插值模式。可选 ``bilinear``、``nearest``、
-            ``nearest-with-mask``、``bilinear-2``、``nearest-2``、
-            ``nearest-with-mask-2``、``bilinear-with-mask-2``。
-            含 ``*-with-mask*`` 时会按海陆类型调整重网格结果。
-        extrapolation_mode :
-            源域外填充方式。正式取值 ``nan``（域外填 NaN，默认）、
-            ``extrapolate``、``error``。历史别名 ``mask``/``nanmask``
-            会归一为 ``nan``。
-        landmask :
-            输入网格上的海陆掩码（``land_binary_mask``），陆点为 1、海点为 0；
-            ``*-with-mask*`` 模式必需。
-        landmask_vicinity :
-            搜索海岸线的邻域半径，单位米。
-        """
         if regrid_mode not in self.REGRID_REQUIRES_LANDMASK:
             raise ValueError(f"Unrecognised regrid mode {regrid_mode}")
         if landmask is None and self.REGRID_REQUIRES_LANDMASK[regrid_mode]:
@@ -101,7 +103,7 @@ class InterpGgLandSea(PostProcessingPlugin):
         regridded_title: Optional[str],
         regrid_mode: str,
     ) -> xr.DataArray:
-        """将 ``data`` 重网格到 ``target_grid``，并更新属性。"""
+        """按 ``regrid_mode`` 将 ``data`` 重网格到 ``target_grid``，并同步网格属性。"""
         if regrid_mode in (
             "nearest-with-mask",
             "nearest-with-mask-2",
@@ -168,22 +170,18 @@ class InterpGgLandSea(PostProcessingPlugin):
         target_grid: xr.DataArray,
         regridded_title: Optional[str] = None,
     ) -> xr.DataArray:
-        """
-        将 ``data`` 重网格到 ``target_grid`` 给出的空间网格。
+        """将 ``data`` 重网格到 ``target_grid`` 的空间网格。
 
-        参数
-        ----------
-        data :
-            待重网格的场。
-        target_grid :
-            目标网格上的数据。若启用掩码重网格，该场应含用于订正的海陆掩码。
-        regridded_title :
-            重网格后写入的 ``title`` 属性；未指定时使用默认值。
+        Args:
+            data: 待重网格的源场。
+            target_grid: 目标网格模板；掩码模式下须含目标侧 ``land_binary_mask``。
+            regridded_title: 写入结果 ``title`` 属性；缺省为 ``unknown``。
 
-        返回
-        -------
-        xr.DataArray
-            重网格后的场，属性已更新。
+        Returns:
+            重网格后的场（属性已按目标网格更新）。
+
+        Raises:
+            ValueError: 掩码模式下手源掩码空间范围不能覆盖 ``data``。
         """
         data = meb.checkout_griddata(data, valid_val=(-np.inf, np.inf, np.nan))
         target_grid = meb.checkout_griddata(
@@ -198,14 +196,23 @@ class InterpGgLandSea(PostProcessingPlugin):
 
 
 class AdjustLandSeaPoints(PostProcessingPlugin):
-    """修正最近邻重网格后海陆类型不匹配的格点。
+    """订正最近邻重网格后岸线附近的海陆类型错配。
 
-    当最近邻把目标点取到了与目标海陆类型相反的源点时，用源网格邻域内
-    类型正确且最近的点替换；邻域内找不到匹配点则保持原值不变。
+    先将源掩码最近邻到目标网格，找出「目标类型 ≠ 所取源类型」且落在
+    ``vicinity_radius`` 邻域内的格点，再替换为源网格上同类型最近邻值；
+    邻域内无匹配点则保持原值。通常由 ``InterpGgLandSea`` 的
+    ``nearest-with-mask`` 路径调用。
+
+    Parameters
+    ----------
+    extrapolation_mode :
+        源掩码重网格到目标网格时的域外行为（同 ``InterpGgLandSea``）。
+    vicinity_radius :
+        岸线邻域搜索半径（米），默认 ``25000``。
     """
 
     class _NoMatchesError(ValueError):
-        """指定选择器在源掩码上无匹配点。"""
+        """源掩码上不存在 ``selector_val`` 对应类型的格点。"""
 
     def __init__(
         self, extrapolation_mode: str = "nan", vicinity_radius: float = 25000.0
@@ -222,6 +229,11 @@ class AdjustLandSeaPoints(PostProcessingPlugin):
     def _get_matches(
         self, selector_val: int
     ) -> Tuple[ndarray, ndarray, ndarray, ndarray]:
+        """定位需订正的错配点，并建立「非本类型 → 本类型最近邻」索引。
+
+        Returns:
+            ``(mismatch_points, indices, use_points, no_use_points)``。
+        """
         input_land_2d = np.asarray(self.input_land, dtype=np.float32)
         output_land_2d = np.asarray(self.output_land, dtype=np.float32)
 
@@ -255,6 +267,7 @@ class AdjustLandSeaPoints(PostProcessingPlugin):
         return mismatch_points, indices, use_points, no_use_points
 
     def correct_where_input_true(self, selector_val: int) -> None:
+        """对目标类型为 ``selector_val``（0=海 / 1=陆）的错配点就地订正。"""
         try:
             mismatch_points, indices, use_points, no_use_points = self._get_matches(
                 selector_val
@@ -275,6 +288,16 @@ class AdjustLandSeaPoints(PostProcessingPlugin):
         input_land: xr.DataArray,
         output_land: xr.DataArray,
     ) -> xr.DataArray:
+        """订正已重网格到目标网格的场中岸线附近的海陆错配。
+
+        Args:
+            data: 已落在目标网格上的场（通常为最近邻结果）。
+            input_land: 源网格海陆掩码。
+            output_land: 目标网格海陆掩码（空间坐标须与 ``data`` 一致）。
+
+        Returns:
+            订正后的场；邻域内无同类型源点的格点保持原值。
+        """
         data = meb.checkout_griddata(data, valid_val=(-np.inf, np.inf, np.nan))
         input_land = meb.checkout_griddata(
             input_land, valid_val=(-np.inf, np.inf, np.nan)

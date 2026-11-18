@@ -109,11 +109,6 @@ class InterpolationGridGridCli(CliBase):
         )
         parser.add_argument("--output", default=None, help="可选输出 Micaps4 路径")
         parser.add_argument(
-            "--used-coords",
-            default=None,
-            help='插值坐标，当前仅支持 xy。省略则读 ini，预设 xy',
-        )
-        parser.add_argument(
             "--outer-value",
             type=float,
             default=None,
@@ -146,7 +141,6 @@ class InterpolationGridGridCli(CliBase):
         grid_type=None,
         grid_template_type=None,
         output=None,
-        used_coords=None,
         outer_value=None,
         glon=None,
         glat=None,
@@ -162,7 +156,6 @@ class InterpolationGridGridCli(CliBase):
                 grid=grid,
                 grid_template=grid_template,
                 output=output,
-                used_coords=used_coords,
                 outer_value=outer_value,
                 glon=_parse_float_list(glon, n=3, name="glon") if glon else glon,
                 glat=_parse_float_list(glat, n=3, name="glat") if glat else glat,
@@ -179,24 +172,21 @@ class InterpolationGridGridCli(CliBase):
             if module_name == "linear":
                 from interp_gg_linear_plugin import InterpGgLinear
 
-                result = InterpGgLinear(
-                    used_coords=cfg["used_coords"],
-                    outer_value=cfg["outer_value"],
-                ).process(grd_in, target)
+                result = InterpGgLinear(outer_value=cfg["outer_value"]).process(
+                    grd_in, target
+                )
             elif module_name == "nearest":
                 from interp_gg_nearest_plugin import InterpGgNearest
 
-                result = InterpGgNearest(
-                    used_coords=cfg["used_coords"],
-                    outer_value=cfg["outer_value"],
-                ).process(grd_in, target)
+                result = InterpGgNearest(outer_value=cfg["outer_value"]).process(
+                    grd_in, target
+                )
             elif module_name == "cubic":
                 from interp_gg_cubic_plugin import InterpGgCubic
 
-                result = InterpGgCubic(
-                    used_coords=cfg["used_coords"],
-                    outer_value=cfg["outer_value"],
-                ).process(grd_in, target)
+                result = InterpGgCubic(outer_value=cfg["outer_value"]).process(
+                    grd_in, target
+                )
             else:
                 raise ValueError(f"未知 module: {module_name}")
 

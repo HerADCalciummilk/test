@@ -29,11 +29,7 @@ _MODULE_ALIASES = {
     "interp_gs_cubic": "cubic",
 }
 _MODULES = ("linear", "nearest", "cubic")
-_COORDS_BY_MODULE = {
-    "linear": ("xy", "xyz", "xydt"),
-    "nearest": ("xy",),
-    "cubic": ("xy",),
-}
+_LINEAR_COORDS = ("xy", "xyz", "xydt")
 
 
 def clear_ini_cache() -> None:
@@ -201,21 +197,27 @@ def _resolve_args(
         "output": _optional_path(output, "output", "path"),
     }
 
-    coords = (
-        used_coords.strip()
-        if not _missing(used_coords)
-        else (
-            _raw(name, "used_coords")
-            or _raw("linear", "used_coords")
-            or str(PRESET["used_coords"])
+    # used_coords 仅 linear 使用；nearest / cubic 为固定水平插值
+    if name == "linear":
+        coords = (
+            used_coords.strip()
+            if not _missing(used_coords)
+            else (
+                _raw("linear", "used_coords")
+                or str(PRESET["used_coords"])
+            )
         )
-    )
-    allowed = _COORDS_BY_MODULE[name]
-    if coords not in allowed:
-        raise ValueError(
-            f'module={name!r} 的 used_coords 仅支持 {allowed}，收到: {coords!r}'
-        )
-    resolved["used_coords"] = coords
+        if coords not in _LINEAR_COORDS:
+            raise ValueError(
+                f'module="linear" 的 used_coords 仅支持 {_LINEAR_COORDS}，收到: {coords!r}'
+            )
+        resolved["used_coords"] = coords
+    else:
+        if not _missing(used_coords):
+            raise ValueError(
+                f'module={name!r} 不支持 used_coords（仅 linear 可用 xy/xyz/xydt）'
+            )
+        resolved["used_coords"] = None
 
     explicit_grid_type = _optional_str(grid_type, "input", "grid_type")
     explicit_sta_type = _optional_str(sta_type, "input", "sta_type")
