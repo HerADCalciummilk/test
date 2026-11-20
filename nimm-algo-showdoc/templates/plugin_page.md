@@ -56,21 +56,35 @@ flowchart LR
 {{引导句：域、分辨率、数据来源（真实优先 / 无则合成仅演示）、本节演示什么}}
 
 ```python
-# 可运行；关键步中文注释（含来源与分辨率）；发版正文禁本机绝对路径
-# 格点场：from meteva_base.tool.plot_tools import pcolormesh_2d_grid
-# 中文图题时先设字体，例如：
-# import matplotlib.pyplot as plt
-# plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
-# plt.rcParams["axes.unicode_minus"] = False
+# 调用代码：读数 / 构造 / .process / print；关键步中文注释；发版正文禁本机绝对路径
 ```
 
 ```
-{{print(返回对象) 的 stdout；勿只打 name/shape}}
+{{方法数据结果展示：print(返回对象)；勿只打 name/shape}}
+```
+
+```python
+# 画图代码（与调用分开）：中文图题先设 YaHei/SimHei
+# 单场格点 pcolormesh_2d_grid；对照 creat_axs + add_contourf(..., cut_colorbar=False)
 ```
 
 {{能画则：![图题](url)；同要素前后共用 clevs；差值规则见 SKILL}}
 
 # {{EntryB_若有则整节复制；每入口仅一个使用示例、一条主路径}}
+
+<!-- 可选：CLI 已有检验时，插件页只贴「一份」汇总表，并链到 CLI；默认不加 -->
+
+## 检验结果
+
+{{一句：相对何实况、窗口、订正前/后含义；Δrmse 负值=改善。逐日明细与调度见 CLI。}}
+
+| 项目 | 订正前 | 订正后 |
+| --- | ---: | ---: |
+| mean_bias | **…** | **…** |
+| mean_rmse | **…** | **…** |
+| Δrmse | — | **…** |
+
+完整检验（逐日表、调度说明）见 [{{PACKAGE}}]({{CLI_PAGE_URL}})。
 
 ---
 
@@ -84,5 +98,6 @@ flowchart LR
 | --- | --- |
 | Mermaid | 须含入口类名；禁止「提取/积分/梯度→幂次」内部流水线 |
 | return | 写清容器类型，非仅变量名 |
-| 示例 | 真实样例优先，否则自建；禁「有输入−默认」差值；图题无「合成」；stdout 用裸代码围栏（不要 `text` 语言标记） |
+| 示例 | 真实样例优先，否则自建；禁「有输入−默认」差值；图题无「合成」；方法数据结果展示用无语言标记的代码围栏（不要 `text`） |
+| 检验 | 默认不加；CLI 有检验时插件页可贴**同一份汇总表**（mean_bias / mean_rmse / Δrmse），**不**贴逐日表；文末链 CLI |
 | 页末 | 有 CLI 则保留回链；无则按上文改基础信息 |

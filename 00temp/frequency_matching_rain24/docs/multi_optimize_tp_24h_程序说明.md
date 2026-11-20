@@ -52,7 +52,7 @@
 | 主程序 | 调用 | 光流 / 半拉格朗日 | Cressman | 双线性 |
 |--------|------|-------------------|----------|--------|
 | `src/correct_tp_24h.py` | `from correct_tp_24h import process`，或 `python -m cli` | `src/cal_optical_flow.py` | `src/interpolation.py` 的 `GressManInterpolation` | `src/interpolation.py` 的 `mesh_val` / `bilinear_interp` |
-| `src/correct_tp_24h_nowcast.py` | `from correct_tp_24h_nowcast import process`，或 `python src/correct_tp_24h_nowcast.py` | `src/cal_optical_flow_nowcast.py` → 子模块 `optical_flow_nowcast.LK` / `Extrapolation` | `src/interpolation_sg_cressman.py` → 子模块 `interp_sg_cressman`（半径由度换算为米） | `src/interpolation_gg_linear.py`：格点→格点 → 子模块 `interp_gg_linear`，格点→站点 `meteva.base.interp_gs_linear` |
+| `src/correct_tp_24h_nowcast.py` | `from correct_tp_24h_nowcast import process`，或 `python src/correct_tp_24h_nowcast.py` | `src/cal_optical_flow_nowcast.py` → 子模块 `optical_flow_nowcast.LK` / `Extrapolation` | `src/interpolation_sg_cressman.py` → `interpolation_station_grid.InterpSgCressman`（半径由度换算为米） | `src/interpolation_gg_linear.py`：格点→格点 → 子模块 `interp_gg_linear` / `InterpGgLinear`，格点→站点 `meteva.base.interp_gs_linear` |
 
 两个 `process` 的参数相同（`plugin` / `is_multi` / `pro_count` / `rpt_times`）。光流只在 **dtime ≤ 60** 时启用。
 
@@ -99,7 +99,7 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 | `src/cal_optical_flow_nowcast.py` | 项目主程序的光流：→ `optical_flow_nowcast.LK` / `Extrapolation` |
 | `src/cal_frequency_match.py` | **核心算法**：频率匹配（站点/格点） |
 | `src/interpolation.py` | 原主程序的 Cressman 与双线性 |
-| `src/interpolation_sg_cressman.py` | 项目主程序的 Cressman：→ `interp_sg_cressman` |
+| `src/interpolation_sg_cressman.py` | 项目主程序的 Cressman：→ `interpolation_station_grid.InterpSgCressman` |
 | `src/interpolation_gg_linear.py` | 项目主程序的双线性：格点→格点 `interp_gg_linear`，格点→站点 `interp_gs_linear` |
 | `src/utils/data_proc.py` | **工具**：格点/站点预处理、平滑、掩膜（`from utils.data_proc`） |
 | `src/utils/data_save.py` | **工具**：MICAPS3/4/NC 写出 |

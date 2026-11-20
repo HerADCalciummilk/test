@@ -106,19 +106,27 @@ python generate_orographic_smoothing_coefficients/cli/dsc_generate_orographic_sm
 默认读取：
 
 - `test_data/cli_inputs/input_orography_meb.nc`
-- 写出：`test_data/cli_outputs/cli_basic_result.nc`
+- 写出：`test_data/cli_outputs/cli_basic_result_x.nc` 与 `…_y.nc`（由 `--output-path` 前缀推导）
 
 业务调用示例：
 
 ```python
-from generate_orographic_smoothing_coefficients.cli.dsc_generate_orographic_smoothing_coefficients import process
+import meteva_base as meb
+from generate_orographic_smoothing_coefficients.cli.dsc_generate_orographic_smoothing_coefficients import (
+    process,
+    paired_output_paths,
+    # 或: DscGenerateOrographicSmoothingCoefficientsCli.call(...)
+)
 
 coeff_x, coeff_y = process(
     orography_path=".../input_orography_meb.nc",
     mask_path=".../input_landmask_meb.nc",  # 可选
     use_mask_boundary=True,
-    output_path=".../out.nc",
+    output_path=".../out.nc",  # 实际写出 out_x.nc / out_y.nc
 )
+path_x, path_y = paired_output_paths(".../out.nc")
+coeff_x = meb.read_griddata_from_nc(str(path_x))
+coeff_y = meb.read_griddata_from_nc(str(path_y))
 ```
 
 ## 7. 测试数据预处理

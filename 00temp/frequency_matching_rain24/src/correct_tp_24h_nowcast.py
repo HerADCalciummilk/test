@@ -18,7 +18,7 @@
 - 光流 / 半拉格朗日：``cal_optical_flow_nowcast.OpticalFlow`` / ``Lagrangian``
   （``optical_flow_nowcast.LK`` / ``Extrapolation``）
 - Cressman：``interpolation_sg_cressman.GressManInterpolation``
-  （子模块 ``interp_sg_cressman``）
+  （``interpolation_station_grid.InterpSgCressman``）
 - 双线性格点→格点：``interpolation_gg_linear.mesh_val``（子模块 ``interp_gg_linear``）
 - 双线性格点→站点：``interpolation_gg_linear.bilinear_interp``（``meteva.base.interp_gs_linear``）
 
@@ -82,7 +82,7 @@ class correct_by_opticalFlow_nowcast(correct_by_opticalFlow):
 
     原版 ``GressManInterpolation`` 虽传入全国背景场，但每个站点只改
     ``distance_limit`` 以内的格点，随后 ``mesh_val`` 到切片。
-    项目 ``interp_sg_cressman`` 会遍历传入网格的每一个点，因此这里先裁到
+    Cressman 会遍历传入网格的每一个点，因此这里先裁到
     切片外加最大影响半径，再调用同一个项目函数。
     """
 

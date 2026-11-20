@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""网格站点融合工具。本地模块优先，并入 ``00temp/utils``。"""
+"""网格站点融合工具包。
+
+本目录（``util_env`` 等）优先；再挂载同级 ``00temp/utils``（``CliBase`` /
+``base_plugin`` 等共享基类），使 ``from utils.xxx`` 在包内可解析。
+"""
 import os
 
 _here = os.path.dirname(os.path.abspath(__file__))

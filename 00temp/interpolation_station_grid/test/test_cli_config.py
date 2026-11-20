@@ -25,6 +25,7 @@ def test_defaults_come_from_ini() -> None:
     assert got["sta"] == r"D:\sta.csv"
     assert got["grid"] == r"D:\grid.nc"
     assert got["background"] is None
+    assert got["reprocess"] is False
     assert got["effect_r"] == 1000
     assert got["near_num"] == 8
     assert got["decrease"] == 2
@@ -32,6 +33,19 @@ def test_defaults_come_from_ini() -> None:
     assert got["grid_type"] == "nc"
     assert got["output"] is None
     assert got["output_type"] is None
+
+
+def test_background_only_ok_and_reprocess() -> None:
+    got = resolve_args(sta=r"D:\sta.csv", background=r"D:\bg.nc")
+    assert got["grid"] is None
+    assert got["grid_type"] is None
+    assert got["background"] == r"D:\bg.nc"
+    assert got["background_type"] == "nc"
+    assert got["reprocess"] is False
+    true_got = resolve_args(
+        sta=r"D:\sta.csv", background=r"D:\bg.nc", reprocess=True
+    )
+    assert true_got["reprocess"] is True
 
 
 def test_total_alias_maps_to_idw() -> None:
@@ -72,8 +86,32 @@ def test_cressman_defaults_and_override() -> None:
 def test_required_paths_raise_when_empty() -> None:
     with pytest.raises(ValueError, match="sta"):
         resolve_args(grid=r"D:\grid.nc")
-    with pytest.raises(ValueError, match="grid"):
+    with pytest.raises(ValueError, match="grid 或 background"):
         resolve_args(sta=r"D:\sta.csv")
+    with pytest.raises(ValueError, match="background"):
+        resolve_args(sta=r"D:\sta.csv", grid=r"D:\grid.nc", reprocess=True)
+    with pytest.raises(ValueError, match="grid 或 background"):
+        resolve_args(module="idw_delta", sta=r"D:\sta.csv")
+
+
+def test_idw_delta_requires_background() -> None:
+    with pytest.raises(ValueError, match="background"):
+        resolve_args(module="idw_delta", sta=r"D:\sta.csv", grid=r"D:\grid.nc")
+    only_bg = resolve_args(
+        module="idw_delta", sta=r"D:\sta.csv", background=r"D:\bg.nc"
+    )
+    assert only_bg["reprocess"] is True
+    assert only_bg["grid"] is None
+    assert only_bg["background"] == r"D:\bg.nc"
+    both = resolve_args(
+        module="idw_delta",
+        sta=r"D:\sta.csv",
+        grid=r"D:\grid.nc",
+        background=r"D:\bg.nc",
+    )
+    assert both["reprocess"] is True
+    assert both["grid"] == r"D:\grid.nc"
+    assert both["background"] == r"D:\bg.nc"
 
 
 def test_invalid_module() -> None:
@@ -86,6 +124,8 @@ def test_cli_omitted_args_are_none() -> None:
     assert args.module is None
     assert args.sta is None
     assert args.grid is None
+    assert args.background is None
+    assert args.reprocess is None
     assert args.effect_r is None
     assert args.half_r is None
     assert args.sta_type is None

@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 """站点→格点局部普通克里金（Ordinary Kriging）。
 
-接口与 ``InterpSgIdw`` 对齐：``process(sta, grid, background=None)``。
+接口：``process(sta, grid=None, background=None)``。
+
+- 无硬截断：每个格点都估计，**不做**远点背景填充。
+- ``reprocess=False``（默认）：插站点绝对值；``grid`` 与 ``background`` 至少其一
+  （有背景时**只取网格信息**，不用场值、不做偏差/远点填充）。
+- ``reprocess=True``：须 ``background``；插 ``obs-bg`` 再叠回；``grid`` 可省略（从背景取）。
 
 算法要点
 --------
-1. 有背景场时先算站点偏差 ``obs - bg_at_sta``，插完再叠回背景；无背景则直接插站点值。
+1. ``reprocess=True`` 时算站点偏差再叠回；``False`` 时直接插站点值。
 2. 对每个目标格点，用 KDTree 取 ``nearNum`` 个近邻站，建立局部普通克里金方程组：
 
        γ(si, sj) λj + μ = γ(si, x0)
@@ -21,8 +26,9 @@ from __future__ import annotations
 import copy
 import os
 import sys
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
+import meteva_base as meb
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
@@ -51,9 +57,9 @@ VariogramModel = Literal["spherical", "exponential", "gaussian"]
 class InterpSgKriging(PostProcessingPlugin):
     """站点→格点局部普通克里金。
 
-    - ``background is None``：直接插站点值。
-    - 给出 ``background``：先插偏差，再叠回背景场。
-    - 每个格点取 ``nearNum`` 个近邻站建立局部 OK 方程组（非全局一次求解）。
+    - ``reprocess=False``：绝对值；``grid`` / ``background`` 至少其一（背景仅取网格）。
+    - ``reprocess=True``：偏差订正；须 ``background``；``grid`` 可省略。
+    - 无远点硬截断；每个格点取 ``nearNum`` 个近邻站建局部 OK 方程组。
 
     Parameters
     ----------
@@ -69,7 +75,9 @@ class InterpSgKriging(PostProcessingPlugin):
     nearNum :
         每个格点参与求解的近邻站点数。
     outer_value :
-        背景场对齐越界填充值，传给 ``InterpGgLinear``。
+        背景场对齐越界填充值，传给 ``InterpGgLinear``（仅 ``reprocess=True``）。
+    reprocess :
+        ``False``：绝对值（背景可只作网格源）；``True``：偏差订正（须 ``background``）。
     """
 
     def __init__(
@@ -80,6 +88,7 @@ class InterpSgKriging(PostProcessingPlugin):
         nugget: float = 0.0,
         nearNum: int = 20,
         outer_value: Optional[float] = None,
+        reprocess: Any = False,
     ):
         if model not in ("spherical", "exponential", "gaussian"):
             raise ValueError("model 仅支持 spherical / exponential / gaussian")
@@ -93,6 +102,20 @@ class InterpSgKriging(PostProcessingPlugin):
         self.nugget = float(nugget)
         self.nearNum = int(nearNum)
         self.outer_value = outer_value
+        self.reprocess = self._as_bool(reprocess, False)
+
+    @staticmethod
+    def _as_bool(value: Any, default: bool = False) -> bool:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        text = str(value).strip().lower()
+        if text in ("1", "true", "yes", "y", "on"):
+            return True
+        if text in ("0", "false", "no", "n", "off", ""):
+            return False
+        return bool(value)
 
     @staticmethod
     def _variogram(
@@ -234,49 +257,64 @@ class InterpSgKriging(PostProcessingPlugin):
             out[i] = self._krige_point(xyz_sta[idx], values[idx], xyz_grid[i], sill, range_)
         return out.astype(np.float32)
 
-    def process(self, sta0, grid, background=None):
+    def process(self, sta, grid=None, background=None):
         """站点→格点克里金插值。
 
         Args:
-            sta0: 站点数据。
-            grid: 目标网格信息（含 ``glon`` / ``glat`` 等）。
-            background: 可选背景场；给出时走偏差订正（插偏差后叠回背景）。
+            sta: 站点数据。
+            grid: 目标网格信息；缺省时从 ``background`` 取。
+            background: ``reprocess=True`` 时必需（偏差场）；
+                ``False`` 时可选，仅在缺 ``grid`` 时作网格来源。
 
         Returns:
-            与站点 member/level/time/dtime 切片拼接后的格点场；``attrs`` 继承自 ``sta0``。
+            与站点 member/level/time/dtime 切片拼接后的格点场；``attrs`` 继承自 ``sta``。
         """
-        import meteva_base as meb
+        # False：绝对值（背景若有仅用于缺 grid 时取网格，场值不用——无硬截断会全场覆盖）
+        # True：偏差订正，须背景
+        if self.reprocess and background is None:
+            raise ValueError("reprocess=true 时必须提供 background 格点场")
+        if grid is None:
+            if background is None:
+                raise ValueError("须提供 grid，或提供 background 以取网格")
+            g0 = (
+                meb.get_grid_of_data(background)
+                if hasattr(meb, "get_grid_of_data")
+                else meb.basicdata.get_grid_of_data(background)
+            )
+            grid = meb.basicdata.grid(g0.glon, g0.glat)
 
-        sta1 = meb.sele_by_para(sta0, drop_IV=True)
+        sta1 = meb.sele_by_para(sta, drop_IV=True)
         grd_list = []
-        for sta in meb.split(sta1, ["member", "level", "time", "dtime"]):
-            data_name = meb.get_stadata_names(sta)
-            index0 = sta.index[0]
+        for sta_slice in meb.split(sta1, ["member", "level", "time", "dtime"]):
+            data_name = meb.get_stadata_names(sta_slice)
+            index0 = sta_slice.index[0]
             grid2 = meb.basicdata.grid(
                 grid.glon,
                 grid.glat,
-                [sta.loc[index0, "time"]],
-                [int(sta.loc[index0, "dtime"])],
-                [int(sta.loc[index0, "level"])],
+                [sta_slice.loc[index0, "time"]],
+                [int(sta_slice.loc[index0, "dtime"])],
+                [int(sta_slice.loc[index0, "level"])],
                 data_name,
             )
 
-            # 可选：背景场偏差订正
-            if background is not None:
-                bg = InterpGgLinear(outer_value=self.outer_value).process(background, grid2)
+            if self.reprocess:
+                bg = InterpGgLinear(outer_value=self.outer_value).process(
+                    background, grid2
+                )
                 if bg is None:
                     raise ValueError(
                         "背景场对齐失败：目标网格超出背景范围时请设置 outer_value"
                     )
-                sta_use = sta.copy()
+                # 末列改为 obs−bg，再全场克里金 Δ 并叠回
+                sta_use = sta_slice.copy()
                 sta_use.iloc[:, -1] = (
-                    sta.iloc[:, -1] - meb.interp_gs_linear(bg, sta).iloc[:, -1]
+                    sta_slice.iloc[:, -1] - meb.interp_gs_linear(bg, sta_slice).iloc[:, -1]
                 )
             else:
                 bg = None
-                sta_use = sta
+                sta_use = sta_slice
 
-            # 经纬度 → 球面笛卡尔坐标，保证距离为弧长意义下的欧氏距离
+            # 球面笛卡尔距离；每格点取 nearNum 邻站建局部 OK（无距离硬截断）
             lon = np.arange(grid2.nlon) * grid2.dlon + grid2.slon
             lat = np.arange(grid2.nlat) * grid2.dlat + grid2.slat
             grid_lon, grid_lat = np.meshgrid(lon, lat)
@@ -293,7 +331,8 @@ class InterpSgKriging(PostProcessingPlugin):
 
             dat = self._krige_grid(xyz_sta, sta_use.iloc[:, -1].values, xyz_grid)
 
-            if background is not None:
+            if self.reprocess:
+                # 克里金 Δ 全场叠回背景（无硬截断，远点亦有 Δ）
                 grd = bg.copy()
                 grd.values = grd.values + meb.basicdata.grid_data(grid2, dat).values
                 grd.name = "data0"
@@ -303,5 +342,5 @@ class InterpSgKriging(PostProcessingPlugin):
             grd_list.append(grd)
 
         grd_all = meb.concat(grd_list)
-        grd_all.attrs = copy.deepcopy(sta0.attrs)
+        grd_all.attrs = copy.deepcopy(sta.attrs)
         return grd_all

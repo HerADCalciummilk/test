@@ -15,8 +15,10 @@ import xarray as xr
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from generate_orographic_smoothing_coefficients.cli.dsc_generate_orographic_smoothing_coefficients import (  # noqa: E402
+    paired_output_paths,
     process,
 )
+import meteva_base as meb  # noqa: E402
 
 
 def _make_meb6d(
@@ -118,12 +120,14 @@ def test_dsc_generate_orographic_smoothing_coefficients_process_smoke(
     assert coeff_y.dims == ("member", "level", "time", "dtime", "lat", "lon")
     assert coeff_x.sizes["lat"] == 3 and coeff_x.sizes["lon"] == 2
     assert coeff_y.sizes["lat"] == 2 and coeff_y.sizes["lon"] == 3
-    assert output_path.exists()
+    path_x, path_y = paired_output_paths(output_path)
+    assert path_x.exists() and path_y.exists()
+    assert not output_path.exists()
 
-    disk = xr.open_dataset(output_path)
-    assert "smoothing_coefficient_x" in disk
-    assert "smoothing_coefficient_y" in disk
-    disk.close()
+    disk_x = meb.read_griddata_from_nc(str(path_x))
+    disk_y = meb.read_griddata_from_nc(str(path_y))
+    assert disk_x.sizes["lat"] == 3 and disk_x.sizes["lon"] == 2
+    assert disk_y.sizes["lat"] == 2 and disk_y.sizes["lon"] == 3
 
 
 @_requires_cli_default_inputs
@@ -148,4 +152,5 @@ def test_cli_default_inputs_exist_and_runnable():
     )
     assert coeff_x.sizes["lat"] == 100 and coeff_x.sizes["lon"] == 99
     assert coeff_y.sizes["lat"] == 99 and coeff_y.sizes["lon"] == 100
-    assert output_path.exists()
+    path_x, path_y = paired_output_paths(output_path)
+    assert path_x.exists() and path_y.exists()

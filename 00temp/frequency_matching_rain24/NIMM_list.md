@@ -30,7 +30,7 @@
 | 光流（项目主程序） | `src/cal_optical_flow_nowcast.py` | `LK` / `Extrapolation`；`correct_tp_24h_nowcast` 使用 |
 | 频率匹配 | `src/cal_frequency_match.py` | 分位数频率匹配 |
 | 插值（原 Cressman 与原双线性） | `src/interpolation.py` | `correct_tp_24h`：`GressManInterpolation` / `mesh_val` / `bilinear_interp` |
-| 插值（项目 Cressman） | `src/interpolation_sg_cressman.py` | → 子模块 `interp_sg_cressman`；`correct_tp_24h_nowcast` 使用 |
+| 插值（项目 Cressman） | `src/interpolation_sg_cressman.py` | → `interpolation_station_grid.InterpSgCressman`；`correct_tp_24h_nowcast` 使用 |
 | 插值（项目双线性） | `src/interpolation_gg_linear.py` | 格点→格点 → 子模块 `interp_gg_linear`；格点→站点 → `meteva.base.interp_gs_linear`；`correct_tp_24h_nowcast` 使用 |
 | 本包工具 | `src/utils/config.py`、`data_proc.py`、`data_save.py`、`util_env.py`、`logger.py`、`verify.py` | 参数、预处理、写出、ini、日志、检验（`from utils.xxx`） |
 | 共享插件 | `00temp/utils/multipro_plugin.py`、`data_prepare_plugin.py` | 经根 `utils/__init__` 合并；包内无副本 |
@@ -42,7 +42,7 @@
 | **中间数据** | `00temp/multi_optimize_tp_24h/` | 整理过程临时样本（当前占位） |
 | 仓库索引 | 仓库根 `00log/multi_optimize_tp_24h.md` | 全库摘要日志 |
 
-> **入口约定**：原算法用 `python -m cli` 或 `from correct_tp_24h import process`（`cal_optical_flow` + `interpolation.py` 的 Cressman 与双线性）。项目算法用 `from correct_tp_24h_nowcast import process` 或 `python src/correct_tp_24h_nowcast.py`（`cal_optical_flow_nowcast` 的 LK / Extrapolation，`interpolation_sg_cressman` 的 `interp_sg_cressman`，`interpolation_gg_linear` 的 `interp_gg_linear` / `interp_gs_linear`）。两个 `process` 参数相同，没有切换用的额外参数。预报时效仍由 ini `start_dtime`/`end_dtime`/`inter_dtime*` 决定。
+> **入口约定**：原算法用 `python -m cli` 或 `from correct_tp_24h import process`（`cal_optical_flow` + `interpolation.py` 的 Cressman 与双线性）。项目算法用 `from correct_tp_24h_nowcast import process` 或 `python src/correct_tp_24h_nowcast.py`（`cal_optical_flow_nowcast` 的 LK / Extrapolation，`interpolation_sg_cressman` → `InterpSgCressman`，`interpolation_gg_linear` → 双线性）。两个 `process` 参数相同，没有切换用的额外参数。预报时效仍由 ini `start_dtime`/`end_dtime`/`inter_dtime*` 决定。
 
 ---
 

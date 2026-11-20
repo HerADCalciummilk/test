@@ -2,7 +2,8 @@
 """从 ``resource/conf.ini`` 读取 CLI 参数。
 
 取值优先级：显式参数 > ini 非空项 > ``PRESET``。
-站点文件和格点文件留空时直接报错，不猜测路径。
+站点 ``sta`` 必填；``grid`` / ``background`` 至少其一；
+``reprocess=true`` / ``idw_delta`` 时须 ``background``。
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ _CACHE: Optional[configparser.ConfigParser] = None
 
 PRESET: Dict[str, Any] = {
     "module": "idw",
+    "reprocess": False,
     "effect_r": 1000,
     "near_num": 8,
     "decrease": 2,
@@ -135,6 +137,28 @@ def _optional_str(explicit: Optional[str], section: str, key: str) -> Optional[s
     return _raw(section, key)
 
 
+def _as_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "y", "on"):
+        return True
+    if text in ("0", "false", "no", "n", "off", ""):
+        return False
+    return bool(value)
+
+
+def _pick_bool(explicit: Any, section: str, key: str, preset: bool) -> bool:
+    if explicit is not None and not (isinstance(explicit, str) and not explicit.strip()):
+        return _as_bool(explicit, preset)
+    raw = _raw(section, key)
+    if raw is None:
+        return bool(preset)
+    return _as_bool(raw, preset)
+
+
 def resolve_io_type(path: str, explicit: Optional[str] = None) -> str:
     """解析格点格式：显式 ``nc`` / ``m4`` 优先；否则按扩展名（``.nc``→nc，否则 m4）。"""
     if not _missing(explicit):
@@ -227,6 +251,7 @@ def resolve_args(
     sta: Optional[str] = None,
     grid: Optional[str] = None,
     background: Optional[str] = None,
+    reprocess: Any = None,
     effect_r: Optional[int] = None,
     near_num: Optional[int] = None,
     decrease: Optional[int] = None,
@@ -243,7 +268,14 @@ def resolve_args(
     output_type: Optional[str] = None,
     config: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """补齐命令行参数。``config`` 给出时改读该 ini，返回前恢复默认文件。"""
+    """补齐 CLI/API 参数字典，供 ``process`` 直接使用。
+
+    优先级：显式参数 > 当前 ini 非空项 > ``PRESET``。
+    ``config`` 非空时临时切到该 ini，返回前恢复默认 ``resource/conf.ini``。
+
+    返回键至少含 ``module`` / ``sta`` / ``grid`` / ``background`` / ``reprocess``
+    及对应 ``*_type``；其余按 module 分支（如 ``effect_r``、``r_list``）。
+    """
     if config:
         set_main_ini(config)
     try:
@@ -252,6 +284,7 @@ def resolve_args(
             sta=sta,
             grid=grid,
             background=background,
+            reprocess=reprocess,
             effect_r=effect_r,
             near_num=near_num,
             decrease=decrease,
@@ -287,7 +320,10 @@ def _attach_io_types(
     explicit_grid = _optional_str(grid_type, "input", "grid_type")
     explicit_bg = _optional_str(background_type, "input", "background_type")
     resolved["sta_type"] = resolve_sta_type(resolved["sta"], explicit_sta)
-    resolved["grid_type"] = resolve_io_type(resolved["grid"], explicit_grid)
+    if resolved["grid"]:
+        resolved["grid_type"] = resolve_io_type(resolved["grid"], explicit_grid)
+    else:
+        resolved["grid_type"] = None
     if resolved["background"]:
         resolved["background_type"] = resolve_io_type(
             resolved["background"], explicit_bg
@@ -306,6 +342,7 @@ def _resolve_args(
     sta: Optional[str] = None,
     grid: Optional[str] = None,
     background: Optional[str] = None,
+    reprocess: Any = None,
     effect_r: Optional[int] = None,
     near_num: Optional[int] = None,
     decrease: Optional[int] = None,
@@ -321,13 +358,36 @@ def _resolve_args(
     background_type: Optional[str] = None,
     output_type: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """实际解析逻辑（假定当前 ``_INI_PATH`` 已指向目标 ini）。"""
     name = resolve_module(module)
+    # 路径可选：grid / background 至少其一；相对路径相对包根展开
+    grid_path = _optional_path(grid, "input", "grid")
+    bg_path = _optional_path(background, "input", "background")
+    do_reprocess = _pick_bool(
+        reprocess, "cli", "reprocess", bool(PRESET["reprocess"])
+    )
+    if name == "idw_delta":
+        # 兼容模块：固定偏差路径，与 --reprocess true 相同，且须 background
+        do_reprocess = True
+    if not grid_path and not bg_path:
+        raise ValueError(
+            "须提供 grid 或 background。"
+            "请传对应命令行参数，或在 resource/conf.ini 的 [input] 中填写"
+        )
+    if do_reprocess and not bg_path:
+        raise ValueError(
+            "reprocess=true（含 idw_delta）时必须提供 background。"
+            "请传 --background，或在 resource/conf.ini 的 [input] 中填写 background"
+        )
+
     resolved: Dict[str, Any] = {
         "module": name,
         "sta": _require("sta", sta, "input", "sta"),
-        "grid": _require("grid", grid, "input", "grid"),
-        "background": _optional_path(background, "input", "background"),
+        "grid": grid_path,
+        "background": bg_path,
+        "reprocess": do_reprocess,
     }
+    # 补齐 sta/grid/background/output 的读写格式（显式 > ini > 扩展名）
     _attach_io_types(
         resolved,
         sta_type=sta_type,
@@ -336,6 +396,8 @@ def _resolve_args(
         output=output,
         output_type=output_type,
     )
+
+    # ---- 按 module 只填充该算法用到的参数，避免无关键干扰 CLI ----
     if name == "gaussian":
         resolved["half_r"] = _pick_int(half_r, "gaussian", "half_r", int(PRESET["half_r"]))
         if resolved["half_r"] <= 0:
@@ -343,6 +405,7 @@ def _resolve_args(
         return resolved
 
     if name == "kriging":
+        # sill/range 可为 None → 插件按站点方差/邻站距离自动估计
         model = (
             kriging_model.strip()
             if not _missing(kriging_model)
@@ -370,6 +433,7 @@ def _resolve_args(
         return resolved
 
     if name == "cressman":
+        # r_list：False 路径为米；True（创新量）为度——单位由插件按 reprocess 解释
         resolved["r_list"] = _pick_r_list(
             r_list, "cressman", "r_list", list(PRESET["cressman_r_list"])
         )
@@ -382,6 +446,7 @@ def _resolve_args(
             raise ValueError("near_num 必须大于等于 1")
         return resolved
 
+    # idw / idw_delta：共用 effect_r / near_num / decrease（节名与 module 同名）
     resolved["effect_r"] = _pick_int(effect_r, name, "effect_r", int(PRESET["effect_r"]))
     resolved["near_num"] = _pick_int(near_num, name, "near_num", int(PRESET["near_num"]))
     resolved["decrease"] = _pick_int(decrease, name, "decrease", int(PRESET["decrease"]))

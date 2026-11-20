@@ -16,7 +16,7 @@ Python::
     )
     DscGenerateOrographicSmoothingCoefficientsCli.call(
         orography_path="orog.nc",
-        output_path="out.nc",
+        output_path="out.nc",  # 实际写出 out_x.nc / out_y.nc
     )
 """
 from __future__ import annotations
@@ -46,6 +46,15 @@ def _set_kwargs(**kwargs):
     return {key: value for key, value in kwargs.items() if value is not None}
 
 
+def paired_output_paths(output_path: str | Path) -> tuple[Path, Path]:
+    """由 ``output_path`` 推导 x/y 两个单场路径：``stem_x.suffix`` / ``stem_y.suffix``。"""
+    path = Path(output_path)
+    return (
+        path.with_name(f"{path.stem}_x{path.suffix}"),
+        path.with_name(f"{path.stem}_y{path.suffix}"),
+    )
+
+
 def process(
     orography_path: str,
     mask_path: Optional[str] = None,
@@ -68,7 +77,8 @@ def process(
     2. 调用 ``OrographicSmoothingCoefficients`` 计算相邻梯度、幂次系数并缩放到
        ``[min_gradient_smoothing_coefficient, max_gradient_smoothing_coefficient]``；
     3. 若提供掩码，按 ``use_mask_boundary`` / ``invert_mask`` 置零；
-    4. 若指定 ``output_path``，将两个系数场写入同一 NetCDF。
+    4. 若指定 ``output_path``，用 ``meb.write_griddata_to_nc`` 分别写出两个单场 nc
+       （``{stem}_x{suffix}`` / ``{stem}_y{suffix}``），便于下游与 ``meb.read`` 分场读取。
 
     参数
     ----------
@@ -88,7 +98,8 @@ def process(
     invert_mask : bool, default False
         反转掩码置零语义（``use_mask_boundary=True`` 时无效）。
     output_path : str, optional
-        输出 nc 路径；为 ``None`` 时仅返回结果、不写盘。
+        输出路径前缀（含后缀）。为 ``None`` 时仅返回、不写盘；否则写出
+        ``{stem}_x{suffix}`` 与 ``{stem}_y{suffix}`` 两个单场 nc。
     config :
         命令行 ``--config`` 传入。本模块无 ini 读取器，不覆盖已给路径。
 
@@ -113,14 +124,14 @@ def process(
     ).process(orography, mask=mask)
 
     if output_path is not None:
-        output = Path(output_path)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        xr.Dataset(
-            {
-                str(coeff_x.name): coeff_x.astype("float32"),
-                str(coeff_y.name): coeff_y.astype("float32"),
-            }
-        ).to_netcdf(output)
+        path_x, path_y = paired_output_paths(output_path)
+        path_x.parent.mkdir(parents=True, exist_ok=True)
+        meb.write_griddata_to_nc(
+            coeff_x.astype("float32"), str(path_x), creat_dir=True
+        )
+        meb.write_griddata_to_nc(
+            coeff_y.astype("float32"), str(path_y), creat_dir=True
+        )
     return coeff_x, coeff_y
 
 
@@ -137,10 +148,12 @@ class DscGenerateOrographicSmoothingCoefficientsCli(CliBase):
         "  python -m cli.dsc_generate_orographic_smoothing_coefficients --help\n"
         "  python -m cli.dsc_generate_orographic_smoothing_coefficients "
         "--orography-path orog.nc --output-path out.nc\n"
+        "  # 实际写出 out_x.nc / out_y.nc\n"
         "  python cli/dsc_generate_orographic_smoothing_coefficients.py "
         "--orography-path orog.nc --mask-path mask.nc --output-path out.nc\n"
         "\n"
         "说明:\n"
+        "  - --output-path out.nc 写出 out_x.nc 与 out_y.nc 两个单场\n"
         "  - 省略系数参数时 process 默认 min=0.5、max=0.0、power=1\n"
         "  - 省略掩码开关时 process 默认不按边界置零、不反转掩码\n"
         "  - --config 传给 process；本模块无 ini 读取器，省略则不改路径\n"
@@ -204,7 +217,10 @@ class DscGenerateOrographicSmoothingCoefficientsCli(CliBase):
             dest="output_path",
             default=None,
             metavar="PATH",
-            help="输出 nc，同时写入 x/y 两个系数场。省略则只返回、不写文件。",
+            help=(
+                "输出路径前缀（含后缀）。写出 {stem}_x{suffix} 与 {stem}_y{suffix} "
+                "两个单场 nc（meb）。省略则只返回、不写文件。"
+            ),
         )
         parser.add_argument(
             "--config",
