@@ -16,22 +16,16 @@ import logging
 import numpy as np
 
 from resource.data_schema import get_segment_fh
-from .identifier import DIA_WeatherPhenomIdentifier
-from .selector import DIA_WeatherPhenomSelector
-from .logic_judger import DIA_WeatherPhenomLogicJudger
-from .encoder import DIA_WeatherPhenomEncoder
 from .utils.output import save_nc, print_stats
+from .weather_phenom_grid_12h_plugin import WeatherPhenomGrid12hPlugin
 
 logger = logging.getLogger(__name__)
 
 # 默认输出根目录（与输入数据同服务器，独立子目录）
 DEFAULT_OUTPUT_DIR = "./PHENOM"
 
-# ── 算法插件单例（模块级，避免每次调用重复初始化）─────────────
-_identifier = DIA_WeatherPhenomIdentifier()
-_selector   = DIA_WeatherPhenomSelector()
-_judger     = DIA_WeatherPhenomLogicJudger()
-_encoder    = DIA_WeatherPhenomEncoder()
+# 算法步骤由插件按固定顺序调用
+_plugin = WeatherPhenomGrid12hPlugin()
 
 
 def run_segment(data_dict: dict, shape, lat_arr: np.ndarray, lon_arr: np.ndarray,
@@ -61,20 +55,8 @@ def run_segment(data_dict: dict, shape, lat_arr: np.ndarray, lon_arr: np.ndarray
         print(f"[{seg_idx:02d}] 数据缺失，跳过")
         return None
 
-    # Step 2: 判识（使用插件类）
-    occur = _identifier.process(data_dict)
-    print(f"[{seg_idx:02d}] 天气现象判识完成")
-
-    # Step 3: 选取A、B（使用插件类，返回 int8 索引）
-    idx_A, idx_B = _selector.process(occur)
-    print(f"[{seg_idx:02d}] A/B现象选取完成")
-
-    # Step 4: 判断逻辑关系（使用插件类，int8 索引全程传递）
-    logic, idx_final_A, idx_final_B = _judger.process(idx_A, idx_B, occur)
-    print(f"[{seg_idx:02d}] 逻辑关系判断完成")
-
-    # Step 5: 编码（使用插件类，int8 索引 → int32 电码）
-    result = _encoder.process(idx_final_A, idx_final_B, logic)
+    # 判识 → 选取 → 逻辑 → 编码
+    result = _plugin.process(data_dict)
     print(f"[{seg_idx:02d}] 编码完成，正在保存...")
 
     # Step 6: 保存（工具模块）

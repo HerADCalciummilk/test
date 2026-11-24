@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 
-from runner import _is_datetime_token, _parse_run_datetime, _select_data_key_and_runtimes
+from cli.frequency_matching_rain03_cli import (
+    _expand_run_times,
+    _is_datetime_token,
+    _para_for,
+    _parse_token,
+)
 
 
 class _Log:
@@ -20,14 +25,21 @@ def test_accept_10_and_12_digit_tokens():
 
 
 def test_parse_10_digit_as_hourly():
-    assert _parse_run_datetime("2026082000") == datetime(2026, 8, 20, 0, 0)
-    assert _parse_run_datetime("202608200000") == datetime(2026, 8, 20, 0, 0)
+    assert _parse_token("2026082000") == datetime(2026, 8, 20, 0, 0)
+    assert _parse_token("202608200000") == datetime(2026, 8, 20, 0, 0)
 
 
-def test_select_ecmwf_10_digit():
+def test_expand_single_and_range():
+    assert _expand_run_times("2026082000") == [datetime(2026, 8, 20, 0, 0)]
+    assert _expand_run_times(["2026082000", "2026082002"]) == [
+        datetime(2026, 8, 20, 0, 0),
+        datetime(2026, 8, 20, 1, 0),
+        datetime(2026, 8, 20, 2, 0),
+    ]
+
+
+def test_para_for_ecmwf():
     configs = {"ecmwf": {"model_template": "a", "fact_template": "b", "output_template": "c"}}
-    para, run_dts, key = _select_data_key_and_runtimes(
-        ["ecmwf", "2026082000"], configs, "ecmwf", _Log())
+    para, key = _para_for(configs, "ecmwf", "ecmwf", _Log())
     assert key == "ecmwf"
-    assert run_dts == [datetime(2026, 8, 20, 0, 0)]
     assert para["model_template"] == "a"

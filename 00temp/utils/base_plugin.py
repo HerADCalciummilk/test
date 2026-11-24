@@ -1,6 +1,9 @@
+"""Module containing plugin base class."""
+
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-"""Module containing plugin base class."""
+
+
 class BasePlugin(ABC):
     """An abstract class for IMPROVER plugins.
     Subclasses must be callable. We preserve the process

@@ -11,12 +11,13 @@ $$
 
 ```
 frequency_matching_rain03/
-├── cli/                 # python -m cli
+├── cli/                 # python -m cli → process / _process
 ├── docs/                # 程序说明
 ├── nbs/                 # Jupyter 说明
-├── resource/            # qpf_fm.ini、path.json、config.json、站点、掩膜
+├── resource/            # conf.ini、path.json、config.json、站点、掩膜
 ├── src/
-│   ├── runner.py        # 主程序 process / main
+│   ├── frequency_matching_rain03_plugin.py       # 核心订正插件
+│   ├── frequency_matching_rain03_plugin_util.py  # 路径/网格/掩膜/任务展开
 │   ├── proc/            # FM / 相似 / 光流 / 平流 / Cressman
 │   └── utils/           # 类型、日志、ini
 ├── test/
@@ -31,16 +32,14 @@ frequency_matching_rain03/
 
 ```bash
 python -m cli --help
-python -m cli ecmwf 202605220800
-python -m cli ecmwf 202605220000 202605221200
+python -m cli data_key=ecmwf run_times=2026052208
+python -m cli data_key=ecmwf run_times=2026052200,2026052212
 
-# from runner import process
-# process(data_key="ecmwf", run_times=["202605220800"])
-
-python src/runner.py ecmwf 202605220800
+# from cli.frequency_matching_rain03_cli import process
+# process(data_key="ecmwf", run_times=["2026052208"])
 ```
 
-依赖：`numpy`、`scipy`、`meteva_base`（未安装会报错：`pip install meteva_base`）。路径用 `meb.get_path`，Micaps 读写走 meteva_base。并行：`QPF_LEADTIME_WORKERS`、`QPF_DISABLE_LEADTIME_MP=1`。
+依赖：`numpy`、`scipy`、`meteva_base`（未安装会报错：`pip install meteva_base`）。路径用 `meb.get_path`，Micaps 读写走 meteva_base。并行：`pro_count`（见 `resource/conf.ini`）。
 
 整理登记见 `NIMM_list.md`、`00log/`。  
 说明（原理 / 实现 / 参数 / 使用 / CLI / 示例）见 [docs/frequency_matching_rain03_算法说明.md](docs/frequency_matching_rain03_算法说明.md)、[nbs/frequency_matching_rain03_说明.ipynb](nbs/frequency_matching_rain03_说明.ipynb)。

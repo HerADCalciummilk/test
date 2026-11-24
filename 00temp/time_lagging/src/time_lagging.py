@@ -36,6 +36,7 @@ class GenerateTimeLaggedEnsemble:
         raise TypeError("时间滞后只接受同一类数据：全部为格点，或全部为站点表")
 
     def _process_grids(self, datasets: list[xr.DataArray]) -> xr.DataArray:
+        # 按起报时次拆成单时次切片
         slices = []
         for grid in datasets:
             prepared = ensure_grid(grid)
@@ -46,6 +47,7 @@ class GenerateTimeLaggedEnsemble:
             return slices[0]
 
         units = _common_units(slices)
+        # 校验有效时间一致，并按有效时间排序时效
         ordered = []
         validity_reference = None
         for item in slices:
@@ -57,10 +59,12 @@ class GenerateTimeLaggedEnsemble:
                 raise ValueError("各起报时次的有效时间不一致，不能做时间滞后")
             ordered.append(item)
 
+        # 统一到最新起报，并重算时效使有效时间不变
         latest = max(pd.Timestamp(item.time.values[0]) for item in ordered)
         latest_item = max(ordered, key=lambda item: pd.Timestamp(item.time.values[0]))
         rebadged = [_rebadge_grid(item, latest, units) for item in ordered]
         _assert_same_space(rebadged)
+        # 成员编号重复时顺延，再沿 member 拼接
         rebadged = _renumber_grid_members(rebadged)
         reference = rebadged[0]
         aligned = []
@@ -125,7 +129,9 @@ class GenerateTimeLaggedEnsemble:
 
 def time_lag(*datasets):
     """合并时间滞后集合，返回格点或站点表。"""
-    return GenerateTimeLaggedEnsemble().process(*datasets)
+    from time_lagging.src.time_lagging_plugin import TimeLaggingPlugin
+
+    return TimeLaggingPlugin().process(*datasets)
 
 
 def _flatten(datasets) -> list:

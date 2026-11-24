@@ -148,16 +148,19 @@ class TimeLagTests(unittest.TestCase):
     def test_cli_and_meteva_readback(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "lagged.nc"
+            grid_inputs = ",".join(
+                [
+                    str(REPO / "time_lagging" / "testdata" / "cycle_00.nc"),
+                    str(REPO / "time_lagging" / "testdata" / "cycle_06.nc"),
+                ]
+            )
             completed = subprocess.run(
                 [
                     PYTHON,
                     "-m",
                     "time_lagging",
-                    "--inputs",
-                    str(REPO / "time_lagging" / "testdata" / "cycle_00.nc"),
-                    str(REPO / "time_lagging" / "testdata" / "cycle_06.nc"),
-                    "--output",
-                    str(output),
+                    f"inputs={grid_inputs}",
+                    f"output={output}",
                 ],
                 cwd=REPO,
                 capture_output=True,
@@ -169,16 +172,19 @@ class TimeLagTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             loaded = load_grid(output)
             station_output = Path(temporary) / "lagged.csv"
+            station_inputs = ",".join(
+                [
+                    str(REPO / "time_lagging" / "testdata" / "cycle_00.csv"),
+                    str(REPO / "time_lagging" / "testdata" / "cycle_06.csv"),
+                ]
+            )
             station_run = subprocess.run(
                 [
                     PYTHON,
                     "-m",
-                    "time_lagging.cli",
-                    "--inputs",
-                    str(REPO / "time_lagging" / "testdata" / "cycle_00.csv"),
-                    str(REPO / "time_lagging" / "testdata" / "cycle_06.csv"),
-                    "--output",
-                    str(station_output),
+                    "time_lagging",
+                    f"inputs={station_inputs}",
+                    f"output={station_output}",
                 ],
                 cwd=REPO,
                 capture_output=True,

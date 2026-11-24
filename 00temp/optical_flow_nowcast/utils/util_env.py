@@ -32,6 +32,16 @@ FIELDS: Dict[str, Sequence[_Field]] = {
         ("decl_scale", "int", False, 20),
         ("verbose", "bool", False, False),
     ),
+    "lsqr_optical_flow": (
+        ("precip_before", "path", True, None),
+        ("precip_next", "path", True, None),
+        ("min_window", "str", False, "5.0,5.0"),
+        ("rain_limit", "float", False, 0.1),
+        ("delta_rain_limit", "float", False, 0.1),
+        ("num_limit", "int", False, 100),
+        ("lsqr_damp", "float", False, 0.01),
+        ("verbose", "bool", False, False),
+    ),
     "extrapolation": (
         ("precip", "path", True, None),
         ("velocity", "path", True, None),
@@ -152,8 +162,25 @@ def _parser() -> configparser.ConfigParser:
     return _CACHE
 
 
+_INI_SECTION_ALIASES = {
+    "lsqr_optical_flow": "window_lsqr",
+    "window_lsqr": "lsqr_optical_flow",
+}
+
+
+def _ini_section(section: str) -> str:
+    parser = _parser()
+    if parser.has_section(section):
+        return section
+    alt = _INI_SECTION_ALIASES.get(section)
+    if alt and parser.has_section(alt):
+        return alt
+    return section
+
+
 def _raw(section: str, key: str) -> Optional[str]:
     parser = _parser()
+    section = _ini_section(section)
     if not parser.has_section(section) or not parser.has_option(section, key):
         return None
     value = parser.get(section, key).strip()
@@ -235,7 +262,11 @@ def resolve_args(module: str, *, config: Optional[str] = None, **explicit: Any) 
             set_main_ini(None)
 
 
+_MODULE_ALIASES = {"window_lsqr": "lsqr_optical_flow", "window-lsqr": "lsqr_optical_flow"}
+
+
 def _resolve_args(module: str, **explicit: Any) -> Dict[str, Any]:
+    module = _MODULE_ALIASES.get(module, module)
     if module not in FIELDS:
         raise ValueError(f"未知模块: {module}")
     spec = FIELDS[module]

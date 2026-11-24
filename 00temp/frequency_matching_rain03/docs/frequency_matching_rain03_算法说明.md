@@ -38,7 +38,9 @@ $$
 
 | 层级 | 路径 | 说明 |
 |------|------|------|
-| 调度 | `src/runner.py` | `process` / `main`：读数 → 相似 → FM →（可选 OF）→ Cressman → 写盘 |
+| CLI 调度 | `cli/frequency_matching_rain03_cli.py` | `process` / `_process`：读入 → 插件 → 写出 |
+| 核心插件 | `src/frequency_matching_rain03_plugin.py` | `FrequencyMatchingRain03Plugin`：相似 → FM →（可选 OF）→ Cressman → 写盘 |
+| 读入工具 | `src/frequency_matching_rain03_plugin_util.py` | 路径 / 网格 / 掩膜 / 任务展开 |
 | 频率匹配 | `src/proc/frequency_match.py` | `FrequencyMatch`：分位映射与分段订正 |
 | 相似 | `src/proc/ensemble.py` | `Ensemble`：相关 / RMSE / TS+Bias |
 | 光流 / 平流 | `src/proc/optical_flow.py`、`rain_extrapolation.py` | 短时效风场与半拉格朗日 |
@@ -46,67 +48,67 @@ $$
 | 数值替代 | `src/proc/alglib.py` | Pearson、稀疏 LSQR（光流） |
 | 配置 | `src/utils/util_env.py` | 读 `resource/qpf_fm.ini` |
 | 路径 / I/O | `src/utils/io_meb.py` | `meb.get_path`、后缀回退、Micaps 读写适配 |
-| CLI | `cli/__main__.py` | argparse → `process` |
 
-**主流程（`main` 单时效）**
+**主流程（单起报 × 单时效）**
 
-1. `_load_path_configs` / `_load_grid_config`；读站点与掩膜。  
-2. 未设 `QPF_DISABLE_LEADTIME_MP` 时，按时效切子进程并行（`QPF_LEADTIME_WORKERS`，默认最多 8）。  
-3. 用 `meb.get_path` 展开模式路径（无后缀则试 `.m4`/`.nc`），`meb.read_griddata_from_micaps4` 读入后裁到大区网格。  
+1. CLI `_load_path_configs` / `_load_grid_config`；读站点与掩膜。  
+2. `pro_count>1` 时用 `SimpleParallelTool` 并行调用 `_process`。  
+3. 插件内：`meb.get_path` 展开模式路径（无后缀则试 `.m4`/`.nc`），读入后裁到大区网格。  
 4. 扫历史窗，成对读模式格点与实况站点（`.m3`）；平滑后 `get_similarity_index_by_ts_and_bias`。  
 5. `get_used_model_level_and_extend` + `correct_model_data` 订正当前场；插到站点写 `.m3`。  
 6. 伪站 + Cressman + 格点 FM → `.m4` / `.nc`。
 
 **调用形态**
 
-- 产品：`from runner import process` / `python -m cli` / `python src/runner.py`  
-- 算法核：`FrequencyMatch.correct_model_data(...)`、`Ensemble.get_similarity_index_by_ts_and_bias(...)`
+- 产品：`from cli.frequency_matching_rain03_cli import process` / `python -m cli`  
+- 算法核：`FrequencyMatchingRain03Plugin.process`；底层 `FrequencyMatch` / `Ensemble`
 
 入参为模式键与起报时刻；核操作本包 `GridData` / `ScatterData`。路径与 Micaps 读写走 `meteva_base`（未安装则报错提示 `pip install meteva_base`）。
 
 ---
 
-## 3. 算法参数说明
+## 3. 参数说明
 
 ### 3.1 运行参数（CLI / `process`）
 
-| 参数 | CLI | 默认 | 含义 |
-|------|-----|------|------|
-| `data_key` | 位置参数 / `--data-key` | `path.json` 的 `default` | 模式键（如 `ecmwf`） |
-| `run_times` | 1 或 2 个 `YYYYMMDDHH` / `YYYYMMDDHHMM` / `--start` `--end` | 当前时刻 | 单时次，或闭区间按小时展开；10 位按整点 |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `data_key` | `str` | 模式键（如 `ecmwf`）；默认 `path.json` 的 `default` |
+| `run_times` | `list[str]` | 单时次，或起止闭区间按小时展开；10 位按整点；默认当前时刻 |
+| `pro_count` | `int` | 进程数；`>1` 时并行 `_process`；默认 `1` |
 
 ### 3.2 算法内部常量（代码内，非 ini）
 
-| 量 | 取值 | 含义 |
-|----|------|------|
-| 时效 | 3–252，步长 3 | 预报时效（小时） |
-| 回溯循环 | 0–24 h，再 \(-8\) h | 起报对齐北京时 |
-| 历史窗 | 4 年 × ±15 天 | 当年不含当日 |
-| 平滑 | 9 点 × 30（历史）；×10（Cressman 后） | 削弱噪声 |
-| `similar_level` | 25、50 mm | TS+Bias 阈值 |
-| 相似截断 | 累加评分 \(>2.4\) | 再 \(\min(20,n)\) / \(\max(N/2,n)\) |
-| 站点 FM 级 | 0.1–500 mm（19 级），两端可丢 5 | 相似个例映射 |
-| 格点 FM 级 | 0.01–250 mm（19 级） | Cressman 后再订正 |
-| Cressman 半径 | \(8,6,4,2\times\Delta\lambda\) | 逐步订正 |
-| 光流窗 | \(5^\circ\times 5^\circ\) | 仅 `predict_valid<=0` |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| 时效 | `list[int]` | 预报时效（小时）；默认 3–252，步长 3 |
+| 回溯循环 | `int` | 起报对齐北京时；默认 0–24 h，再 \(-8\) h |
+| 历史窗 | — | 当年不含当日；默认 4 年 × ±15 天 |
+| 平滑 | `int` | 削弱噪声；默认 9 点 × 30（历史）；×10（Cressman 后） |
+| `similar_level` | `list[float]` | TS+Bias 阈值；默认 25、50 mm |
+| 相似截断 | `float` | 累加评分 \(>2.4\) 后 \(\min(20,n)\) / \(\max(N/2,n)\) |
+| 站点 FM 级 | `list[float]` | 相似个例映射；默认 0.1–500 mm（19 级），两端可丢 5 |
+| 格点 FM 级 | `list[float]` | Cressman 后再订正；默认 0.01–250 mm（19 级） |
+| Cressman 半径 | `list[float]` | 逐步订正；默认 \(8,6,4,2\times\Delta\lambda\) |
+| 光流窗 | `tuple` | 仅 `predict_valid<=0`；默认 \(5^\circ\times 5^\circ\) |
 
 ### 3.3 路径（`qpf_fm.ini` / JSON）
 
-| 键 / 文件 | 默认 | 含义 |
-|-----------|------|------|
-| `log_file` | `log/YYYYMMDD.txt` | 日志模板 |
-| `config_json` | `resource/config.json` | 网格：`lon/lat` 起止、`dlon/dlat`、`expand` |
-| `path_json` | `resource/path.json` | 各模式 `model_template` / `fact_template` / `output_template` |
-| `station_info` | `resource/sta.info` | 站点表 |
-| `mask_file` | `resource/mask010.dat` | 陆地掩膜；`dlon` 为 0.01/0.05 时改用 `mask001`/`mask005` |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `log_file` | `str` | 日志模板；默认 `log/YYYYMMDD.txt` |
+| `config_json` | `path` | 网格：`lon/lat` 起止、`dlon/dlat`、`expand`；默认 `resource/config.json` |
+| `path_json` | `path` | 各模式 `model_template` / `fact_template` / `output_template`；默认 `resource/path.json` |
+| `station_info` | `path` | 站点表；默认 `resource/sta.info` |
+| `mask_file` | `path` | 陆地掩膜；`dlon` 为 0.01/0.05 时改用 `mask001`/`mask005`；默认 `resource/mask010.dat` |
 
 路径占位符：`YYYY`/`MM`/`DD`/`HH`/`VVV`（三位时效）。展开时先把 `VVV` 换成 `TTT`，再 `meb.get_path(tpl, time, dtime)`。无后缀模板会依次尝试 `.m4` / `.nc` / `.m3`。格点用 `read_griddata_from_micaps4` / `read_griddata_from_nc` 与对应写出；站点用 `read_stadata_from_micaps3` / `write_stadata_to_micaps3`。`sta.info` 仍按本包站点表格式读取。未在 CLI 给出的项回落 ini / `path.json`。未安装 `meteva_base` 时直接报错。
 
-环境变量：`QPF_LEADTIME_WORKERS`（时效子进程数）；`QPF_DISABLE_LEADTIME_MP=1` 关闭并行（子进程内部自动设置）。
+并行由 `pro_count` 控制（见 `resource/conf.ini`）。
 
 ---
 
-## 4. 算法使用说明
+## 4. 运行示例
 
 **环境**：项目根 `frequency_matching_rain03/`；依赖 `numpy` / `scipy` / `meteva_base`。无 `scripts/`。
 
@@ -114,28 +116,28 @@ $$
 
 1. 在 `resource/path.json` 填写模式、实况、输出模板。  
 2. 按需要改 `resource/config.json` 网格；确认 `sta.info` 与 `mask*.dat`。  
-3. 任选 CLI / 模块 / 直跑。  
+3. `python -m cli` 或模块调用。  
 4. 查看 `output_template` 展开路径下的 `.m3` / `.m4` / `.nc`。
 
 **模块调用**
 
 ```python
-from runner import process
-process(data_key="ecmwf", run_times=["202605220800"])
-process(data_key="ecmwf", run_times=["202605220000", "202605221200"])
+from cli.frequency_matching_rain03_cli import process
+process(data_key="ecmwf", run_times=["2026052208"])
+process(data_key="ecmwf", run_times=["2026052200", "2026052212"])
 ```
 
-**直跑**
+**命令行**
 
 ```bash
-python src/runner.py ecmwf 202605220800
+python -m cli data_key=ecmwf run_times=2026052208
 ```
 
-（无参则用 `path.json` 的 `default` 与当前时刻。）
+（无参则用 `conf.ini` / `path.json` 的默认与当前时刻。）
 
 ---
 
-## 5. CLI 调用说明
+### CLI
 
 在仓库根执行：
 

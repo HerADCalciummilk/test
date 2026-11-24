@@ -11,9 +11,8 @@
 
 入口
 ----
-- 模块：``from gust_factor import process``
-- CLI：``python -m cli``
-- 直跑：``python src/gust_factor.py``
+- CLI：``cli/gust_factor_cli.py`` 的 ``process``
+- 插件：``GustFactorCalculatorPlugin`` / ``GustCorrectWithFactorPlugin``
 
 数据读写优先使用 ``meteva_base``（格点 NC 读/写）。
 """
@@ -43,7 +42,8 @@ def _bootstrap_paths() -> None:
 
 _bootstrap_paths()
 
-from utils.util_env import get_repo_root, get_resolved_paths, get_run_params, set_main_ini  # noqa: E402
+from utils.base_plugin import BasePlugin
+from util_plugin import gust_from_wind, least_squares, origin_scale, percent_values
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ from utils.util_env import get_repo_root, get_resolved_paths, get_run_params, se
 # ---------------------------------------------------------------------------
 
 
-class GustFactorCalculatorPlugin(object):
+class GustFactorCalculatorPlugin(BasePlugin):
     """根据历史站点预报/观测统计阵风系数与分位数匹配参数。
 
     对每个预报时效 ``h``：
@@ -139,10 +139,9 @@ class GustFactorCalculatorPlugin(object):
         obs_arr = np.asarray(data_pd["obs_gust"], dtype=float)
         fore_arr = np.asarray(data_pd["fcst_wind"], dtype=float)
 
-        # 过原点最小二乘：param = Σ(obs·fcst) / Σ(fcst²)
-        t_par = float(np.sum(obs_arr * fore_arr) / np.sum(fore_arr * fore_arr))
+        # 过原点最小二乘，再对分位数做线性匹配
+        t_par = origin_scale(obs_arr, fore_arr)
 
-        # 分位数匹配：线性订正后的预报分位 ↔ 观测分位
         new_arr = fore_arr * t_par
         new_per_arr = self._calc_percent_value(new_arr)
         obs_per_arr = self._calc_percent_value(obs_arr)
@@ -158,23 +157,11 @@ class GustFactorCalculatorPlugin(object):
 
     def _calc_percent_value(self, data_arr) -> List[float]:
         """按 ``self.per_list`` 计算百分位值（自动忽略 NaN）。"""
-        data_arr = np.asarray(data_arr, dtype=float)
-        filtered_arr = data_arr[~np.isnan(data_arr)]
-        return [float(np.percentile(filtered_arr, p_v)) for p_v in self.per_list]
+        return percent_values(data_arr, self.per_list)
 
     def _least_squares_method(self, x, y) -> Tuple[float, float]:
         """一元线性最小二乘 ``y = a·x + b``。"""
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-        mean_x = np.mean(x)
-        mean_y = np.mean(y)
-        denominator = np.sum((x - mean_x) ** 2)
-        # 退化情形：分位几乎常数，退回单位斜率
-        if denominator == 0:
-            return 1.0, float(mean_y - mean_x)
-        a = float(np.sum((x - mean_x) * (y - mean_y)) / denominator)
-        b = float(mean_y - a * mean_x)
-        return a, b
+        return least_squares(x, y)
 
     def _save_gust_factor(self, save_path: str) -> bool:
         """写出 JSON；``save_path`` 为空则跳过。"""
@@ -198,7 +185,7 @@ class GustFactorCalculatorPlugin(object):
 # ---------------------------------------------------------------------------
 
 
-class GustCorrectWithFactorPlugin(object):
+class GustCorrectWithFactorPlugin(BasePlugin):
     """读取阵风系数 JSON，由 10 m U/V 生成订正后的阵风格点场。
 
     步骤：``ws = sqrt(u²+v²)`` → ``g0 = ws * param`` →
@@ -242,15 +229,10 @@ class GustCorrectWithFactorPlugin(object):
         if param_dic is None:
             raise Exception("预报时效[%s]的阵风系数不存在" % fore_hour)
 
-        gust_arr = s_arr * float(param_dic["param"])
-        new_g_arr = gust_arr * float(param_dic["a"]) + float(param_dic["b"])
-        # 物理约束：负值或异常大值回退到未匹配的 gust_arr
-        new_g_arr = np.where(new_g_arr < 0, gust_arr, new_g_arr)
-        new_g_arr = np.where(new_g_arr > 100, gust_arr, new_g_arr)
-        # 阵风不应低于同时次平均风速
-        min_mask = new_g_arr < s_arr
-        new_g_arr = new_g_arr.copy()
-        new_g_arr[min_mask] = s_arr[min_mask]
+        # 平均风速换成阵风，并限制在物理范围内
+        new_g_arr = gust_from_wind(
+            s_arr, param_dic["param"], param_dic["a"], param_dic["b"]
+        )
 
         n_grd = meb.grid(main_grd.glon, main_grd.glat)
         return meb.grid_data(n_grd, new_g_arr)
@@ -336,169 +318,3 @@ def make_compare_png(ws_arr, gust_arr, png_path: str, show_png) -> bool:
     print("对比图片已保存至：%s" % png_path)
     return True
 
-
-def _parse_fore_hours(value) -> Tuple[int, ...]:
-    if value is None:
-        return (24, 48, 72)
-    if isinstance(value, (list, tuple)):
-        return tuple(int(x) for x in value)
-    s = str(value).strip()
-    if not s:
-        return (24, 48, 72)
-    return tuple(int(x.strip()) for x in s.split(",") if x.strip())
-
-
-# ---------------------------------------------------------------------------
-# 可调度入口（无独立 runner）
-# ---------------------------------------------------------------------------
-
-
-def process(
-    mode: Optional[str] = None,
-    station_csv_dir: Optional[str] = None,
-    fore_hours: Optional[Union[Sequence[int], str]] = None,
-    factor_path: Optional[str] = None,
-    u_path: Optional[str] = None,
-    v_path: Optional[str] = None,
-    fore_hour: Optional[int] = None,
-    output_path: Optional[str] = None,
-    make_png: Optional[bool] = None,
-    show_png: Optional[bool] = None,
-    ws_path: Optional[str] = None,
-    png_path: Optional[str] = None,
-    log_file: Optional[str] = None,
-    config: Optional[str] = None,
-) -> Dict:
-    """阵风系数入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
-    kwargs = dict(
-        mode=mode,
-        station_csv_dir=station_csv_dir,
-        fore_hours=fore_hours,
-        factor_path=factor_path,
-        u_path=u_path,
-        v_path=v_path,
-        fore_hour=fore_hour,
-        output_path=output_path,
-        make_png=make_png,
-        show_png=show_png,
-        ws_path=ws_path,
-        png_path=png_path,
-        log_file=log_file,
-    )
-    if not config:
-        return _process_impl(**kwargs)
-    set_main_ini(config)
-    try:
-        return _process_impl(**kwargs)
-    finally:
-        set_main_ini(None)
-
-
-def _process_impl(
-    mode: Optional[str] = None,
-    station_csv_dir: Optional[str] = None,
-    fore_hours: Optional[Union[Sequence[int], str]] = None,
-    factor_path: Optional[str] = None,
-    u_path: Optional[str] = None,
-    v_path: Optional[str] = None,
-    fore_hour: Optional[int] = None,
-    output_path: Optional[str] = None,
-    make_png: Optional[bool] = None,
-    show_png: Optional[bool] = None,
-    ws_path: Optional[str] = None,
-    png_path: Optional[str] = None,
-    log_file: Optional[str] = None,
-) -> Dict:
-    """阵风系数 / 订正可调度入口。
-
-    未传参数从 ``resource/conf.ini`` 读取。
-
-    Parameters
-    ----------
-    mode :
-        ``calc`` / ``correct`` / ``all``。
-    station_csv_dir :
-        历史站点 CSV 目录（``calc`` / ``all``）。
-    fore_hours :
-        系数统计时效列表。
-    factor_path :
-        系数 JSON 路径（写出或读入）。
-    u_path, v_path :
-        10 m U/V 格点 NC（``correct`` / ``all``）。
-    fore_hour :
-        订正时效。
-    output_path :
-        订正阵风 NC 输出路径。
-    make_png / ws_path / png_path :
-        可选对比图。
-
-    Returns
-    -------
-    dict
-        含 ``mode``、``gust_factor``（若计算）、``output_path``（若订正）等。
-    """
-    paths = get_resolved_paths()
-    params = get_run_params()
-
-    if log_file is not None:
-        paths["log_file_template"] = log_file
-
-    mode = (mode or params["mode"] or "all").strip().lower()
-    station_csv_dir = station_csv_dir or paths["station_csv_dir"]
-    factor_path = factor_path or paths["factor_path"]
-    u_path = u_path or paths["u_path"]
-    v_path = v_path or paths["v_path"]
-    output_path = output_path or paths["output_path"]
-    ws_path = ws_path if ws_path is not None else paths.get("ws_path", "")
-    png_path = png_path or paths["png_path"]
-    fore_hours_t = _parse_fore_hours(
-        fore_hours if fore_hours is not None else params["fore_hours"]
-    )
-    fore_hour = int(params["fore_hour"] if fore_hour is None else fore_hour)
-    if make_png is None:
-        make_png = bool(params["make_png"])
-    if show_png is None:
-        show_png = bool(params["show_png"])
-
-    result: Dict = {"mode": mode, "repo_root": get_repo_root()}
-
-    if mode in ("calc", "all"):
-        print("#" * 60)
-        print("start calculate gust factor")
-        print("#" * 60)
-        train_pd = load_station_csv_dir(station_csv_dir)
-        g_factor = GustFactorCalculatorPlugin().process(
-            train_pd, fore_hours=fore_hours_t, save_path=factor_path
-        )
-        result["gust_factor"] = g_factor
-        result["factor_path"] = factor_path
-
-    if mode in ("correct", "all"):
-        print("#" * 60)
-        print("start use gust factor to correct gust forecast")
-        print("#" * 60)
-        u_da = read_grid_nc(u_path)
-        v_da = read_grid_nc(v_path)
-        g_da = GustCorrectWithFactorPlugin().process(
-            u_da, v_da, fore_hour, factor_path
-        )
-        write_grid_nc(g_da, output_path)
-        print("阵风预报结果已保存至：%s" % output_path)
-        result["output_path"] = output_path
-        result["fore_hour"] = fore_hour
-
-        if make_png and ws_path:
-            ws_da = read_grid_nc(ws_path)
-            ws_arr = np.asarray(ws_da.values)[0, 0, 0, 0]
-            gust_arr = np.asarray(g_da.values)[0, 0, 0, 0]
-            make_compare_png(ws_arr, gust_arr, png_path, show_png)
-            result["png_path"] = png_path
-
-    if mode not in ("calc", "correct", "all"):
-        raise ValueError("未知 mode=%r，期望 calc/correct/all" % mode)
-
-    return result
-
-
-if __name__ == "__main__":
-    process()

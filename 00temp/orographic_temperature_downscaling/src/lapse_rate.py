@@ -18,7 +18,11 @@ import xarray as xr
 
 import meteva_base as meb
 
-from orographic_temperature_downscaling.utils.base_plugin import BasePlugin,PostProcessingPlugin
+from orographic_temperature_downscaling.src.util_plugin import (
+    ELR,
+    compute_lapse_rate_adjustment,
+)
+from orographic_temperature_downscaling.utils.base_plugin import BasePlugin, PostProcessingPlugin
 from orographic_temperature_downscaling.utils.utils import (
     convert_units,
     rebuild_to_meb_griddata,
@@ -27,58 +31,8 @@ from orographic_temperature_downscaling.utils.utils import (
 _MEB_VALID_VAL = (-np.inf, np.inf, np.nan)
 
 
-# 物理常数（单位：K/m）
+# 物理常数（单位：K/m）。ELR 的计算在 util_plugin。
 DALR = -0.0098  # 干绝热递减率
-ELR = -0.0065   # 环境递减率（标准大气）
-
-
-def compute_lapse_rate_adjustment(
-    lapse_rate: np.ndarray,
-    orog_diff: np.ndarray,
-    max_orog_diff_limit: float = 50.0
-) -> np.ndarray:
-    """根据层结递减率与地形高度差计算温度订正量。
-
-    计算逻辑：
-    1. 当高度差绝对值不超过 `max_orog_diff_limit` 时，使用 `lapse_rate * orog_diff`；
-    2. 超过上限的高度差部分使用环境递减率 `ELR`，避免订正量异常放大。
-
-    参数
-    ----------
-    lapse_rate : np.ndarray
-        层结递减率数组，单位 K/m。
-    orog_diff : np.ndarray
-        地形高度差数组（目标地形减去源地形），单位 m。
-    max_orog_diff_limit : float
-        直接应用局地层结递减率的最大高度差（m）。
-
-    返回值
-    -------
-    np.ndarray
-        温度订正量，单位 K，形状与广播后的 `lapse_rate` 一致。
-    """
-    orog_diff = np.broadcast_to(orog_diff, lapse_rate.shape).copy()
-    orig_orog_diff = orog_diff.copy()
-
-    # 如果地形高度差大于最大允许值（如未解析的山顶）或小于负的最大允许值（如未解析的山谷）
-    condition1 = orog_diff > max_orog_diff_limit
-    condition2 = orog_diff < -max_orog_diff_limit
-    orog_diff[condition1] = max_orog_diff_limit
-    orog_diff[condition2] = -max_orog_diff_limit
-    vertical_adjustment = np.multiply(orog_diff, lapse_rate)
-
-    # 计算绝对地形高度差大于最大允许值的点的额外层结递减率调整
-    orig_orog_diff[condition1] = np.clip(
-        orig_orog_diff[condition1] - max_orog_diff_limit, 0, None
-    )
-    orig_orog_diff[condition2] = np.clip(
-        orig_orog_diff[condition2] + max_orog_diff_limit, None, 0
-    )
-
-    # 假设环境递减率（也称为标准大气递减率）
-    vertical_adjustment[condition1] += np.multiply(orig_orog_diff[condition1], ELR)
-    vertical_adjustment[condition2] += np.multiply(orig_orog_diff[condition2], ELR)
-    return vertical_adjustment
 
 
 class ApplyGriddedLapseRate(PostProcessingPlugin):
@@ -486,6 +440,7 @@ class LapseRate(BasePlugin):
         else:
             land_mask_values = land_sea_mask.astype(bool, copy=False)
 
+        # 温度换成开尔文、地形换成米，再按最后两维做邻域回归
         if isinstance(temperature, xr.DataArray):
             temp_k = convert_units(temperature, "K")
         else:

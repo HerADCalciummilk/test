@@ -17,10 +17,10 @@ import meteva_base as meb
 import numpy as np
 import xarray as xr
 
-from simple_bias_correction.cli.cal_calculate_forecast_bias import (
+from simple_bias_correction.cli.cal_calculate_forecast_bias_cli import (
     process as calc_bias_cli_process,
 )
-from simple_bias_correction.cli.prb_bias_correction import (
+from simple_bias_correction.cli.simple_bias_correction_cli import (
     process as apply_bias_cli_process,
 )
 from simple_bias_correction.src.simple_bias_correction import (

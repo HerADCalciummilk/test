@@ -18,10 +18,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from radar_echo_classification.cli.conv_strat_raut_main import process as conv_strat_raut
-from radar_echo_classification.cli.feature_detection_main import process as feature_detection
-from radar_echo_classification.cli.hydroclass_semisupervised_main import process as hydroclass_semisupervised
-from radar_echo_classification.cli.steiner_conv_strat_main import process as steiner_conv_strat
+from radar_echo_classification.cli.conv_strat_raut_cli import process as conv_strat_raut
+from radar_echo_classification.cli.feature_detection_cli import process as feature_detection
+from radar_echo_classification.cli.hydroclass_semisupervised_cli import process as hydroclass_semisupervised
+from radar_echo_classification.cli.radar_echo_classification_cli import process as steiner_conv_strat
 from radar_echo_classification.src.echo_class import (
     ConvStratRautPlugin,
     FeatureDetectionPlugin,

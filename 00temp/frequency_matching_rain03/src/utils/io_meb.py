@@ -17,6 +17,9 @@ from typing import Iterable, Optional, Sequence, Tuple
 
 import numpy as np
 
+import pandas as pd
+
+
 try:
     import meteva_base as meb
 except ImportError as exc:
@@ -173,7 +176,6 @@ def write_stadata_m3(
     title: Optional[str] = None,
 ) -> None:
     """组 ``sta_data`` 后 ``meb.write_stadata_to_micaps3``。"""
-    import pandas as pd
     id_list = []
     for item in ids:
         try:

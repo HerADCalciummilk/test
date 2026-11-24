@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from steps_multi_time_fusion.src.climatological_skill import calc_climatological_skill, compute_daily_skill
+from utils.base_plugin import BasePlugin
+from steps_multi_time_fusion.src.util_plugin import calc_climatological_skill, compute_daily_skill
 
 
-class ClimatologicalSkillPlugin:
+class ClimatologicalSkillPlugin(BasePlugin):
     """Calculate daily and climatological cascade skill matrices."""
 
     def __init__(self, n_cascade_levels: int = 8, use_spearman: bool = False) -> None:

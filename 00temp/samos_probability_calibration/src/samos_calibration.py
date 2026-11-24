@@ -83,16 +83,19 @@ def train_samos(
     默认 ``emos_additional_fields=None``：异常空间 EMOS 按点/站一维系数（β 仅集合均值），
     不再把海拔等静态场当作 EMOS 预测因子；需要时才显式传入。
     """
+    # 统一预报、实况和 GAM 静态场的输入格式
     hf = normalize_gam_input(historic_forecasts, var_name=var_name)
     tr = normalize_gam_input(truths, var_name=var_name)
     gam_add = normalize_gam_fields(gam_additional_fields, var_name=var_name)
 
+    # 用已拟合的 GAM 取气候均值和标准差
     forecast_mean, forecast_sd = get_climatological_stats(
         hf, forecast_gams, gam_features, gam_add
     )
     truth_mean, truth_sd = get_climatological_stats(
         tr, truth_gams, gam_features, gam_add
     )
+    # 转为标准化气候异常，再在异常空间训练 EMOS
     forecast_ca = calculate_climate_anomalies(hf, forecast_mean, forecast_sd)
     truth_ca = calculate_climate_anomalies(tr, truth_mean, truth_sd)
 
@@ -227,6 +230,7 @@ def apply_samos(
     GAM 侧 ``gam_additional_fields`` 与训练一致（静态因子）；异常 EMOS 侧默认
     ``emos_additional_fields=None``，与 ``train_samos`` 推荐用法一致。
     """
+    # 统一预报格式并补上 dtime，供逐层订正
     fc = normalize_gam_input(forecast, var_name=var_name)
     fc = ensure_dtime_dimension(fc)
     validate_grid_format(fc, apply=True)
@@ -262,6 +266,7 @@ def apply_samos(
         else:
             fc_6d = _internal_to_samos_grid(fc_internal, fc_level)
 
+        # 预报气候态 → 标准化异常
         forecast_mean, forecast_sd = get_climatological_stats(
             fc_6d, forecast_gams, gam_features, gam_add
         )
@@ -282,6 +287,7 @@ def apply_samos(
         location = params["location_parameter"]
         scale = params["scale_parameter"]
 
+        # 用实况气候态把异常空间的位置/尺度还原到原单位
         truth_mean_6d, truth_sd_6d = get_climatological_stats(
             fc_6d, truth_gams, gam_features, gam_add
         )

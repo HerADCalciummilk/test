@@ -7,7 +7,7 @@
 
 调用::
 
-    from runner import process
+from runner import process
     process(data_key="ecmwf", run_times=["202605220800"])
 
     python -m cli ecmwf 202605220800
@@ -68,10 +68,13 @@ def _parse_run_datetime(token: str) -> datetime:
     raise ValueError(f"unsupported datetime token: {token}")
 
 
-def _load_path_configs(base: Path, log: Log):
+def _load_path_configs(base: Path, log: Log, path_json=None):
     """读 ``path.json``，返回 ``{key: {model,fact,output}_template}`` 与 ``default`` 键。"""
-    paths = get_resolved_paths()
-    path_json = Path(paths["path_json"])
+    if path_json is None:
+        paths = get_resolved_paths()
+        path_json = Path(paths["path_json"])
+    else:
+        path_json = Path(path_json)
     if not path_json.exists():
         log.write_error("Path Json File Is Not Exist!", 1)
         raise RuntimeError("Path Json File Is Not Exist!")
@@ -164,7 +167,7 @@ def _select_data_key_and_runtimes(args, configs, default_key, log):
     return para, run_dts, data_key
 
 
-def _load_grid_config(base: Path, log: Log):
+def _load_grid_config(base: Path, log: Log, config_json=None):
     """读 ``config.json`` 的中心区与分辨率；缺省 70–140°E、0–60°N、0.1°、外扩 1°。"""
     cfg = ConfigureData()
     cfg.center_lon_left = 70.0
@@ -174,8 +177,11 @@ def _load_grid_config(base: Path, log: Log):
     cfg.dlon = 0.1
     cfg.dlat = 0.1
     cfg.lonlat_ext = 1.0
-    paths = get_resolved_paths()
-    config_path = Path(paths["config_json"])
+    if config_json is None:
+        paths = get_resolved_paths()
+        config_path = Path(paths["config_json"])
+    else:
+        config_path = Path(config_json)
     if not config_path.exists():
         log.write_info("config.json not found, using default grid config", 0)
         return cfg
@@ -413,6 +419,18 @@ def process(
     station_info=None,
     mask_file=None,
 ):
+    return _process_entry(data_key=data_key, run_times=run_times, config=config, log_file=log_file, config_json=config_json, path_json=path_json, station_info=station_info, mask_file=mask_file)
+
+def _process_entry(
+    data_key=None,
+    run_times=None,
+    config=None,
+    log_file=None,
+    config_json=None,
+    path_json=None,
+    station_info=None,
+    mask_file=None,
+):
     """可调度入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。
 
     ``log_file`` / ``config_json`` / ``path_json`` / ``station_info`` / ``mask_file``
@@ -438,6 +456,8 @@ def process(
             set_main_ini(None)
     finally:
         clear_call_overrides()
+
+process.__doc__ = _process_entry.__doc__
 
 
 def _process_impl(data_key=None, run_times=None):

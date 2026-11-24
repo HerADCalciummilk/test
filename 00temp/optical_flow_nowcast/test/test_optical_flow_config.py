@@ -10,11 +10,6 @@ import pytest
 _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 
-from cli.extrapolation_plugin_cli import build_parser as build_extrapolation_parser
-from cli.linda_plugin_cli import build_parser as build_linda_parser
-from cli.lk_plugin_cli import build_parser as build_lk_parser
-from cli.sprog_plugin_cli import build_parser as build_sprog_parser
-from cli.steps_plugin_cli import build_parser as build_steps_parser
 from utils.util_env import clear_ini_cache, resolve_args
 
 
@@ -27,6 +22,8 @@ def test_project_layout() -> None:
         assert (_ROOT / name).is_dir(), f"missing directory: {name}"
     for name in (
         "lk_plugin.py",
+        "lsqr_optical_flow_plugin.py",
+        "lagrangian_plugin.py",
         "extrapolation_plugin.py",
         "linda_plugin.py",
         "sprog_plugin.py",
@@ -34,11 +31,12 @@ def test_project_layout() -> None:
     ):
         assert (_ROOT / "src" / name).is_file()
     for name in (
-        "lk_plugin_cli.py",
-        "extrapolation_plugin_cli.py",
-        "linda_plugin_cli.py",
-        "sprog_plugin_cli.py",
-        "steps_plugin_cli.py",
+        "lk_cli.py",
+        "lsqr_optical_flow_cli.py",
+        "extrapolation_cli.py",
+        "linda_cli.py",
+        "sprog_cli.py",
+        "steps_cli.py",
     ):
         assert (_ROOT / "cli" / name).is_file()
 
@@ -55,6 +53,30 @@ def test_lk_defaults_and_keeps_typed_path() -> None:
 def test_lk_requires_precip() -> None:
     with pytest.raises(ValueError, match="precip"):
         resolve_args("lk")
+
+
+def test_lsqr_optical_flow_defaults() -> None:
+    got = resolve_args(
+        "lsqr_optical_flow",
+        precip_before="model.nc",
+        precip_next="obs.nc",
+    )
+    assert got["precip_before"] == "model.nc"
+    assert got["precip_next"] == "obs.nc"
+    assert got["min_window"] == "5.0,5.0"
+    assert got["rain_limit"] == 0.1
+    assert got["num_limit"] == 100
+    assert got["verbose"] is False
+
+
+def test_lsqr_optical_flow_requires_paths() -> None:
+    with pytest.raises(ValueError, match="precip_before"):
+        resolve_args("lsqr_optical_flow")
+
+
+def test_window_lsqr_alias() -> None:
+    got = resolve_args("window_lsqr", precip_before="a.nc", precip_next="b.nc")
+    assert got["precip_before"] == "a.nc"
 
 
 def test_explicit_overrides_ini() -> None:
@@ -79,19 +101,3 @@ def test_steps_optional_thresholds_stay_empty() -> None:
     assert got["vel_pert_method"] is None
     assert got["return_output"] is True
 
-
-def test_cli_omitted_args_are_none() -> None:
-    lk_args = build_lk_parser().parse_args([])
-    extrap_args = build_extrapolation_parser().parse_args([])
-    sprog_args = build_sprog_parser().parse_args([])
-    linda_args = build_linda_parser().parse_args([])
-    steps_args = build_steps_parser().parse_args([])
-    assert lk_args.precip is None
-    assert lk_args.dense is None
-    assert lk_args.fd_method is None
-    assert extrap_args.timesteps is None
-    assert extrap_args.measure_time is None
-    assert sprog_args.conditional is None
-    assert linda_args.add_perturbations is None
-    assert steps_args.return_output is None
-    assert steps_args.precip_thr is None

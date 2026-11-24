@@ -68,52 +68,54 @@ $$
 
 ---
 
-## 3. 算法参数说明
+## 3. 参数说明
 
 ### 3.1 运行参数（`mait_3.ini` / CLI 共用）
 
-| 参数 | ini 键 | CLI | 默认 | 含义 |
-|------|--------|-----|------|------|
-| `time_inputs` | — | `--time-inputs` | 当前时刻 | UTC 起报列表，写 `YYYYMMDD0000` / `YYYYMMDD1200` 即出该 00/12Z |
-| `time_input` | — | `--time-input` | — | 单个起报（兼容旧写法） |
-| `predict_valid_list` | `predict_valid_list` | `--predict-valid-list` | `3,6,…,252` | 预报时效（小时） |
-| `para_path` | `para_ini` | `--para-path` | `resource/para_3.ini` | 模式/实况/输出路径 |
-| `background_path` | `background_ini` | `--background-path` | `resource/para_3_background.ini` | 背景格点 Micaps4 路径 |
-| `beta_path` | `beta_path_template` | `--beta-path` | `beta_3h/YYYYMMDDHH/%02d_%02d_TTT.info` | 历史/当期权重文件 |
-| `is_obs_bjt` | `is_obs_bj` | `--is-obs-bjt` | true | 实况按北京时（+8 h） |
-| `is_interp` | `is_interp` | `--is-interp` | false | 写出前是否双线性裁剪 |
-| `is_multi` | `is_multi` | `--is-multi` | false | 多个起报是否多进程 |
-| `clip_coords` | `clip_coords` | `--clip-coords` | `70,140,0,60,0.1,0.1` | `lon0,lon1,lat0,lat1,dlon,dlat` |
-| `pro_count` | `pro_count` | `--pro-count` | 3 | 起报并行进程数（仅 `is_multi`） |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `time_inputs` | `list[str]` | UTC 起报列表，写 `YYYYMMDD0000` / `YYYYMMDD1200` 即出该 00/12Z；默认当前时刻 |
+| `time_input` | `str` | 单个起报（兼容旧写法） |
+| `predict_valid_list` | `list[int]` | 预报时效展开（小时）；显式传入则按列表；空则 **3–252，步长 3** |
+| `para_path` | `path` | 模式/实况/输出路径；默认 `resource/para_3.ini` |
+| `background_path` | `path` | 背景格点 Micaps4 路径；默认 `resource/para_3_background.ini` |
+| `beta_path` | `str` | 历史/当期权重文件；默认 `beta_3h/YYYYMMDDHH/%02d_%02d_TTT.info` |
+| `is_obs_bjt` | `bool` | 实况按北京时（+8 h）；默认 true |
+| `is_interp` | `bool` | 写出前是否双线性裁剪；默认 false |
+| `is_multi` | `bool` | 多个起报是否多进程；默认 false |
+| `clip_coords` | `list[float]` | `lon0,lon1,lat0,lat1,dlon,dlat`；默认 `70,140,0,60,0.1,0.1` |
+| `pro_count` | `int` | 起报并行进程数（仅 `is_multi`）；默认 3 |
 
 ### 3.2 算法内部常量（代码内，非 ini）
 
-| 量 | 取值 | 含义 |
-|----|------|------|
-| `area_scale` | 0.5 | 训练窗外扩（相对子区边长） |
-| `predict_type` | 3 | 3 小时累积降水 |
-| `rain_limit` / 权重 | 0.1/10/25/50；0.05/0.1/0.35/0.5 | TS 量级与合成权重 |
-| \(\alpha\) / \(S\) | 0.1 / \(10^5\) | beta 平滑；交叉 TS 平滑 |
-| 站点 FM 级 | 0.1–250 mm（18 级） | 站点频率匹配 |
-| 格点 FM 级 | 0.01–250 mm（19 级） | 格点频率匹配 |
-| Cressman 半径 | \(8,6,4,2\times\Delta\lambda\) | 逐步订正 |
-| 长时效衰减 | \(\ge108\,\mathrm{h}\) 乘 0.8 | 格点后处理 |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `area_scale` | `float` | 训练窗外扩（相对子区边长）；默认 0.5 |
+| `predict_type` | `int` | 3 小时累积降水；默认 3 |
+| `rain_limit` / 权重 | `list[float]` | TS 量级与合成权重；默认 0.1/10/25/50；0.05/0.1/0.35/0.5 |
+| \(\alpha\) / \(S\) | `float` | beta 平滑；交叉 TS 平滑；默认 0.1 / \(10^5\) |
+| 站点 FM 级 | `list[float]` | 站点频率匹配；默认 0.1–250 mm（18 级） |
+| 格点 FM 级 | `list[float]` | 格点频率匹配；默认 0.01–250 mm（19 级） |
+| Cressman 半径 | `list[float]` | 逐步订正；掩膜外每隔 5 点取背景作伪站；默认 \(8,6,4,2\times\Delta\lambda\) |
+| 平滑 | `int` | Cressman 之后；默认 9 点 × 10 次 |
+| 长时效衰减 | `float` | 格点后处理；\(\ge108\,\mathrm{h}\) 乘 0.8 |
+| 写出 | `str` | 前缀 `staoutputPath`；`.m3` / `.m4`（可选 `.nc`）；`is_interp` 时可再裁到 `clip_coords` |
 
 ### 3.3 路径（`mait_3.ini`）
 
-| 键 | 默认 | 含义 |
-|----|------|------|
-| `log_file` | `log/YYYYMMDD.txt` | 日志模板 |
-| `station_info` | `resource/station_info.txt` | 站点表 |
-| `mask_dat` | `resource/mask010.dat` | 陆地掩膜（境外填背景伪站） |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `log_file` | `str` | 日志模板；默认 `log/YYYYMMDD.txt` |
+| `station_info` | `path` | 站点表；默认 `resource/station_info.txt` |
+| `mask_dat` | `path` | 陆地掩膜（境外填背景伪站）；默认 `resource/mask010.dat` |
 
 默认读 `para_3.ini` / `para_3_background.ini`（Linux 挂载路径）。Windows 本机用 UNC 时，把 `mait_3.ini` 改成 `para_3_local.ini` / `para_3_background_local.ini`，或 CLI `--para-path` / `--background-path`。  
-`para_3*.ini`：`modelNum`、各模式 Micaps3 路径、`fact`、`staoutputPath`。  
-`para_3_background*.ini`：与模式键同名的 Micaps4 背景模板（`_analysis_background_ini`）；缺键时回退为同模式 Micaps3 改 `.m4`。未在 CLI 给出的项回落 `resource/mait_3.ini`。
+`para_3*.ini`：`modelNum`、各模式 **站点** Micaps3、`fact`（R03 实况）、`staoutputPath`。默认模式键：`ecModel`、`ncepModel`、`grapesgfsModel`、`japanModel`、`shanghaiModel`、`grapes3kmModel`、`beijingModel`、`guangzhouModel`。  
+`para_3_background*.ini`：与模式键同名的 **格点** Micaps4 背景模板；缺键时回退为同模式 Micaps3 改 `.m4`。站点表 / 陆地掩膜见上表 `station_info`、`mask_dat`。未在 CLI 给出的项回落 `resource/mait_3.ini` / `conf.ini`。
 
 ---
 
-## 4. 算法使用说明
+## 4. 运行示例
 
 **环境**：项目根 `multi_rain_mait03_blending/`；依赖 `numpy` / `pandas` / `meteva` / `meteva_base`；共享 `utils.base_plugin`。无 `scripts/`。
 
@@ -144,34 +146,43 @@ python src/mait_3h.py
 
 ---
 
-## 5. CLI 调用说明
+### CLI
 
-在仓库根执行：
+在本包根执行。每个起报内按时效串行；`pro_count>1` 时按起报并行。
+
+区域逐 3 小时回算示例（核对产物：`staoutputPath` 下 `.m3` / `.m4`，范围与 `clip_coords` 一致）：
 
 ```bash
-python -m cli --help
-python -m cli --time-inputs=202608200000
-python -m cli --time-inputs=202608200000,202608201200 --is-multi=true --pro-count=4
-python -m cli --time-input=202608200000 --predict-valid-list=3,6,9
-python -m cli --time-inputs=202608200000 --para-path=resource/para_3.ini
-python -m cli --time-inputs=202608200000 --is-interp=true --clip-coords=70,140,0,60,0.1,0.1
+python -m cli time_inputs=2025070200,2025070212 \
+  predict_valid_list=3,6,9,12,15,18,21,24 \
+  para_path=resource/para_3.ini \
+  background_path=resource/para_3_background.ini \
+  clip_coords=70,140,0,60,0.1,0.1 \
+  pro_count=2
+```
+
+其它常用写法：
+
+```bash
+python -m cli time_inputs=202608200000
+python -m cli time_inputs=202608200000,202608201200 pro_count=4
+python -m cli time_inputs=202608200000 predict_valid_list=3,6,9
+python -m cli time_inputs=202608200000 is_interp=true clip_coords=70,140,0,60,0.1,0.1
 ```
 
 | 参数 | 说明 |
 |------|------|
-| `--time-inputs` | UTC 起报，如 `202608200000,202608201200`（写出对应 00/12Z） |
-| `--time-input` | 单个起报（兼容旧写法） |
-| `--predict-valid-list` | 时效列表，如 `3,6,9` |
-| `--para-path` | 模式/实况 ini |
-| `--background-path` | 背景格点 Micaps4 ini |
-| `--beta-path` | beta 路径模板 |
-| `--is-obs-bjt` | 实况是否北京时 |
-| `--is-interp` | 是否按 clip 再插值 |
-| `--is-multi` | 多个起报是否多进程 |
-| `--clip-coords` | 输出裁剪六元组 |
-| `--pro-count` | 起报并行进程数 |
+| `time_inputs` | UTC 起报，如 `202608200000,202608201200` |
+| `predict_valid_list` | 时效列表；省略则 3–252 步长 3 |
+| `para_path` | 模式/实况 ini（站点） |
+| `background_path` | 背景格点 Micaps4 ini |
+| `beta_path` | beta 路径模板 |
+| `is_obs_bjt` | 实况是否北京时 |
+| `is_interp` | 是否按 clip 再插值 |
+| `clip_coords` | 输出裁剪六元组 |
+| `pro_count` | 起报并行进程数 |
 
-省略项从 `resource/mait_3.ini` 读取。
+省略项从 `resource/conf.ini` / `mait_3.ini` 读取。若日志出现历史或当前全缺，检查对应日目录与 `VVV` 时效文件名。
 
 ---
 

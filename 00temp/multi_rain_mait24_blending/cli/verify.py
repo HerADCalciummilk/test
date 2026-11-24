@@ -10,6 +10,10 @@
 import sys
 from pathlib import Path
 
+from clize.parser import value_converter
+from clize.runner import Clize
+from clize.runner import run
+
 
 def _bootstrap_paths():
     """项目根优先（加载本地 ``utils/__init__`` 合并 ``00temp/utils``），再 ``src``。"""
@@ -35,6 +39,8 @@ import meteva.product as mpd
 
 
 from datetime import datetime
+
+
 
 _DEFAULT_H5 = Path(__file__).resolve().parent.parent / "resource" / "verify_data.h5"
 _DEFAULT_GRADES = [0.1, 10, 25, 50, 100]
@@ -377,7 +383,6 @@ def run_verify(
 
 
 def _cli_converters():
-    from clize.parser import value_converter
 
     @value_converter
     def comma_str_list(s):
@@ -410,7 +415,6 @@ def _cli_converters():
 
 
 def _make_cli_entry():
-    from clize.runner import Clize
 
     comma_str_list, comma_float_list, optional_str, optional_int_cli = _cli_converters()
 
@@ -449,9 +453,5 @@ def _make_cli_entry():
 
 
 def main():
-    from clize.runner import run
     run(_make_cli_entry())
 
-
-if __name__ == "__main__":
-    main()

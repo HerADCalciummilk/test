@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """threshold 通用工具。
 
-把 ``00temp/utils`` 并入本包 ``utils``，以便 ``from utils.cli_base import CliBase``。
+把 ``00temp/utils`` 并入本包 ``utils``，以便 ``from utils.merge_params import merge_params``。
 """
 import os
 

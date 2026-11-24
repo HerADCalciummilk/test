@@ -1,188 +1,75 @@
-"""CLI for dB_trans.
+# -*- coding: utf-8 -*-
+"""降水强度变换。
 
-Run from this package directory::
-
-    python -m cli.dB_trans_cli --method db --values 0,0.05,0.1,1,10,100
-    python cli/dB_trans_cli.py --method db --values 0,0.05,0.1,1,10,100
+``@merge_params`` 挂在函数 ``process`` 上；业务经 ``DbTransPlugin`` 调度四个算法。
+由 ``python -m db_trans`` 或 ``python -m utils.nimm_cli db_trans`` 启动。
 """
-from __future__ import annotations
-
-import argparse
+import os
 import sys
-from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Optional
 
-
-def _bootstrap_paths() -> None:
-    root = str(Path(__file__).resolve().parent.parent)
-    if root not in sys.path:
-        sys.path.insert(0, root)
-
-
-_bootstrap_paths()
+_CLI_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_CLI_DIR)
+_SRC_DIR = os.path.join(_ROOT_DIR, "src")
+for _p in (_ROOT_DIR, _SRC_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import numpy as np
 
-from src.dB_trans import NQ_transform, boxcox_transform, dB_transform, sqrt_transform
-from utils.cli_base import CliBase
-from utils.util_env import METHODS, resolve_args
+from db_trans_plugin import METHODS, DbTransPlugin
+from utils.merge_params import merge_params
 
-_TRANSFORMS = {
-    "db": dB_transform,
-    "box": boxcox_transform,
-    "nq": NQ_transform,
-    "sqrt": sqrt_transform,
-}
+_METHODS = ("summary",) + METHODS
 
 
-def _parse_values(text: str) -> np.ndarray:
-    parts = [item.strip() for item in text.split(",") if item.strip()]
+def _parse_values(text):
+    parts = [item.strip() for item in str(text).split(",") if item.strip()]
     if not parts:
         raise ValueError("values 未包含数值")
     return np.asarray([float(item) for item in parts], dtype=float)
 
 
-def transform_values(cfg: Dict[str, Any]):
-    """按配置变换一维降水强度，返回数组和可打印的元数据。"""
-    method = cfg["method"]
-    if method == "nq" and cfg["inverse"]:
-        raise ValueError("nq 的逆变换依赖正变换留下的 metadata，命令行单次调用只做正变换")
-    array = _parse_values(cfg["values"])
-    kwargs: Dict[str, Any] = {"inverse": cfg["inverse"]}
-    if method in ("db", "box"):
-        kwargs["threshold"] = cfg["threshold"]
-        if cfg["zerovalue"] is not None:
-            kwargs["zerovalue"] = cfg["zerovalue"]
-    if method == "box":
-        kwargs["Lambda"] = cfg["lambda"]
-    if method == "nq":
-        kwargs["a"] = cfg["a"]
-    result, metadata = _TRANSFORMS[method](array, **kwargs)
-    printable = {
-        key: value
-        for key, value in metadata.items()
-        if isinstance(value, (str, int, float, bool)) or value is None
-    }
-    return result, printable
-
-
-class DBTransCli(CliBase):
-    """降水强度变换。"""
-
-    prog = "python -m cli.dB_trans_cli"
-    description = (
-        "降水强度变换。\n"
-        "未给出的项先读 resource/conf.ini，再没有则用预设。"
-    )
-    epilog = (
-        "示例（在本包目录执行）:\n"
-        "  python -m cli.dB_trans_cli\n"
-        "  python -m cli.dB_trans_cli --method db --values 0,0.05,0.1,1,10,100\n"
-        "  python cli/dB_trans_cli.py --method db --values 0,0.05,0.1,1,10,100\n"
-        "  python -m cli.dB_trans_cli --method box --values 0.1,1,10 --lambda 0\n"
-        "  python -m cli.dB_trans_cli --method sqrt --values 0,1,4,9\n"
-    )
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--method",
-            choices=METHODS,
-            default=None,
-            help="summary、db、box、nq、sqrt。省略则读 ini，预设 summary",
-        )
-        parser.add_argument(
-            "--values",
-            default=None,
-            help="逗号分隔的降水强度。除 summary 外必填；省略则读 ini",
-        )
-        parser.add_argument(
-            "--threshold",
-            type=float,
-            default=None,
-            help="仅 db、box：有雨阈值（毫米/小时）。省略则读 ini，预设 0.1",
-        )
-        parser.add_argument(
-            "--zerovalue",
-            type=float,
-            default=None,
-            help="仅 db、box：无降水格点取值。省略则读 ini，空则由变换函数决定",
-        )
-        parser.add_argument(
-            "--lambda",
-            dest="lam",
-            type=float,
-            default=None,
-            help="仅 box：Box-Cox 的 Lambda。省略则读 ini，预设 0",
-        )
-        parser.add_argument(
-            "--a",
-            type=float,
-            default=None,
-            help="仅 nq：绘图位置偏移。省略则读 ini，预设 0",
-        )
-        parser.add_argument(
-            "--inverse",
-            dest="inverse",
-            action="store_true",
-            default=None,
-            help="做逆变换。省略则读 ini，预设不做",
-        )
-        parser.add_argument(
-            "--no-inverse",
-            dest="inverse",
-            action="store_false",
-            default=None,
-            help="做正变换",
-        )
-        parser.add_argument(
-            "--config",
-            default=None,
-            metavar="PATH",
-            help="运行配置 ini。相对路径按本包目录解析。省略则使用 resource/conf.ini。",
-        )
-
-    def run(
-        self,
-        method=None,
-        values=None,
-        threshold=None,
-        zerovalue=None,
-        lam=None,
-        a=None,
-        inverse=None,
-        config=None,
-    ) -> int:
-        cfg = resolve_args(
+@merge_params()
+def process(
+    method: str = "summary",
+    values: str = None,
+    threshold: float = 0.1,
+    zerovalue: Optional[float] = None,
+    lam: float = 0,
+    a: float = 0,
+    inverse: bool = False,
+    config=None,
+):
+    """调用入口。``config`` 只换配置文件；变换由 ``DbTransPlugin`` 执行。"""
+    _ = config
+    method = (method or "summary").strip().lower()
+    if method not in _METHODS:
+        raise ValueError("method 无效。可选 summary、db、box、nq、sqrt")
+    if method == "summary":
+        print("available methods: %s" % (", ".join(METHODS),))
+        return 0
+    text = None if values is None else str(values).strip()
+    if not text:
+        raise ValueError("缺少参数: values（调用参数与配置文件均未提供）")
+    try:
+        result, metadata = DbTransPlugin().process(
+            _parse_values(text),
             method=method,
-            values=values,
+            inverse=bool(inverse),
             threshold=threshold,
             zerovalue=zerovalue,
-            lam=lam,
+            Lambda=lam,
             a=a,
-            inverse=inverse,
-            config=config,
         )
-        if cfg["method"] == "summary":
-            print("available methods: db, box, nq, sqrt")
-            print("未给出的参数来自 resource/conf.ini，缺项再用预设。")
-            return 0
-        result, metadata = transform_values(cfg)
+        printable = {
+            key: value
+            for key, value in metadata.items()
+            if isinstance(value, (str, int, float, bool)) or value is None
+        }
         print(np.array2string(np.asarray(result), separator=", "))
-        print(metadata)
-        return 0
-
-
-def build_parser() -> argparse.ArgumentParser:
-    return DBTransCli().build_parser()
-
-
-def dB_trans_cli(argv: Optional[Sequence[str]] = None) -> int:
-    """命令行入口。``python -m cli.dB_trans_cli`` 与直接运行本文件都进这里。"""
-    return DBTransCli().main(argv)
-
-
-main = dB_trans_cli
-
-
-if __name__ == "__main__":
-    raise SystemExit(dB_trans_cli())
+        print(printable)
+        return result
+    except Exception as exc:
+        print("降水强度变换失败 %s: %s" % (method, exc))
+        return False

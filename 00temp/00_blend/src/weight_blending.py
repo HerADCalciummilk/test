@@ -12,8 +12,16 @@ from iris.cube import Cube
 from types import FunctionType as function
 from typing import Tuple, Optional
 
+import os
+import sys
+
 import cv2
 import numpy as np
+
+_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+from util_plugin import power_weight
 
 from nimm import PostProcessingPlugin
 
@@ -35,7 +43,7 @@ class WeightBlending(PostProcessingPlugin):
     """
 
     def __init__(self, 
-                 wfunc: function=lambda x: np.power(x, -2), 
+                 wfunc: function=None, 
                  tolerate_period_mismatch: Optional[bool]=False,
                  ) -> None: 
         """
@@ -58,7 +66,7 @@ class WeightBlending(PostProcessingPlugin):
         None
         """
         if wfunc is None: 
-            self.wfunc = lambda x: np.power(x, -2)
+            self.wfunc = power_weight
         else: 
             self.wfunc = wfunc 
         self.tolerate_period_mismatch=tolerate_period_mismatch
@@ -87,7 +95,7 @@ class WeightBlending(PostProcessingPlugin):
         if len(fcst_cubes) != len(factor_cubes): 
             raise ValueError("len of fcst_cubes and factor_cubes should be the same!")
         
-        # ws: the weights cube list
+        # 评分换成权重，再按权重融合
         ws = self._calculate_weights(factor_cubes, self.wfunc)
 
         return self._blending(fcst_cubes, ws)

@@ -10,7 +10,9 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from orographic_wind_downscaling.cli.dsc_wind_downscaling import process
+import inspect
+
+from orographic_wind_downscaling.cli.orographic_wind_downscaling_cli import process
 from orographic_wind_downscaling.src.wind_downscaling import RoughnessCorrection
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "test_data" / "wind_calculations_data"
@@ -53,6 +55,31 @@ def _to_spatial_values(data: xr.DataArray | np.ndarray) -> np.ndarray:
 def _load_reference(path: Path, variable_name: str) -> xr.DataArray:
     with xr.open_dataset(path, decode_timedelta=False) as dataset:
         return dataset[variable_name].load()
+
+
+def test_wind_process_signature() -> None:
+    """入口参数名与命令行 dest 一致，配置键都是具名参数。"""
+    names = inspect.signature(process).parameters
+    for key in (
+        "wind_speed_path",
+        "sigma_path",
+        "target_orography_path",
+        "standard_orography_path",
+        "silhouette_roughness_path",
+        "model_resolution",
+        "vegetative_roughness_path",
+        "output_path",
+        "output_height_level",
+        "absolute_correction_tol",
+        "href_scale",
+        "dx_max_factor",
+        "dx_min_factor",
+        "config",
+    ):
+        assert key in names
+    assert not any(
+        item.kind is inspect.Parameter.VAR_KEYWORD for item in names.values()
+    )
 
 
 def test_official_roughness_correction_matches_kgo_and_original() -> None:

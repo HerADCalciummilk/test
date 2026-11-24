@@ -28,6 +28,7 @@ import xarray as xr
 
 
 from linear_scd_multi_time_fusion.src.linear_blending import linear_blending_forecast
+from linear_scd_multi_time_fusion.src.util_plugin import interpolate_weight
 
 try:
     from .conf_overrides import CONF_KEYS, apply_conf_overrides
@@ -222,20 +223,6 @@ def parse_keyframe_weights(text: str) -> Dict[int, float]:
     if not weights:
         raise ValueError("keyframe_weights cannot be empty")
     return dict(sorted(weights.items()))
-
-
-def interpolate_weight(lead_minutes: int, keyframes: Dict[int, float]) -> float:
-    items = sorted(keyframes.items())
-    if lead_minutes <= items[0][0]:
-        return items[0][1]
-    if lead_minutes >= items[-1][0]:
-        return items[-1][1]
-
-    for (lead_a, weight_a), (lead_b, weight_b) in zip(items[:-1], items[1:]):
-        if lead_a <= lead_minutes <= lead_b:
-            fraction = (lead_minutes - lead_a) / (lead_b - lead_a)
-            return weight_a + fraction * (weight_b - weight_a)
-    raise RuntimeError("Failed to interpolate weight")
 
 
 def get_crop_slices(ds: xr.Dataset, config: ConfigParser) -> Tuple[slice, slice]:

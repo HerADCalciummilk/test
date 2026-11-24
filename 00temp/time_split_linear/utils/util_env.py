@@ -105,6 +105,15 @@ def _optional(explicit: Optional[str], section: str, key: str) -> Optional[str]:
     return _raw(section, key)
 
 
+def _pick_delta(delta: Optional[str], delta_hour: Optional[str]) -> Optional[str]:
+    """显式 ``delta`` 优先，其次 ``delta_hour``，再读 ini 的 delta_hour / 旧键 delta。"""
+    if not _missing(delta):
+        return str(delta).strip()
+    if not _missing(delta_hour):
+        return str(delta_hour).strip()
+    return _raw("timesplit", "delta_hour") or _raw("timesplit", "delta")
+
+
 def _require(name: str, explicit: Optional[str], section: str, key: str) -> str:
     if not _missing(explicit):
         return str(explicit).strip()
@@ -142,6 +151,7 @@ def resolve_args(
     output_fmt: Optional[str] = None,
     uv_fmt: Optional[str] = None,
     delta: Optional[str] = None,
+    delta_hour: Optional[str] = None,
     is_fill0: Optional[bool] = None,
     is_min: Optional[bool] = None,
     index: Optional[str] = None,
@@ -161,6 +171,7 @@ def resolve_args(
             output_fmt=output_fmt,
             uv_fmt=uv_fmt,
             delta=delta,
+            delta_hour=delta_hour,
             is_fill0=is_fill0,
             is_min=is_min,
             index=index,
@@ -180,6 +191,7 @@ def _resolve_args(
     output_fmt: Optional[str] = None,
     uv_fmt: Optional[str] = None,
     delta: Optional[str] = None,
+    delta_hour: Optional[str] = None,
     is_fill0: Optional[bool] = None,
     is_min: Optional[bool] = None,
     index: Optional[str] = None,
@@ -197,7 +209,7 @@ def _resolve_args(
         "time": _require("time", time, "timesplit", "time"),
         "output_fmt": _optional(output_fmt, "timesplit", "output_fmt"),
         "uv_fmt": _optional(uv_fmt, "timesplit", "uv_fmt"),
-        "delta": _optional(delta, "timesplit", "delta"),
+        "delta": _pick_delta(delta, delta_hour),
         "is_fill0": _opt_bool("timesplit", "is_fill0", bool(PRESET["is_fill0"])) if is_fill0 is None else bool(is_fill0),
         "is_min": _opt_bool("timesplit", "is_min", bool(PRESET["is_min"])) if is_min is None else bool(is_min),
         "index": _timesplit_index(index),

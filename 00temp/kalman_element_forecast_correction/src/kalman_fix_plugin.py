@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from kalman_element_forecast_correction.utils.base_plugin import PostProcessingPlugin
+from kalman_element_forecast_correction.utils.base_plugin import BasePlugin
 
 
-class KalmanFix(PostProcessingPlugin):
+class KalmanFix(BasePlugin):
     """Apply a Kalman mean-error field to a forecast field."""
 
     def __init__(self, model_id_attr: Optional[str] = None) -> None:

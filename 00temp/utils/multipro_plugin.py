@@ -90,13 +90,8 @@ class SimpleParallelTool:
     @staticmethod  # 改为静态方法，彻底避免跨进程传递实例
     def _execute_async_with_return(params: Dict) -> Any:
         """顶层方法：异步执行并返回结果（解决pickle序列化问题）"""
-        print("=------------------------------------------->>> ", params)
-        # try:
-        #     return params["_target_func"](**params)
-        # except Exception as e:
-        #     print(f"异步任务执行异常：{str(e)}")
-        #     return None
-        return params["_target_func"](**params)
+        target_func = params.pop("_target_func")
+        return target_func(**params)
 
     # ---------------------- 私有辅助方法（聚合字典处理）----------------------
     def _validate_aggregate_dict(self, aggregate_dict: Dict) -> None:

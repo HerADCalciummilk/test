@@ -5,8 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
+from utils.base_plugin import BasePlugin
 
-class ScdFusionPlugin:
+
+class ScdFusionPlugin(BasePlugin):
     """Fuse split unet_qpf and mait_st files using configured SCD weights."""
 
     def __init__(self, config_path: str | Path | None = None) -> None:
@@ -17,29 +19,54 @@ class ScdFusionPlugin:
     def __call__(self, history_range: Sequence[str] | None = None) -> None:
         return self.process(history_range=history_range)
 
-    def process(self, history_range: Sequence[str] | None = None, config=None) -> None:
-        """Run realtime mode or a two-value UTC history range.
-
-        ``config`` 给出时本次改读该 ini，不改构造时的默认路径。
-        """
+    def process(
+        self,
+        history_range: Sequence[str] | None = None,
+        config=None,
+        allowed_realtime_minutes=None,
+        history_step_minutes=None,
+        dry_run=None,
+        max_files=None,
+        source1_dir=None,
+        source2_dir=None,
+        truth_dir=None,
+        output_dir=None,
+        enabled=None,
+        time_step_minutes=None,
+        overwrite=None,
+        blending_type=None,
+        keyframe_weights=None,
+        lon_min=None,
+        lon_max=None,
+        lat_min=None,
+        lat_max=None,
+        output_var=None,
+        output_source=None,
+    ) -> None:
+        """按配置做双源配对融合。``None`` 不覆盖 ini。"""
         import linear_scd_multi_time_fusion.src.pair_fusion_workflow as pair_fusion_workflow
 
-        history = list(history_range or [])
-        config_path = Path(config) if config else self.config_path
-        config = pair_fusion_workflow.read_config(config_path)
-        positional_history = len(history) == 2
-        mode = "history" if positional_history else "realtime"
-        history_start_utc = history[0] if positional_history else None
-        history_end_utc = history[1] if positional_history else None
-
-        dry_run = pair_fusion_workflow.parse_bool(config.get("run", "dry_run", fallback="true"))
-        keyframes = pair_fusion_workflow.parse_keyframe_weights(config.get("fusion", "keyframe_weights"))
-        pairs = pair_fusion_workflow.build_pairs(config, mode, history_start_utc, history_end_utc)
-
-        if dry_run:
-            print("当前为 dry_run，仅检查配对关系；如需写出文件，请将配置 dry_run 改为 false。")
-            return
-
-        for index, pair in enumerate(pairs, start=1):
-            print(f"[{index}/{len(pairs)}] 融合 {pair.source1_path.name} -> {pair.output_path}")
-            pair_fusion_workflow.fuse_one_pair(pair, config, keyframes)
+        # 显式参数写入本次配置，再按原流程配对并融合
+        pair_fusion_workflow.process(
+            history_range=history_range,
+            config=Path(config) if config else self.config_path,
+            allowed_realtime_minutes=allowed_realtime_minutes,
+            history_step_minutes=history_step_minutes,
+            dry_run=dry_run,
+            max_files=max_files,
+            source1_dir=source1_dir,
+            source2_dir=source2_dir,
+            truth_dir=truth_dir,
+            output_dir=output_dir,
+            enabled=enabled,
+            time_step_minutes=time_step_minutes,
+            overwrite=overwrite,
+            blending_type=blending_type,
+            keyframe_weights=keyframe_weights,
+            lon_min=lon_min,
+            lon_max=lon_max,
+            lat_min=lat_min,
+            lat_max=lat_max,
+            output_var=output_var,
+            output_source=output_source,
+        )

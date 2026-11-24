@@ -1,29 +1,32 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""orographic_temperature_downscaling.cli 包的可执行入口。
-
-包根目录::
-
-    python -m cli
-    python -m cli lapse-rate
-    python -m cli apply-lapse
-"""
-
-from __future__ import annotations
-
+"""``python -m cli``：无参数跑递减率估计；``apply`` 转应用订正。"""
+import importlib
 import sys
-from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parent.parent
-_PARENT = _ROOT.parent
-for _p in (str(_PARENT), str(_ROOT)):
-    while _p in sys.path:
-        sys.path.remove(_p)
-for _p in reversed((str(_PARENT), str(_ROOT))):
-    sys.path.insert(0, _p)
+from utils.merge_params import parse_kv_argv
 
-from orographic_temperature_downscaling.cli import main  # noqa: E402
+_STEMS = {
+    "lapse": "orographic_temperature_downscaling_cli",
+    "apply": "apply_cli",
+    "apply-lapse": "apply_cli",
+}
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def _run(module_name, argv):
+    module = importlib.import_module("." + module_name, __package__)
+    return module.process(**parse_kv_argv(argv))
+
+
+_args = list(sys.argv[1:])
+if not _args:
+    from .orographic_temperature_downscaling_cli import process
+
+    process()
+elif _args[0] in ("-h", "--help"):
+    print("用法: python -m cli [lapse|apply] [key=value ...]")
+elif _args[0] in _STEMS:
+    _run(_STEMS[_args[0]], _args[1:])
+else:
+    from .orographic_temperature_downscaling_cli import process
+
+    process(**parse_kv_argv(_args))

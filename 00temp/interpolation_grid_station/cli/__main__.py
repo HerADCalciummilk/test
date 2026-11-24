@@ -1,10 +1,5 @@
-"""在本包目录执行：``python -m cli``。"""
-from .interpolation_grid_station_cli import interpolation_grid_station_cli
+# -*- coding: utf-8 -*-
+"""``python -m cli`` → 已装饰的 ``process``（合 conf.ini）。"""
+from .interpolation_grid_station_cli import process
 
-
-def main(argv=None):
-    return interpolation_grid_station_cli(argv)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+process()

@@ -1,0 +1,16 @@
+name: nimm
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.8
+  - numpy
+  - scipy
+  - scikit-learn
+  - numba
+  - xarray
+  - netCDF4
+  - pandas
+  - meteva_base
+  - pyyaml
+  - pip

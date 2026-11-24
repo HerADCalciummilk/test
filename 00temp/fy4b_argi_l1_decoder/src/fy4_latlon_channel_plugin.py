@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import List, Optional, Sequence, Union
 
@@ -5,12 +6,19 @@ import h5py
 import numpy as np
 import xarray as xr
 
+_SRC = Path(__file__).resolve().parent
+_ROOT = _SRC.parent
+for _path in (str(_SRC), str(_ROOT)):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+from utils.base_plugin import BasePlugin
 from fy4agri.metadata import CHANNELS, attr_scalar, common_attrs, parse_channels
 from fy4agri.projection import latlon_to_fy4_grid
 from fy4agri.reader import read_calibrated_channel, sample_to_latlon
 
 
-class FY4LatLonChannelPlugin:
+class FY4LatLonChannelPlugin(BasePlugin):
     """FY-4B AGRI L1 HDF parser plugin.
 
     The plugin reads FY-4B AGRI L1 channel data, calibrates each channel with
@@ -139,6 +147,7 @@ class FY4LatLonChannelPlugin:
                 }
             )
 
+            # 逐通道定标并重采样到规则经纬度网格
             for channel_number in self.channels:
                 source = read_calibrated_channel(hdf, channel_number)
                 values = sample_to_latlon(source, src_line, src_col, visible, self.resampling)

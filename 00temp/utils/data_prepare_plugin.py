@@ -8,6 +8,9 @@ import os
 
 from utils.multipro_plugin import SimpleParallelTool
 
+import shutil
+
+
 para_example = {
     "base_on": "obTime",
     "begin_time": datetime.datetime.now() - datetime.timedelta(days=7),
@@ -1213,7 +1216,6 @@ def rename_hdf_file(old_para, new_para):
     :param para:  包含更改后文件名的运行参数
     :return:  不返还值
     '''
-    import shutil
     # 更改观测的hdf文件
     old_hdf_filename = old_para["hdf_file_name"]
     new_hdf_filename = new_para["hdf_file_name"]

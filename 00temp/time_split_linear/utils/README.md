@@ -1,6 +1,6 @@
 # utils
 
-`util_env.py` 读取 `resource/conf.ini`（及兼容的 timesplit.ini），缺项再用代码预设。
+`util_env.py` 默认读取 `resource/conf.ini`，缺项再用代码预设。
 
 本包 `src/` 现有插件：`TimeSplit`。  
 多时效读拼在上一级共用目录 `00temp/utils/grid_combine.py`（经本目录并入后以 `utils.grid_combine` 导入）：

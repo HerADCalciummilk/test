@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-"""仓库布局与 CLI help。"""
+"""仓库布局与新入口。"""
 from pathlib import Path
-import subprocess
-import sys
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -10,8 +8,8 @@ _ROOT = Path(__file__).resolve().parents[1]
 def test_required_paths_exist():
     required = [
         _ROOT / "cli" / "__main__.py",
-        _ROOT / "src" / "runner.py",
-        _ROOT / "src" / "interp_sg_cressman.py",
+        _ROOT / "cli" / "interp_sg_cressman_cli.py",
+        _ROOT / "src" / "interp_sg_cressman_plugin.py",
         _ROOT / "src" / "utils" / "util_env.py",
         _ROOT / "utils" / "__init__.py",
         _ROOT / "resource" / "interp_sg_cressman.ini",
@@ -25,14 +23,8 @@ def test_required_paths_exist():
     assert not missing, "缺少路径:\n" + "\n".join(missing)
 
 
-def test_cli_help_runs():
-    r = subprocess.run(
-        [sys.executable, "-m", "cli", "--help"],
-        cwd=str(_ROOT),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    assert r.returncode == 0, r.stderr
-    assert "interp_sg_cressman" in (r.stdout + r.stderr)
+def test_cli_entry_calls_process():
+    text = (_ROOT / "cli" / "__main__.py").read_text(encoding="utf-8")
+    assert "from .interp_sg_cressman_cli import process" in text
+    assert "process()" in text
+    assert "def main(" not in text

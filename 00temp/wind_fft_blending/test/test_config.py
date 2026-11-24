@@ -9,7 +9,9 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from cli.__main__ import _build_arg_parser  # noqa: E402
+import inspect  # noqa: E402
+
+from cli.wind_fft_blending_cli import process  # noqa: E402
 from utils.util_env import (  # noqa: E402
     clear_ini_cache,
     get_algo_constants,
@@ -77,25 +79,21 @@ def test_missing_paths_use_preset_output_then_raise():
 
 
 def test_cli_omitted_args_are_none():
-    args = _build_arg_parser().parse_args([])
-    assert args.main_uv_path is None
-    assert args.ass_uv_path is None
-    assert args.weight_value is None
-    assert args.power_model is None
-    assert args.l_scale is None
-    assert args.reflect_pad is None
-    assert args.output_dir is None
-    assert args.output_prefix is None
-    assert args.feature_border is None
-    assert args.max_iterations is None
-    assert args.move_percent is None
-    assert args.write_linear_compare is None
-    assert args.is_multi is None
-    assert args.pro_count is None
-
-
-def test_cli_flags():
-    args = _build_arg_parser().parse_args(["--is-multi", "--no-write-linear-compare", "--pro-count", "2"])
-    assert args.is_multi is True
-    assert args.write_linear_compare is False
-    assert args.pro_count == 2
+    params = inspect.signature(process).parameters
+    for name in (
+        "main_uv_path",
+        "ass_uv_path",
+        "weight_value",
+        "power_model",
+        "l_scale",
+        "reflect_pad",
+        "output_dir",
+        "output_prefix",
+        "feature_border",
+        "max_iterations",
+        "move_percent",
+        "write_linear_compare",
+        "is_multi",
+        "pro_count",
+    ):
+        assert params[name].default is None

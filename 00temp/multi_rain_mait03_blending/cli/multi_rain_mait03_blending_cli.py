@@ -1,164 +1,197 @@
 # -*- coding: utf-8 -*-
-"""3 小时气象预报集成命令行。
+"""3 小时气象预报集成。
 
-在本包目录执行::
-
-    python -m cli --time-inputs=202608200000
-    python cli/multi_rain_mait03_blending_cli.py --time-inputs=202608200000
+一条任务是一个起报 ``time_input``。该起报下的全部时效在这一条任务里循环。
+``pro_count`` 大于 1 时，``process`` 把 ``_process`` 交给进程池。
 """
-from __future__ import annotations
-
-import argparse
+import datetime
+import os
 import sys
-from pathlib import Path
-from typing import Optional, Sequence
+from typing import List
 
-_ROOT = Path(__file__).resolve().parent.parent
-_SRC = _ROOT / "src"
-for _p in (str(_ROOT), str(_SRC)):
-    while _p in sys.path:
-        sys.path.remove(_p)
-for _p in reversed((str(_ROOT), str(_SRC))):
-    sys.path.insert(0, _p)
+_CLI_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_CLI_DIR)
+_SRC_DIR = os.path.join(_ROOT_DIR, "src")
+for _p in (_ROOT_DIR, _SRC_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-from utils.cli_base import CliBase
+from utils.merge_params import merge_params
+from utils.multipro_plugin import SimpleParallelTool
+from mait_3_plugin import (
+    AnalysisTsWeightProcess,
+    StationDataInterp2GridDataProcess,
+    DataFlgProcess,
+)
+from mait_3_plugin_util import (
+    write_beta,
+    _data_write_to_micaps3,
+    get_now_beta_file_path,
+    get_his_beta_file_path,
+    read_his_beta,
+    write_grid_to_micaps4,
+    _prepare,
+    _analysis_para_ini,
+    _analysis_background_ini,
+    _read_history_source_micaps3,
+    _read_now_source_micaps3_micaps4,
+    read_grid_mask,
+)
 
-_CONFIG_HELP = "运行配置文件，传给入口函数。相对路径按项目根目录解析。省略则用包内默认 ini。"
+_DEFAULT_VALID = list(range(3, 253, 3))
+_DEFAULT_CLIP = [70.0, 140.0, 0.0, 60.0, 0.1, 0.1]
 
 
-def _parse_str_list(s):
-    if s is None or not str(s).strip():
+def _abs_path(path):
+    """相对路径按本包根目录解析。"""
+    path = os.path.expanduser(str(path))
+    if os.path.isabs(path):
+        return os.path.normpath(path)
+    return os.path.normpath(os.path.join(_ROOT_DIR, path))
+
+
+def _as_list(value):
+    if value is None:
         return None
-    return [x.strip() for x in str(s).split(",") if x.strip()]
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
 
 
-def _parse_int_list(s):
-    if s is None or not str(s).strip():
-        return None
-    return [int(x.strip()) for x in str(s).split(",") if x.strip()]
+def _process(
+    time_input,
+    *,
+    para_path,
+    beta_path,
+    background_path,
+    is_obs_bjt,
+    is_interp,
+    clip_coords,
+    predict_valid_list,
+    log_file,
+    station_info,
+    mask_dat,
+):
+    """执行一个起报下全部预报时效的集成。"""
+    if not time_input or not para_path or not station_info or not mask_dat:
+        return
+    try:
+        para_file = _abs_path(para_path)
+        beta_file = _abs_path(beta_path) if beta_path else beta_path
+        background_file = _abs_path(background_path) if background_path else background_path
+        log_path = _abs_path(log_file) if log_file else log_file
+        station_file = _abs_path(station_info)
+        mask_file = _abs_path(mask_dat)
+        area_scale = 0.5
+        predict_type = 3
+        if not predict_valid_list:
+            return
+
+        for predict_valid in predict_valid_list:
+            simple_log, dt_now, sd_sta_info = _prepare(time_input, log_path, station_file)
+            ini_tuple = _analysis_para_ini(para_file, simple_log)
+            if not ini_tuple:
+                print("[SKIP] para invalid or missing: %s" % para_file, flush=True)
+                return
+            model_num, model_name, model_path, fact_path, output_sample_path = ini_tuple
+            background_templates = _analysis_background_ini(background_file)
+
+            hist = _read_history_source_micaps3(
+                predict_valid, dt_now, model_num, sd_sta_info, fact_path, simple_log,
+                model_path, is_obs_bjt)
+            if hist is None:
+                print("[SKIP] valid=%03d: fact missing, continue next lead time" % predict_valid, flush=True)
+                continue
+            (
+                sta_before_flg, sta_current_flg1, sd_current_model, sd_before_model,
+                sd_fact, md_current_yr, md_current_mo, md_current_dy,
+                md_current_hr_utc, dt_model_current,
+            ) = hist
+
+            sta_current_flg2, gd_back_ground, grid_base = _read_now_source_micaps3_micaps4(
+                model_num, model_path, dt_model_current, predict_valid, model_name,
+                sta_current_flg1, simple_log, sd_sta_info, sd_current_model,
+                md_current_yr, md_current_mo, md_current_dy, md_current_hr_utc,
+                background_templates=background_templates)
+
+            before_total_flg, current_total_flg, sta_current_flg = DataFlgProcess(
+                model_num, sta_before_flg, sta_current_flg2, simple_log).process()
+            if before_total_flg == 0.0:
+                print("All Before Data Is Not Exist!\n", flush=True)
+                continue
+            if current_total_flg == 0.0:
+                print("All Current Data Is Not Exist!\n", flush=True)
+                continue
+
+            obeta_file_path_list = get_now_beta_file_path(beta_file, grid_base)
+            ibeta_file_path_list, iflag_list = get_his_beta_file_path(beta_file, grid_base)
+            score_before_list, iflag_list = read_his_beta(
+                ibeta_file_path_list, iflag_list, model_num, model_name, grid_base)
+
+            analysis_ts = AnalysisTsWeightProcess(
+                grid_base, area_scale, model_num,
+                sd_before_model, sd_current_model, sd_sta_info, sd_fact,
+                sta_before_flg, model_name, sta_current_flg,
+                iflag_list, score_before_list)
+            sd_output, score_last = analysis_ts.process()
+            write_beta(obeta_file_path_list[0][0][0], model_num, model_name, score_last)
+            _data_write_to_micaps3(predict_type, output_sample_path, sd_output, grid_base)
+
+            gd_mask_val, gd_mask_xn, gd_mask_yn = read_grid_mask(mask_file, grid_base)
+            gd_final_output = StationDataInterp2GridDataProcess(
+                gd_mask_val, gd_mask_xn, gd_mask_yn, grid_base, gd_back_ground, sd_output).process()
+            write_grid_to_micaps4(
+                gd_final_output, output_sample_path, predict_type,
+                clip_coords, grid_base, is_interp)
+    except Exception as exc:
+        print("集成失败 time_input=%s: %s" % (time_input, exc))
 
 
-def _parse_float_list(s):
-    if s is None or not str(s).strip():
-        return None
-    return [float(x.strip()) for x in str(s).split(",") if x.strip()]
-
-
-def _parse_bool(s):
-    if s is None or not str(s).strip():
-        return None
-    t = str(s).strip().lower()
-    if t in ("1", "true", "yes", "y", "on"):
-        return True
-    if t in ("0", "false", "no", "n", "off"):
-        return False
-    raise argparse.ArgumentTypeError("期望布尔 true/false")
-
-
-class MultiRainMait03BlendingCli(CliBase):
-    """``multi_rain_mait03_blending`` 的命令行。``run`` 转调 ``mait_3h.process``。"""
-
-    description = "3 小时多模式降水 TS 加权集成（时效默认 3–252 / 步长 3）"
-    epilog = (
-        "示例:\n"
-        "  python -m cli --time-inputs=202608200000\n"
-        "  python -m cli --time-inputs=202608200000,202608201200 --is-multi=true --pro-count=4\n"
-        "  python -m cli --time-input=202608200000 --predict-valid-list=3,6,9\n"
-        "  python -m cli --time-inputs=202608200000 --para-path=resource/para_3.ini\n\n"
-        "模块: from mait_3h import process\n"
-        "  process(time_inputs=['202608200000', '202608201200'], is_multi=True, pro_count=4)\n"
-    )
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--time-inputs", type=_parse_str_list, default=None,
-            metavar="YYYYMMDDHHMM,...",
-            help="UTC 起报列表，写 0000/1200 即出该 00/12Z",
-        )
-        parser.add_argument(
-            "--time-input", default=None, metavar="YYYYMMDDHHMM",
-            help="单个 UTC 起报（兼容旧写法）",
-        )
-        parser.add_argument(
-            "--predict-valid-list", type=_parse_int_list, default=None,
-            metavar="3,6,9,...", help="预报时效列表；省略读 conf.ini",
-        )
-        parser.add_argument("--para-path", default=None, help="模式/实况路径 ini")
-        parser.add_argument("--background-path", default=None, help="背景格点 Micaps4 路径 ini")
-        parser.add_argument("--beta-path", default=None, help="beta 路径模板")
-        parser.add_argument(
-            "--is-obs-bjt", type=_parse_bool, default=None, metavar="BOOL",
-            help="实况是否按北京时（+8 h）",
-        )
-        parser.add_argument(
-            "--is-interp", type=_parse_bool, default=None, metavar="BOOL",
-            help="写出前是否按 clip_coords 双线性裁剪",
-        )
-        parser.add_argument(
-            "--is-multi", type=_parse_bool, default=None, metavar="BOOL",
-            help="多个起报是否多进程（SimpleParallelTool）",
-        )
-        parser.add_argument(
-            "--clip-coords", type=_parse_float_list, default=None,
-            metavar="lon0,lon1,lat0,lat1,dlon,dlat",
-        )
-        parser.add_argument("--pro-count", type=int, default=None, help="起报并行进程数")
-        parser.add_argument("--log-file", default=None, help="日志路径模板；省略则用 ini 中的 log_file")
-        parser.add_argument("--station-info", default=None, help="站点信息文件；省略则用 ini 中的 station_info")
-        parser.add_argument("--mask-dat", default=None, help="格点掩膜 dat 文件；省略则用 ini 中的 mask_dat")
-        parser.add_argument(
-            "--config", dest="config", default=None, metavar="PATH",
-            help=_CONFIG_HELP,
-        )
-
-    def run(
-        self,
-        time_inputs=None,
-        time_input=None,
-        predict_valid_list=None,
-        para_path=None,
-        background_path=None,
-        beta_path=None,
-        is_obs_bjt=None,
-        is_interp=None,
-        is_multi=None,
-        clip_coords=None,
-        pro_count=None,
-        log_file=None,
-        station_info=None,
-        mask_dat=None,
-        config=None,
-    ) -> int:
-        from mait_3h import process
-
-        process(
-            time_inputs=time_inputs,
-            time_input=time_input,
-            para_path=para_path,
-            beta_path=beta_path,
-            background_path=background_path,
-            is_obs_bjt=is_obs_bjt,
-            is_interp=is_interp,
-            is_multi=is_multi,
-            clip_coords=clip_coords,
-            pro_count=pro_count,
-            predict_valid_list=predict_valid_list,
-            log_file=log_file,
-            station_info=station_info,
-            mask_dat=mask_dat,
-            config=config,
-        )
-        return 0
-
-
-def _build_parser():
-    return MultiRainMait03BlendingCli().build_parser()
-
-
-def multi_rain_mait03_blending_cli(argv: Optional[Sequence[str]] = None) -> int:
-    """命令行入口。``python -m cli`` 与直接运行本文件都进这里。"""
-    return MultiRainMait03BlendingCli().main(argv)
-
-
-if __name__ == "__main__":
-    raise SystemExit(multi_rain_mait03_blending_cli())
+@merge_params()
+def process(
+    time_inputs: list = None,
+    pro_count: int = 1,
+    *,
+    predict_valid_list: List[int] = None,
+    para_path: str = "resource/para_3.ini",
+    beta_path: str = "beta_3h/YYYYMMDDHH/%02d_%02d_TTT.info",
+    background_path: str = "resource/para_3_background.ini",
+    is_obs_bjt: bool = True,
+    is_interp: bool = False,
+    clip_coords: List[float] = None,
+    log_file: str = "log/YYYYMMDD.txt",
+    station_info: str = "resource/station_info.txt",
+    mask_dat: str = "resource/mask010.dat",
+    config=None,
+):
+    """展开全部起报；pro_count 大于 1 时并行调用 _process。"""
+    time_inputs = _as_list(time_inputs)
+    if not time_inputs:
+        raise ValueError("缺少参数: time_inputs（调用参数与配置文件均未提供）")
+    predict_valid_list = _as_list(predict_valid_list) or list(_DEFAULT_VALID)
+    clip_coords = _as_list(clip_coords) or list(_DEFAULT_CLIP)
+    blend_para = {
+        "para_path": para_path,
+        "beta_path": beta_path,
+        "background_path": background_path,
+        "is_obs_bjt": is_obs_bjt,
+        "is_interp": is_interp,
+        "clip_coords": clip_coords,
+        "predict_valid_list": predict_valid_list,
+        "log_file": log_file,
+        "station_info": station_info,
+        "mask_dat": mask_dat,
+    }
+    if pro_count > 1:
+        sw_all = datetime.datetime.now()
+        SimpleParallelTool(
+            target_func=_process,
+            parallel_mode="async",
+            with_return=True,
+            num_process=pro_count,
+            fixed_params=blend_para,
+        ).process({"time_input": time_inputs})
+        print(">>> Time elasped: " + str((datetime.datetime.now() - sw_all).total_seconds()))
+    else:
+        for time_input in time_inputs:
+            _process(time_input, **blend_para)

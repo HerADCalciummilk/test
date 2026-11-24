@@ -11,8 +11,6 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional, Sequence
-
 import numpy as np
 import xarray as xr
 
@@ -158,25 +156,3 @@ def save_echo_class_grid_to_netcdf(
         raise
 
     return path_obj
-
-
-def main(argv: Optional[Sequence[str]] = None):
-    """列出带路径参数的命令行。"""
-    del argv
-    lines = [
-        "echo_class 命令行参数由 flags 传入，先看 --help：",
-        "  python cli/steiner_conv_strat_main.py --help",
-        "  python cli/steiner_conv_strat_main.py --refl-path PATH [--output-path PATH] [--config PATH]",
-        "  python -m cli.steiner_conv_strat_main --help",
-        "  python cli/feature_detection_main.py --help",
-        "  python cli/feature_detection_main.py --field-data-path PATH [--output-path PATH] [--config PATH]",
-        "  python -m cli.feature_detection_main --help",
-        "  python cli/conv_strat_raut_main.py --help",
-        "  python cli/conv_strat_raut_main.py --refl-path PATH [--output-path PATH] [--config PATH]",
-        "  python -m cli.conv_strat_raut_main --help",
-        "  python cli/hydroclass_semisupervised_main.py --help",
-        "  python cli/hydroclass_semisupervised_main.py --refl-path PATH [--zdr-path PATH] [--output-path PATH] [--config PATH]",
-        "  python -m cli.hydroclass_semisupervised_main --help",
-    ]
-    print("\n".join(lines))
-    return 0

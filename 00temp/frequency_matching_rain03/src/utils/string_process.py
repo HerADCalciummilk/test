@@ -1,5 +1,8 @@
 from datetime import datetime
 
+import os
+
+
 
 class StringProcess:
     """标题模板：把 ``YYYYMMDDHH`` / ``VVV`` 换成起报与时效。
@@ -41,7 +44,6 @@ class StringProcess:
 
     @staticmethod
     def write_str_to_txt(str_file_path, str_context):
-        import os
         os.makedirs(os.path.dirname(str_file_path), exist_ok=True)
         with open(str_file_path, 'w', encoding='gb2312') as f:
             f.write(str_context)

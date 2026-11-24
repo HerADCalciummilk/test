@@ -2,7 +2,12 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2019 NMC Developers.
 # Distributed under the terms of the GPL V3 License.
-"""面向 meteva_base 网格数据的门控过滤工具。"""
+"""面向 meteva_base 网格数据的门控过滤工具。
+
+.. deprecated::
+    主质控路径已改为极坐标 ``PolarRadarQCPlugin``（``src/radar_qc.py``）。
+    本模块仅兼容旧的 CREF 水平门控；新代码请勿再依赖。
+"""
 
 from __future__ import annotations
 

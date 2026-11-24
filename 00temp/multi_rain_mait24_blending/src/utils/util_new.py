@@ -20,6 +20,9 @@ from multiprocessing import Pool
 
 from utils.util_context import RunContext
 
+from PIL import Image
+
+
 data0_str = 'data0'
 
 
@@ -1073,7 +1076,6 @@ def read_grid_mask_nc(mask_file):
 
 
 def save_grid_mask_png(gd_mask_val, png_name):
-    from PIL import Image
     height, width = gd_mask_val.shape
     rgb_array = np.zeros((height, width, 3), dtype=np.uint8)
 

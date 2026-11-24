@@ -85,13 +85,16 @@ def overlay_none(
     anchor_file: str,
     config: Optional[str],
     values: Dict[str, Any],
+    *,
+    section: str = "process",
 ) -> Dict[str, Any]:
     """用 ini 填补仍为 None 的参数。
 
     ``values`` 的值可以是当前参数，或 ``(当前值, 转换名)``。
     当前值不是 None 时保持原样。
+    ``section`` 默认 ``process``（如 QPE）；质控 CLI 用 ``radar_qc``。
     """
-    ini = load_process_ini(anchor_file, config)
+    ini = load_process_ini(anchor_file, config, section=section)
     out: Dict[str, Any] = {}
     for key, spec in values.items():
         if isinstance(spec, tuple):

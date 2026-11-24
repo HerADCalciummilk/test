@@ -11,6 +11,10 @@ from typing import Optional, Tuple
 import meteva_base as meb
 import xarray as xr
 
+from datetime import timedelta
+
+
+
 
 @deprecate_args({"R": "precip", "V": "velocity", "R_thr": "precip_thr"}, "1.8.0")
 def forecast(
@@ -492,7 +496,6 @@ class Sprog(PostProcessingPlugin):
         self.filter_kwargs = filter_kwargs
         self.measure_time = measure_time
 
-    from datetime import timedelta
 
     @deprecate_args({"R": "precip", "V": "velocity", "R_thr": "precip_thr"}, "1.8.0")
     def process(self,

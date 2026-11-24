@@ -14,19 +14,31 @@ _DEFAULT_INI = _PKG_ROOT / "resource" / "conf.ini"
 _INI_PATH = _DEFAULT_INI
 _CACHE: Optional[configparser.ConfigParser] = None
 
-MODES = ("summary", "lonlat-to-equal", "meteva-to-cube", "cube-to-meteva")
+MODES = ("lonlat-to-equal", "equal-to-lonlat")
+_MODE_ALIASES = {
+    "lonlat_to_equal": "lonlat-to-equal",
+    "equal_to_lonlat": "equal-to-lonlat",
+    "latlon-to-equal": "lonlat-to-equal",
+    "equal-to-latlon": "equal-to-lonlat",
+}
+
+BACKENDS = ("cartopy", "iris")
+_BACKEND_ALIASES = {
+    "cartopy": "cartopy",
+    "iris": "iris",
+    "ir": "iris",
+}
 
 PRESET: Dict[str, Any] = {
-    "mode": "summary",
+    "mode": "lonlat-to-equal",
+    "backend": "cartopy",
     "projection_extent": [83.0, 138.0, 12.0, 53.0],
     "secant_latitudes": [25.0, 47.0],
     "grid_distance": 1000.0,
+    "lonlat_extent": [83.0, 138.0, 12.0, 53.0],
+    "grid_spacing": 0.1,
     "regrid_mode": "bilinear",
     "extrapolation_mode": "nanmask",
-    "spatial_grid": "latlon",
-    "bounds": [],
-    "near_num": 3,
-    "near_distance": 20000.0,
 }
 
 
@@ -93,11 +105,6 @@ def _opt_float(section: str, key: str, preset: float) -> float:
     return preset if raw is None else float(raw)
 
 
-def _opt_int(section: str, key: str, preset: int) -> int:
-    raw = _raw(section, key)
-    return preset if raw is None else int(raw)
-
-
 def _opt_float_list(section: str, key: str, preset: Sequence[float]) -> List[float]:
     raw = _raw(section, key)
     if raw is None:
@@ -111,37 +118,48 @@ def _as_float_list(value: Optional[str], fallback: List[float]) -> List[float]:
     return [float(item.strip()) for item in str(value).split(",") if item.strip()]
 
 
+def _normalize_mode(mode: str) -> str:
+    resolved = mode.strip().lower().replace("_", "-")
+    resolved = _MODE_ALIASES.get(resolved, resolved)
+    if resolved not in MODES:
+        raise ValueError("mode 无效。可选 lonlat-to-equal、equal-to-lonlat")
+    return resolved
+
+
+def _normalize_backend(backend: str) -> str:
+    resolved = backend.strip().lower()
+    resolved = _BACKEND_ALIASES.get(resolved, resolved)
+    if resolved not in BACKENDS:
+        raise ValueError("backend 无效。可选 cartopy、iris（默认 cartopy）")
+    return resolved
+
+
 def resolve_args(
     mode: Optional[str] = None,
+    backend: Optional[str] = None,
     projection_extent: Optional[str] = None,
     secant_latitudes: Optional[str] = None,
     grid_distance: Optional[float] = None,
+    lonlat_extent: Optional[str] = None,
+    grid_spacing: Optional[float] = None,
     regrid_mode: Optional[str] = None,
     extrapolation_mode: Optional[str] = None,
-    spatial_grid: Optional[str] = None,
-    bounds: Optional[str] = None,
-    near_num: Optional[int] = None,
-    near_distance: Optional[float] = None,
     config: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """补齐命令行参数。``bounds`` 为空列表表示不设置时间界。
-
-    ``config`` 给出时改读该 ini，返回前恢复默认文件。其余参数含义不变。
-    """
+    """补齐命令行参数。``config`` 给出时改读该 ini，返回前恢复默认文件。"""
     if config:
         set_main_ini(config)
     try:
         return _resolve_args(
             mode=mode,
+            backend=backend,
             projection_extent=projection_extent,
             secant_latitudes=secant_latitudes,
             grid_distance=grid_distance,
+            lonlat_extent=lonlat_extent,
+            grid_spacing=grid_spacing,
             regrid_mode=regrid_mode,
             extrapolation_mode=extrapolation_mode,
-            spatial_grid=spatial_grid,
-            bounds=bounds,
-            near_num=near_num,
-            near_distance=near_distance,
         )
     finally:
         if config:
@@ -150,21 +168,23 @@ def resolve_args(
 
 def _resolve_args(
     mode: Optional[str] = None,
+    backend: Optional[str] = None,
     projection_extent: Optional[str] = None,
     secant_latitudes: Optional[str] = None,
     grid_distance: Optional[float] = None,
+    lonlat_extent: Optional[str] = None,
+    grid_spacing: Optional[float] = None,
     regrid_mode: Optional[str] = None,
     extrapolation_mode: Optional[str] = None,
-    spatial_grid: Optional[str] = None,
-    bounds: Optional[str] = None,
-    near_num: Optional[int] = None,
-    near_distance: Optional[float] = None,
 ) -> Dict[str, Any]:
-    resolved_mode = mode.strip() if not _missing(mode) else _opt_str("cli", "mode", str(PRESET["mode"]))
-    if resolved_mode not in MODES:
-        raise ValueError(
-            "mode 无效。可选 summary、lonlat-to-equal、meteva-to-cube、cube-to-meteva"
-        )
+    raw_mode = mode.strip() if not _missing(mode) else _opt_str("cli", "mode", str(PRESET["mode"]))
+    resolved_mode = _normalize_mode(raw_mode)
+    raw_backend = (
+        backend.strip()
+        if not _missing(backend)
+        else _opt_str("cli", "backend", str(PRESET["backend"]))
+    )
+    resolved_backend = _normalize_backend(raw_backend)
     extent = _as_float_list(
         projection_extent,
         _opt_float_list("lonlat_to_equal", "projection_extent", PRESET["projection_extent"]),
@@ -173,25 +193,24 @@ def _resolve_args(
         secant_latitudes,
         _opt_float_list("lonlat_to_equal", "secant_latitudes", PRESET["secant_latitudes"]),
     )
+    lonlat = _as_float_list(
+        lonlat_extent,
+        _opt_float_list("equal_to_lonlat", "lonlat_extent", PRESET["lonlat_extent"]),
+    )
     if len(extent) != 4:
         raise ValueError("projection_extent 须为 lonmin,lonmax,latmin,latmax 四个数")
     if len(secant) != 2:
         raise ValueError("secant_latitudes 须为两个纬度")
-    resolved_bounds = _as_float_list(
-        bounds, _opt_float_list("meteva_to_cube", "bounds", PRESET["bounds"])
-    )
+    if len(lonlat) != 4:
+        raise ValueError("lonlat_extent 须为 lonmin,lonmax,latmin,latmax 四个数")
     regrid = regrid_mode.strip() if not _missing(regrid_mode) else _opt_str(
         "lonlat_to_equal", "regrid_mode", str(PRESET["regrid_mode"])
     )
     if regrid not in ("bilinear", "nearest"):
         raise ValueError("regrid_mode 只支持 bilinear 或 nearest")
-    spatial = spatial_grid.strip() if not _missing(spatial_grid) else _opt_str(
-        "meteva_to_cube", "spatial_grid", str(PRESET["spatial_grid"])
-    )
-    if spatial not in ("latlon", "equalarea"):
-        raise ValueError("spatial_grid 只支持 latlon 或 equalarea")
     return {
         "mode": resolved_mode,
+        "backend": resolved_backend,
         "projection_extent": extent,
         "secant_latitudes": secant,
         "grid_distance": float(
@@ -199,18 +218,20 @@ def _resolve_args(
             if grid_distance is None
             else grid_distance
         ),
+        "lonlat_extent": lonlat,
+        "grid_spacing": float(
+            _opt_float("equal_to_lonlat", "grid_spacing", float(PRESET["grid_spacing"]))
+            if grid_spacing is None
+            else grid_spacing
+        ),
         "regrid_mode": regrid,
         "extrapolation_mode": (
             extrapolation_mode.strip()
             if not _missing(extrapolation_mode)
-            else _opt_str("lonlat_to_equal", "extrapolation_mode", str(PRESET["extrapolation_mode"]))
-        ),
-        "spatial_grid": spatial,
-        "bounds": resolved_bounds,
-        "near_num": int(_opt_int("kdtree", "near_num", int(PRESET["near_num"])) if near_num is None else near_num),
-        "near_distance": float(
-            _opt_float("kdtree", "near_distance", float(PRESET["near_distance"]))
-            if near_distance is None
-            else near_distance
+            else _opt_str(
+                "lonlat_to_equal",
+                "extrapolation_mode",
+                str(PRESET["extrapolation_mode"]),
+            )
         ),
     }

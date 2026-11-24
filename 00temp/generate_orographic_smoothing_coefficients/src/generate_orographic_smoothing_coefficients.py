@@ -21,7 +21,7 @@ import xarray as xr
 import meteva_base as meb
 from numpy import ndarray
 
-from generate_orographic_smoothing_coefficients.src.utils._gradient import (
+from generate_orographic_smoothing_coefficients.src.util_plugin import (
     adjacent_gradients_projected,
 )
 from generate_orographic_smoothing_coefficients.utils.base_plugin import BasePlugin
@@ -280,6 +280,7 @@ class OrographicSmoothingCoefficients(BasePlugin):
             lat_units=lat_units,
             lon_units=lon_units,
         )
+        # 梯度取幂后缩放到给定系数区间
         coeff_x = self.unnormalised_smoothing_coefficients(grad_x)
         coeff_y = self.unnormalised_smoothing_coefficients(grad_y)
         coeff_x, coeff_y = self.scale_smoothing_coefficients(coeff_x, coeff_y)

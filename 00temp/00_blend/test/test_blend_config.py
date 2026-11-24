@@ -2,10 +2,19 @@
 """ini 补齐与目录结构。"""
 from __future__ import annotations
 
+import importlib.util
+import inspect
 from pathlib import Path
 
-from cli.weight_blending_cli import build_parser
 from utils.util_env import clear_ini_cache, resolve_args
+
+
+def _load_process():
+    path = Path(__file__).resolve().parents[1] / "cli" / "00_blend_cli.py"
+    spec = importlib.util.spec_from_file_location("_blend_cli_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.process
 
 
 def setup_module() -> None:
@@ -31,7 +40,10 @@ def test_explicit_overrides_ini() -> None:
     assert got["tolerate_period_mismatch"] is True
 
 
-def test_cli_omitted_args_are_none() -> None:
-    args = build_parser().parse_args([])
-    assert args.weight_power is None
-    assert args.tolerate_period_mismatch is None
+def test_process_signature() -> None:
+    process = _load_process()
+    assert callable(process)
+    names = inspect.signature(process).parameters
+    assert "weight_power" in names
+    assert "tolerate_period_mismatch" in names
+    assert "config" in names

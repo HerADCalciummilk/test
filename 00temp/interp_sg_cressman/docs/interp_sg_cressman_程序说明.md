@@ -42,7 +42,7 @@ $$
 
 | 层级 | 路径 | 说明 |
 |------|------|------|
-| 算法核 | `src/interp_sg_cressman.py` | `interp_sg_cressman`、`InterpSGCressmanPlugin` |
+| 算法核 | `src/interp_sg_cressman_plugin.py` | `InterpSgCressman`、`interp_sg_cressman`（最初版函数） |
 | 调度 | `src/runner.py` | `process`：读站/背景 → 插值 → 写 Micaps4 |
 | 配置 | `src/utils/util_env.py` | 读 `resource/interp_sg_cressman.ini` |
 | CLI | `cli/__main__.py` | argparse → `process` |
@@ -63,11 +63,10 @@ $$
 
 **调用形态**
 
-- 函数：`interp_sg_cressman(sta, grid, r_list, background=..., nearNum=..., outer_value=...)`  
-- 插件：`InterpSGCressmanPlugin(r_list=...)(sta, grid, background=...)`  
+- 插件：`InterpSgCressman(r_list=..., reprocess=False|True).process(sta, grid=..., background=...)`  
 - 产品入口：`from runner import process` / `python -m cli`
 
-入参为 meteva / meteva_base 站点与网格对象。仓库根另有共享 `utils/interp_sg_cressman_plugin.py`，逻辑应与本包 `src/interp_sg_cressman.py` 保持一致。
+入参为 meteva / meteva_base 站点与网格对象。算法实现仅在本包 `src/interp_sg_cressman_plugin.py`。
 
 ---
 
@@ -117,11 +116,12 @@ from runner import process
 process(sta_path="a.m3", domain=[20, 50, 70, 140, 0.1, 0.1],
         r_list=[60000, 40000, 20000], output_path="out.m4")
 
-# 或直接调算法核（已有 meteva 对象时）
-from interp_sg_cressman import interp_sg_cressman, InterpSGCressmanPlugin
-grd = interp_sg_cressman(sta, grid, r_list=[60000, 40000, 20000])
-grd = InterpSGCressmanPlugin(r_list=[60000, 40000, 20000])(sta, grid, background=bg)
+# 或直接调插件（已有 meteva 对象时）
+from interp_sg_cressman_plugin import InterpSgCressman
+grd = InterpSgCressman(r_list=[60000, 40000, 20000]).process(sta, grid=grid)
+grd = InterpSgCressman(r_list=[60000, 40000, 20000])(sta, grid, background=bg)
 ```
+
 
 **直跑**
 
@@ -158,3 +158,23 @@ python -m cli --sta=a.m3 --glon=70,140,0.1 --glat=15,55,0.1 --near-num=100
 | `--domain` | `sou,nor,wst,est,dlon,dlat` |
 
 省略的参数从 `resource/interp_sg_cressman.ini` 读取。
+
+---
+
+## 统一插件与再处理
+
+自 `frequency_matching_rain24` 迁入的再处理，与 km 核合成一个插件：
+
+| 文件 | 说明 |
+|------|------|
+| `src/interp_sg_cressman_plugin.py` | `InterpSgCressman(reprocess=False/True)`：默认 km 核；`True` 为差值累加再处理 |
+| `src/gressman_plugin.py` | 度制 `GressManInterpolation`（对照） |
+| `cli/gressman_cli.py` | GressMan 独立入口 |
+
+```bash
+# km 核（默认 reprocess=false；r_list 为米）
+python -m cli sta_path=a.m3 background_path=b.m4 glon=70,140,0.1 glat=0,60,0.1
+# 再处理（须背景；r_list 为度）
+python -m cli sta_path=a.m3 background_path=b.m4 reprocess=true r_list=1.0,0.8,0.6,0.4
+```
+

@@ -1,154 +1,249 @@
 # -*- coding: utf-8 -*-
-"""逐 3 小时降水频率匹配订正命令行。
+"""逐 3 小时降水频率匹配订正。
 
-在本包目录执行::
+一条任务 = 一个起报 ``date_time`` × 一个时效 ``predict_valid``。
+``pro_count>1`` 时 ``process`` 把 ``_process`` 交给进程池。
 
-    python -m cli ecmwf 2026052208
-    python cli/frequency_matching_rain03_cli.py ecmwf 2026052208
+``_process`` 三段::
+
+    1. 读入 —— path/config/站点/掩膜，展开输出路径
+    2. 插件 —— ``FrequencyMatchingRain03Plugin.process``
+    3. 写出 —— 在插件内完成（m3/m4/nc）
 """
 from __future__ import annotations
 
-import argparse
+import logging
+import os
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import List, Optional
 
-_ROOT = Path(__file__).resolve().parent.parent
-_SRC = _ROOT / "src"
-for _p in (str(_ROOT), str(_SRC)):
-    while _p in sys.path:
-        sys.path.remove(_p)
-for _p in reversed((str(_ROOT), str(_SRC))):
-    sys.path.insert(0, _p)
-
-from utils.cli_base import CliBase
-
-_CONFIG_HELP = "运行配置文件，传给入口函数。相对路径按项目根目录解析。省略则用包内默认 ini。"
+_CLI_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_CLI_DIR)
+_SRC_DIR = os.path.join(_ROOT_DIR, "src")
 
 
-def _is_datetime_token(token: str) -> bool:
-    """与 ``runner._is_datetime_token`` 一致：10 位 ``YYYYMMDDHH`` 或 12 位 ``YYYYMMDDHHMM``。"""
-    s = str(token).strip()
-    return s.isdigit() and len(s) in (10, 12)
+def _prefer_path(*dirs):
+    # insert(0) 逆序落地：最后一项在 sys.path 最前
+    for d in dirs:
+        if not d:
+            continue
+        d = os.path.normpath(d)
+        while d in sys.path:
+            sys.path.remove(d)
+        sys.path.insert(0, d)
 
 
-class FrequencyMatchingRain03Cli(CliBase):
-    """``frequency_matching_rain03`` 的命令行。``run`` 转调 ``runner.process``。"""
+# 与 rain24 相同：最终 ROOT 在前，走包级 utils/__init__（合并 00temp/utils + src/utils）
+_prefer_path(_SRC_DIR, _ROOT_DIR)
+for _k in list(sys.modules):
+    if _k == "utils" or _k.startswith("utils."):
+        del sys.modules[_k]
+import utils  # noqa: E402,F401
 
-    description = "逐 3 小时降水频率匹配订正（单模式 QPF 统计订正，时效 3–252h / 步长 3）"
-    epilog = (
-        "示例:\n"
-        "  python -m cli\n"
-        "  python -m cli ecmwf 2026052208\n"
-        "  python -m cli ecmwf 202605220800\n"
-        "  python -m cli ecmwf 202605220000 202605221200\n"
-        "  python -m cli --data-key ecmwf --start 2026052208\n\n"
-        "模块调用:\n"
-        "  from runner import process\n"
-        "  process(data_key='ecmwf', run_times=['2026052208'])\n"
-    )
+from frequency_matching_rain03_plugin import FrequencyMatchingRain03Plugin
+from frequency_matching_rain03_plugin_util import (
+    _build_forecast_tasks,
+    _load_grid_config,
+    _load_mask_grid,
+    _load_path_configs,
+)
+from utils.io_meb import expand_data_path
+from utils.log import Log
+from utils.merge_params import merge_params
+from utils.multipro_plugin import SimpleParallelTool
+from utils.types import FileFlag, LineData, ScatterData
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "tokens",
-            nargs="*",
-            metavar="ARG",
-            help="兼容旧写法：模式键 + 起报时刻(YYYYMMDDHH 或 YYYYMMDDHHMM)",
+
+def _abs_path(path):
+    path = os.path.expanduser(str(path))
+    if os.path.isabs(path):
+        return os.path.normpath(path)
+    return os.path.normpath(os.path.join(_ROOT_DIR, path))
+
+
+def _as_list(value):
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
+
+
+def _is_datetime_token(token):
+    text = str(token).strip()
+    return text.isdigit() and len(text) in (10, 12)
+
+
+def _parse_token(token):
+    text = str(token).strip()
+    if len(text) == 10 and text.isdigit():
+        return datetime.strptime(text, "%Y%m%d%H")
+    if len(text) == 12 and text.isdigit():
+        return datetime.strptime(text, "%Y%m%d%H%M")
+    raise ValueError("Date Args Content Is Not Right!")
+
+
+def _expand_run_times(run_times):
+    if run_times is None:
+        return [datetime.now()]
+    items = _as_list(run_times)
+    dts = [item if isinstance(item, datetime) else _parse_token(item) for item in items]
+    if len(dts) == 1:
+        return dts
+    if len(dts) == 2:
+        start, end = dts
+        if start > end:
+            raise ValueError("Date Args Range Is Not Right!")
+        out = []
+        current = start
+        while current <= end:
+            out.append(current)
+            current += timedelta(hours=1)
+        return out
+    raise ValueError("Date Args Number Is Not Right!")
+
+
+def _para_for(configs, default_key, data_key, log):
+    key = (str(data_key).strip() if data_key else "") or None
+    if not key:
+        if default_key and default_key in configs:
+            key = default_key
+        elif len(configs) == 1:
+            key = next(iter(configs))
+        else:
+            log.write_error("Data Key Is Not Specified!", 1)
+            raise RuntimeError("Data Key Is Not Specified!")
+    para = configs.get(key)
+    if para is None:
+        log.write_error("Data Key Is Not Exist! key=%s" % key, 1)
+        raise RuntimeError("Data Key Is Not Exist! key=%s" % key)
+    return para, key
+
+
+def _process(
+    date_time,
+    predict_valid,
+    *,
+    data_key,
+    log_file,
+    config_json,
+    path_json,
+    station_info,
+    mask_file,
+):
+    """订正一个起报时效：读入 → 插件.process → 写出（插件内）。"""
+    if date_time is None or predict_valid is None:
+        return
+    try:
+        when = date_time if not isinstance(date_time, str) else _parse_token(date_time)
+        lead = int(predict_valid)
+        log_path = _abs_path(log_file) if log_file else log_file
+        log = Log(expand_data_path(log_path, datetime.now(), 0))
+
+        # 1. 读入：路径配置、网格、站点、掩膜
+        configs, default_key = _load_path_configs(
+            Path(_ROOT_DIR), log, path_json=_abs_path(path_json) if path_json else path_json
         )
-        parser.add_argument(
-            "--data-key", "--data", "--path",
-            dest="data_key", default=None,
-            help="模式键，对应 resource/path.json 的 configs",
+        para, _key = _para_for(configs, default_key, data_key, log)
+        configure_data = _load_grid_config(
+            Path(_ROOT_DIR),
+            log,
+            config_json=_abs_path(config_json) if config_json else config_json,
         )
-        parser.add_argument(
-            "--start", default=None, metavar="YYYYMMDDHH[MM]",
-            help="起报起始时刻（10 或 12 位）；与 --end 组成闭区间（步长 1 小时）",
+        station_file = _abs_path(station_info) if station_info else station_info
+        if not os.path.exists(station_file):
+            raise RuntimeError("Station info file not found: %s" % station_file)
+        sd_sta_info = ScatterData(station_file, FileFlag.stainfo)
+        sd_sta_info = sd_sta_info.frame_by_line(
+            LineData(
+                [
+                    configure_data.large_lon_left,
+                    configure_data.large_lon_right,
+                    configure_data.large_lon_right,
+                    configure_data.large_lon_left,
+                ],
+                [
+                    configure_data.large_lat_bottom,
+                    configure_data.large_lat_bottom,
+                    configure_data.large_lat_top,
+                    configure_data.large_lat_top,
+                ],
+            )
         )
-        parser.add_argument(
-            "--end", default=None, metavar="YYYYMMDDHH[MM]",
-            help="运行结束时刻（需同时给 --start）",
-        )
-        parser.add_argument(
-            "--config", dest="config", default=None, metavar="PATH",
-            help=_CONFIG_HELP,
-        )
-        parser.add_argument(
-            "--log-file", dest="log_file", default=None, metavar="PATH",
-            help="覆盖 ini 的 log_file（日志模板 log_file_template）。省略则用 ini。",
-        )
-        parser.add_argument(
-            "--config-json", dest="config_json", default=None, metavar="PATH",
-            help="覆盖 ini 的 config_json。省略则用 ini。",
-        )
-        parser.add_argument(
-            "--path-json", dest="path_json", default=None, metavar="PATH",
-            help="覆盖 ini 的 path_json。省略则用 ini。",
-        )
-        parser.add_argument(
-            "--station-info", dest="station_info", default=None, metavar="PATH",
-            help="覆盖 ini 的 station_info。省略则用 ini。",
-        )
-        parser.add_argument(
-            "--mask-file", dest="mask_file", default=None, metavar="PATH",
-            help="覆盖 ini 的 mask_file。省略则用 ini。",
-        )
+        mask_src = _abs_path(mask_file) if mask_file else mask_file
+        resource_dir = Path(mask_src).parent
+        resolution = configure_data.dlon
+        if abs(resolution - 0.01) < 0.001:
+            mask_name = "mask001.dat"
+        elif abs(resolution - 0.05) < 0.001:
+            mask_name = "mask005.dat"
+        else:
+            mask_name = "mask010.dat"
+        mask_path = resource_dir / mask_name
+        if not mask_path.exists():
+            log.write_info("%s not found, fallback to mask file argument" % mask_name, 0)
+            mask_path = Path(mask_src)
+        if not mask_path.exists():
+            raise RuntimeError("Mask file not found: %s" % mask_path)
+        gd_mask = _load_mask_grid(str(mask_path), configure_data.dlon)
 
-    def run(
-        self,
-        tokens=None,
-        data_key=None,
-        start=None,
-        end=None,
-        config=None,
-        log_file=None,
-        config_json=None,
-        path_json=None,
-        station_info=None,
-        mask_file=None,
-    ) -> int:
-        from runner import process
-
-        run_times = None
-        tokens = list(tokens or [])
-
-        pos_key = None
-        date_args = []
-        for tok in tokens:
-            if _is_datetime_token(tok):
-                date_args.append(tok)
-            elif pos_key is None and not str(tok).startswith("-"):
-                pos_key = tok
-            else:
-                self.build_parser().error("无法解析参数: %s" % tok)
-
-        if data_key is None:
-            data_key = pos_key
-
-        if start:
-            date_args = [start] + ([end] if end else [])
-        if date_args:
-            run_times = date_args
-
-        return process(
-            data_key=data_key,
-            run_times=run_times,
-            config=config,
-            log_file=log_file,
-            config_json=config_json,
-            path_json=path_json,
-            station_info=station_info,
-            mask_file=mask_file,
+        # 2. 核心插件：历史相似 + 频率匹配 +（短时效）光流外推 + Cressman 上格点
+        # 3. 写出：插件内写 m3 / m4 / nc
+        FrequencyMatchingRain03Plugin(
+            para["model_template"],
+            para["fact_template"],
+            para["output_template"],
+            configure_data,
+            sd_sta_info,
+            gd_mask,
+            log,
+        ).process(when, lead)
+    except Exception as exc:
+        logging.getLogger("frequency_matching_rain03").error(
+            "订正失败 date_time=%s lead=%s: %s", date_time, predict_valid, exc
         )
 
 
-def _build_arg_parser() -> argparse.ArgumentParser:
-    return FrequencyMatchingRain03Cli().build_parser()
-
-
-def frequency_matching_rain03_cli(argv: Optional[Sequence[str]] = None) -> int:
-    """命令行入口。``python -m cli`` 与直接运行本文件都进这里。"""
-    return FrequencyMatchingRain03Cli().main(argv)
-
-
-if __name__ == "__main__":
-    raise SystemExit(frequency_matching_rain03_cli())
+@merge_params()
+def process(
+    run_times: Optional[List[str]] = None,
+    pro_count: int = 1,
+    *,
+    data_key: str = None,
+    log_file: str = None,
+    config_json: str = None,
+    path_json: str = None,
+    station_info: str = None,
+    mask_file: str = None,
+    config=None,
+):
+    """展开全部起报时效；pro_count>1 时并行调用 _process。"""
+    _ = config
+    tasks = _build_forecast_tasks(_expand_run_times(run_times))
+    if not tasks:
+        raise ValueError("缺少参数: run_times（调用参数与配置文件均未提供）")
+    correct_para = {
+        "data_key": data_key,
+        "log_file": log_file,
+        "config_json": config_json,
+        "path_json": path_json,
+        "station_info": station_info,
+        "mask_file": mask_file,
+    }
+    date_times = [when for when, _lead in tasks]
+    leads = [lead for _when, lead in tasks]
+    if int(pro_count or 1) > 1:
+        sw_all = datetime.now()
+        SimpleParallelTool(
+            target_func=_process,
+            parallel_mode="async",
+            with_return=True,
+            num_process=int(pro_count),
+            fixed_params=correct_para,
+        ).process({"date_time": date_times, "predict_valid": leads})
+        print(">>> Time elasped: " + str((datetime.now() - sw_all).total_seconds()))
+    else:
+        for date_time, predict_valid in zip(date_times, leads):
+            _process(date_time, predict_valid, **correct_para)

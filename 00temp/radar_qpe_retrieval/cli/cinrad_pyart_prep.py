@@ -6,7 +6,19 @@ from typing import Sequence
 
 import numpy as np
 
-from radar_qpe_retrieval.cli.cinrad_meb import cinrad_frequency_hz
+
+def cinrad_frequency_hz(cinrad_file) -> float | None:
+    """从标准格式基数据站配置读取发射频率（Hz）。
+
+    cinrad 将站配置 frequency（MHz）存为 ``StandardData.wavelength``（厘米）。
+    """
+    wl_cm = getattr(cinrad_file, "wavelength", None)
+    if wl_cm is None:
+        return None
+    wl_cm = float(wl_cm)
+    if not np.isfinite(wl_cm) or wl_cm <= 0:
+        return None
+    return 3e8 / (wl_cm * 0.01)
 
 
 # ==================== 雷达基数据转 Py-ART Radar 预处理函数 ====================

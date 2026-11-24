@@ -1,28 +1,5 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""samos_probability_calibration.cli 包的可执行入口。
+"""``python -m cli`` → 已装饰的 ``process``（合 conf.ini）。"""
+from .samos_probability_calibration_cli import process
 
-包根目录::
-
-    python -m cli
-    python -m cli samos
-"""
-
-from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-_ROOT = Path(__file__).resolve().parent.parent
-_PARENT = _ROOT.parent
-for _p in (str(_PARENT), str(_ROOT)):
-    while _p in sys.path:
-        sys.path.remove(_p)
-for _p in reversed((str(_PARENT), str(_ROOT))):
-    sys.path.insert(0, _p)
-
-from samos_probability_calibration.cli import main  # noqa: E402
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+process()

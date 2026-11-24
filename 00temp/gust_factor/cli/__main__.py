@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""在本包目录执行：``python -m cli``。"""
-from .gust_factor_cli import _build_parser, gust_factor_cli
+"""``python -m cli`` → 已装饰的 ``process``（合 conf.ini）。"""
+from .gust_factor_cli import process
 
-
-def main(argv=None):
-    return gust_factor_cli(argv)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+process()

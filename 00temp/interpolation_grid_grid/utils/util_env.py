@@ -18,6 +18,7 @@ _CACHE: Optional[configparser.ConfigParser] = None
 PRESET: Dict[str, Any] = {
     "module": "linear",
     "outer_value": 0.0,
+    "mdtol": 1.0,
 }
 
 _MODULE_ALIASES = {
@@ -27,8 +28,11 @@ _MODULE_ALIASES = {
     "interp_gg_nearest": "nearest",
     "gg_cubic": "cubic",
     "interp_gg_cubic": "cubic",
+    "gg_conservative": "conservative",
+    "interp_gg_conservative": "conservative",
+    "area_weighted": "conservative",
 }
-_MODULES = ("linear", "nearest", "cubic")
+_MODULES = ("linear", "nearest", "cubic", "conservative")
 
 
 def clear_ini_cache() -> None:
@@ -152,7 +156,8 @@ def resolve_module(module: Optional[str] = None, config: Optional[str] = None) -
         name = _MODULE_ALIASES.get(str(module).strip(), str(module).strip())
         if name not in _MODULES:
             raise ValueError(
-                "module 未指定或无效。请传 --module，可选 linear、nearest、cubic"
+                "module 未指定或无效。请传 --module，可选 "
+                "linear、nearest、cubic、conservative"
             )
         return name
     finally:
@@ -166,6 +171,7 @@ def resolve_args(
     grid_template: Optional[str] = None,
     output: Optional[str] = None,
     outer_value: Optional[float] = None,
+    mdtol: Optional[float] = None,
     glon: Any = None,
     glat: Any = None,
     domain: Any = None,
@@ -182,6 +188,7 @@ def resolve_args(
             grid_template=grid_template,
             output=output,
             outer_value=outer_value,
+            mdtol=mdtol,
             glon=glon,
             glat=glat,
             domain=domain,
@@ -212,6 +219,7 @@ def _resolve_args(
     grid_template: Optional[str] = None,
     output: Optional[str] = None,
     outer_value: Optional[float] = None,
+    mdtol: Optional[float] = None,
     glon: Any = None,
     glat: Any = None,
     domain: Any = None,
@@ -234,6 +242,18 @@ def _resolve_args(
         if raw is None:
             raw = _raw("linear", "outer_value")
         resolved["outer_value"] = float(PRESET["outer_value"]) if raw is None else float(raw)
+
+    # mdtol：仅 conservative 使用；其它模块保持 None
+    if name == "conservative":
+        if mdtol is not None:
+            resolved["mdtol"] = float(mdtol)
+        else:
+            raw = _raw("conservative", "mdtol")
+            resolved["mdtol"] = float(PRESET["mdtol"]) if raw is None else float(raw)
+        if not (0.0 <= resolved["mdtol"] <= 1.0):
+            raise ValueError("mdtol 须在 [0, 1]")
+    else:
+        resolved["mdtol"] = None
 
     explicit_grid_type = _optional_str(grid_type, "input", "grid_type")
     explicit_tmpl_type = _optional_str(grid_template_type, "input", "grid_template_type")

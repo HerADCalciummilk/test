@@ -26,20 +26,29 @@
 
 | 类型 | 路径 | 说明 |
 | --- | --- | --- |
-| 核心源码 | `src/qpe.py` | QPE 插件与算法函数 |
+| 核心源码 | `src/qpe.py` | QPE 插件与算法函数（**meteva `grid_data` 网格**） |
+| 质控插件 | `src/radar_qc.py`、`src/polar_grid.py` | 极坐标质控 + 六维网格化 `PolarRadarQCPlugin` |
 | 内部工具 | `src/utils/_freq.py`、`src/utils/_grid.py` | 频率系数与网格重组装 |
-| 模块工具 | `utils/grid_gate_filter.py` | 门控过滤 |
-| 插件基类 | `utils/base_plugin.py` | PostProcessingPlugin |
-| CLI | `cli/qpe.py` | QPE 统一入口 |
-| CLI 辅助 | `cli/cinrad_meb.py`、`cli/cinrad_pyart_prep.py` | CINRAD 读数与预处理 |
-| 测试 | `test/` | 单元测试、插件、CLI、门控过滤 |
+| 模块工具 | `utils/grid_gate_filter.py` | 旧 CREF 水平门控（已废弃，无主路径引用） |
+| 插件基类 | `utils/base_plugin.py` | BasePlugin / PostProcessingPlugin |
+| CLI | `cli/qpe.py` | QPE 统一入口（网格进、网格出；CliBase） |
+| CLI | `cli/radar_qc_cli.py` | 极坐标质控入口（基数据→质控网格；CliBase） |
+| CLI 库 | `cli/polar_qc.py`、`cli/cinrad_pyart_prep.py` | 质控编排函数、网格化/落盘、CINRAD→Py-ART |
+| 测试 | `test/` | 单元测试、插件、CLI、极坐标质控 |
 | 文档 | `docs/qpe.md` | 原始算法说明 |
 | notebook | `nbs/qpe.ipynb` | 示例 |
 | 资源 | `resource/` | 仅说明；样例在独立 testdata / 原目录 |
 
-## 插件入口
+## 插件入口（两类，数据契约不同）
 
-统一插件类 `QPEPlugin`（`src/qpe.py`），通过 `method` 参数选择 `z`、`zpoly`、`kdp`、`a`、`zkdp`、`za`、`hydro`、`ztor` 等方法。
+| 插件 | 模块 | 输入 | 输出 |
+| --- | --- | --- | --- |
+| `QPEPlugin` | `src/qpe.py` | meteva 风格网格（REF/KDP 等） | 降水率网格 |
+| `PolarRadarQCPlugin` | `src/radar_qc.py` | Py-ART `Radar`（+ 可选 meb 高度网格 `dem`；网格化需 `cinrad_file`） | `PolarQCResult`：指定仰角 REF/KDP/A meb 六维场（可直接给 `QPEPlugin`）；无 `cinrad_file` 时仍返回 `Radar` + `GateFilter` |
+
+质控在极坐标门点上做，插件内建六维网格化后交给 `QPEPlugin`。衰减环用 Z-PHI 估 `specific_attenuation` 并订正反射率（基数据无现成 A）。
+
+`QPEPlugin` 通过 `method` 选择 `z`、`zpoly`、`kdp`、`a`、`zkdp`、`za`、`hydro`、`ztor` 等方法。
 
 ## 当前整理状态
 

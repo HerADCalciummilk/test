@@ -95,13 +95,29 @@ flowchart TB
 | `cli/__main__.py`（`python -m cli`） | Clize 命令行，转调 `mait_24h.process` |
 | `requirements-cli.txt` | 命令行额外依赖：**clize**（≥5） |
 
-运行期约定：`src` 为工作目录（程序内 `os.chdir` 到 `mait_24h.py` 所在目录），并需能将 `utils` 作为包导入。除使用下文 **7.4 节命令行** 外，**建议将项目根目录与 `src` 均加入 `PYTHONPATH`（或直接 `import` 前等价设置）**。
+运行期约定：`src` 为工作目录（程序内 `os.chdir` 到 `mait_24h.py` 所在目录），并需能将 `utils` 作为包导入。除使用下文 **§7.6 命令行** 外，**建议将项目根目录与 `src` 均加入 `PYTHONPATH`（或直接 `import` 前等价设置）**。
 
 ---
 
-## 4. 完整算法流程与关键节点实现
+## 4. 算法原理与完整流程
 
-本节按程序执行顺序说明各关键节点的输入、处理原理、输出及对应实现位置。
+### 4.0 算法原理
+
+目标：对多模式 **24 小时累积降水** 做分区动态加权集成，站点频率匹配后再 Cressman 到业务网格。
+
+1. **资料**  
+   每个起报 × 时效：读历史模式/实况（算技巧）、当前模式站点与背景格点（定网格与融合）；至少各有一个历史、当前模式可用，否则跳过。
+
+2. **分区 TS 与权重记忆**  
+   `split_lat × split_lon` 划分子区，训练区外扩 `area_scale`。多量级（0.1 / 10 / 25 / 50 mm）TS 得 `score_now`，与历史 beta 的 `score_before` 指数平滑（\(\alpha=0.1\)）得 `score_last` 并写回 beta。长时效（108–238 h）可仅保留 `ecModel`；其余时效保留评分前 5 名，再按当前到齐归一为 \(w_n\)。
+
+3. **站点集成**  
+   \(\sum_n w_n V_n^{\mathrm{now}}\) 后经频率匹配订正分布，子区拼接为整域站点场并写 Micaps3。
+
+4. **格点**  
+   掩膜外伪站 + 订正站 → Cressman（半径 8/6/4/2 倍格距）→ 平滑 → 格点频率匹配；长时效可乘 0.8 并钳制极值，再按 `clip_coords` 写 Micaps4/NC。
+
+以下按程序执行顺序展开各节点输入、处理与实现位置。
 
 ### 4.1 阶段 0：任务派发
 
@@ -356,36 +372,57 @@ staoutputPath=/path/.../YYYYMMDD/YYYYMMDDHH.VVV
 
 ---
 
-## 7. 运行参数说明
+## 7. 参数说明
 
-### 7.1 主函数 `mait_24h.process`
+本节汇总运行时可调项与算法内常量；流程细节见 **§4**，模式/背景路径解析见 **§6**。
+
+### 7.1 运行参数（`process` / CLI）
 
 定义见 `src/mait_24h.py`。调用前请保证 **`time_inputs` 为非空列表**（当前实现未对 `None` 做默认处理）。
 
-| 参数 | 类型 | 含义 | 默认/备注 |
-| ------ | ------ | ------ | ----------- |
-| `time_inputs` | `list[str]` | 起报时刻列表，如 `'202507010800'`（与业务约定一致，多为世界时，见 `is_obs_bjt`） | 必传（业务上） |
-| `predict_valid_list` | `list[int]` | 预报时效（小时），如 `[36,60,...,252]` | 默认 `36..252` 步长 24 |
-| `para_path` | `str \| None` | `para_24.ini` 路径 | `None` 时用 `resource/mait_24.ini` 的 `para_ini` |
-| `beta_path` | `str \| None` | beta（历史评分）目录模板，可含 `YYYYMMDDHH` | `None` 时用 `mait_24.ini` 的 `bate_file` |
-| `is_obs_bjt` | `bool` | 实况时间是否为北京时间 | 默认 `True` |
-| `is_multi` | `bool` | 是否多进程处理多个 `time_input` | 默认 `False` |
-| `clip_coords` | `list \| None` | 输出裁剪：`[slon, elon, slat, elat, dlon, dlat]` | `None` 表示不按该参数裁（写出函数内仍可能用网格自身范围） |
-| `pro_count` | `int` | 多进程 worker 数量 | 默认 `4` |
-| `split_lat` | `int` | 纬度方向分区数 | 默认 `1` |
-| `split_lon` | `int` | 经度方向分区数 | 默认 `1` |
+| 参数 | 类型 | 含义 |
+| ------ | ------ | ------ |
+| `time_inputs` | `list[str]` | 起报时刻列表，如 `202507010800`（多为世界时，见 `is_obs_bjt`）；业务上必传 |
+| `predict_valid_list` | `list[int]` | 预报时效（小时）；默认 `36..252` 步长 24 |
+| `para_path` | `path` | `para_24.ini` 路径；默认 `resource/para_24.ini` |
+| `beta_path` | `str` | beta（历史评分）目录模板，可含 `YYYYMMDDHH`；默认 `resource/YYYYMMDDHH` |
+| `is_obs_bjt` | `bool` | 实况时间是否为北京时间；默认 `True` |
+| `is_multi` | `bool` | 是否多进程处理多个 `time_input`；默认 `False` |
+| `clip_coords` | `list[float]` | 输出裁剪：`slon,elon,slat,elat,dlon,dlat`；`None` 表示不按该参数裁；默认 `70,140,0,60,0.1,0.1` |
+| `pro_count` | `int` | 多进程 worker 数量；默认 `4` |
+| `split_lat` | `int` | 纬度方向分区数；默认 `1` |
+| `split_lon` | `int` | 经度方向分区数；默认 `1` |
 
-### 7.2 运行期固定约定（代码内写死或可改）
+### 7.2 算法内部常量（代码内，非 ini）
 
-| 项 | 当前实现 |
-| ---- | ---------- |
-| 预报类型 `predict_type` | **24**（`build_run_context` 默认） |
-| `area_scale` | **0.5**（`build_run_context` 默认） |
-| 掩码文件 | `resource/mait_24.ini` → `mask_nc`（默认 `resource/mask010.nc`） |
-| 站点信息 | `resource/mait_24.ini` → `station_info` |
-| 日志 | `resource/mait_24.ini` → `log_file`；单进程 `log/YYYYMMDD_{time_input}.txt`；多进程子进程另含 `_pid` |
+| 参数 | 类型 | 含义 |
+| ------ | ------ | ------ |
+| `predict_type` | `int` | 24 小时累积降水；默认 **24** |
+| `area_scale` | `float` | 训练区相对子区外扩；默认 **0.5** |
+| TS 量级 | `list[float]` | 多阈值技巧；默认 0.1 / 10 / 25 / 50 mm |
+| `rain_limit_weight` | `list[float]` | 量级合成权重；≤60 h：`0.1,0.15,0.3,0.45`；否则 `0.1,0.2,0.45,0.25` |
+| `similar_smooth` \(S\) | `float` | 交叉 TS 平滑；默认 \(10^5\) |
+| beta 平滑 \(\alpha\) | `float` | `score_last=(1-α)score_before+α score_now`；默认 **0.1** |
+| 模式筛选 | — | 108–238 h 仅 **ecModel**；其余保留评分前 **5** 名；见 §4.5.4 |
+| 站点 FM | `list[float]` | 切片集成后；20 级（0.01–250 mm） |
+| Cressman 半径 | `list[float]` | 参数 `(1.0, 0.001, 2.0, 0.01)`；默认 **8 / 6 / 4 / 2**×格距 |
+| 平滑 | `int` | Cressman 之后；默认 9 点 × **5** 次 |
+| 格点 FM | `int` | 站点↔格点二次 FM；19 级 |
+| 长时效 | — | 格点后处理；≥108 h ×**0.8**；≥240 mm→250 |
+| 小值 | `float` | 站点/格点；<0.01 mm 置 0 |
 
-### 7.2.1 RunContext 字段（`src/utils/util_context.py`）
+### 7.3 运行资源（`mait_24.ini`）
+
+| 参数 | 类型 | 含义 |
+| ---- | ------ | ------ |
+| `mask_nc` | `path` | 掩码；默认 `resource/mask010.nc` |
+| `station_info` | `path` | 站点表路径（`mait_24.ini`） |
+| `log_file` | `str` | 日志模板；单进程 `log/YYYYMMDD_{time_input}.txt`；多进程子进程含 `_pid` |
+| `predict_valid_list` | `list[int]` | 默认时效窗；空则 **36–252 h，步长 24** |
+
+`para_path`、`beta_path`、`background_ini` 等运行项见 §7.1；`para_24.ini` / `para_24_background.ini` 格式见 §6。
+
+### 7.4 RunContext 字段（`src/utils/util_context.py`）
 
 | 子对象 | 主要字段 | 来源 |
 | -------- | ---------- | ------ |
@@ -394,30 +431,36 @@ staoutputPath=/path/.../YYYYMMDD/YYYYMMDDHH.VVV
 | `ctx.grid` | `clip_coords`, `split_lat/lon`, `area_scale`, `predict_type` | CLI/`mait_24.ini` + 代码默认 |
 | `ctx.session` | `dt_now`, `sd_sta_info`, `is_obs_bjt` | `_prepare` + 运行参数 |
 
-### 7.3 调用示例
+### 7.5 运行示例
 
-批处理脚本见 `test/test_mait_24h.py`。最小调用示例：
+批处理脚本见 `test/test_mait_24h.py`。按第 2 章场景复核时：先确认 `para_24.ini` 模式/实况、`para_24_background.ini` 背景格点、站点表与 `mask010.nc` 可读；跑完后核对 `staoutputPath` 下 **站点 Micaps3** 与 **格点 Micaps4/NC**，以及 `beta_path` 分区评分文件。
 
 ```python
 import mait_24h
 
 mait_24h.process(
-    time_inputs=["202507010800", "202507012000"],
-    predict_valid_list=[36, 60, 84, 108, 132, 156, 180, 204, 228, 252],
-    para_path=None,   # 省略时使用 resource/mait_24.ini → para_ini
-    beta_path=None,   # 省略时使用 resource/mait_24.ini → bate_file
+    time_inputs=["2026052400", "2026052412"],
+    predict_valid_list=[36, 60, 84, 108],
+    para_path="resource/para_24.ini",
+    beta_path=None,   # 省略时用 conf / mait_24.ini 的 beta 模板
     is_obs_bjt=True,
-    is_multi=True,
     clip_coords=[70.0, 140.0, 0.0, 60.0, 0.1, 0.1],
-    pro_count=8,
-    split_lat=2,
-    split_lon=2,
+    pro_count=4,
+    split_lat=1,
+    split_lon=1,
 )
 ```
 
-运行前：在 `resource/` 下准备 `para_24.ini`、`para_24_background.ini`、`station_info.txt`、`mask010.nc` 及业务数据目录；程序运行期工作目录为 `src`。若不用 7.4 节 CLI，需将项目根目录与 `src` 加入 `PYTHONPATH`。
+```bash
+python -m cli time_inputs=2026052400,2026052412 \
+  predict_valid_list=36,60,84,108 \
+  para_path=resource/para_24.ini \
+  clip_coords=70,140,0,60,0.1,0.1 pro_count=4
+```
 
-### 7.4 命令行调用（Clize：`cli`）
+起报、时效、`split_lat`/`split_lon`、beta 记忆与背景场含义见第 2、4、6 节。若不用 CLI，需将项目根与 `src` 加入 `PYTHONPATH`。
+
+### 7.6 命令行调用（Clize：`cli`）
 
 在项目**根目录**（与 `src`、`cli` 同级）执行。依赖 **clize**（见 `requirements-cli.txt`，可使用 `pip install -r requirements-cli.txt` 或随业务环境一并安装）。
 
@@ -437,25 +480,25 @@ python -m cli --help
 
 **命令行参数与 `process` 的对应关系（Clize 将 Python 形参转为 `--kebab-case`）：**
 
-| 命令行选项 | 类型 | 对应 `process` 形参 | 含义 | 默认 / 省略时 |
-| ------------ | ------ | --------------------- | ------ | ---------------- |
-| `--time-inputs` | 逗号分隔字符串 | `time_inputs` | 起报时刻列表，如 `202507010800,202507012000` | **必选**；不可为空（与 7.1 节一致） |
-| `--predict-valid-list` | 逗号分隔整数 | `predict_valid_list` | 预报时效（小时），如 `36,60,84,...,252` | 省略则 `36..252`、步长 **24** |
-| `--para-path` | 字符串 | `para_path` | `para_24.ini` 路径（相对/绝对均可） | 省略为 `None` → `resource/mait_24.ini` 的 `para_ini` |
-| `--beta-path` | 字符串 | `beta_path` | beta 目录模板（可含 `YYYYMMDDHH`） | 省略为 `None` → `resource/mait_24.ini` 的 `bate_file` |
-| `--is-obs-bjt` | 布尔 | `is_obs_bjt` | 实况是否按北京时间 | 默认 **True**；关闭时请以 `python -m cli --help` 为准（常见为 `--no-is-obs-bjt` 或 `--is-obs-bjt=False`） |
-| `--is-multi` | 开关 | `is_multi` | 是否对多个 `time_input` 多进程 | 默认关闭；**需要多进程时加上 `--is-multi`** |
-| `--clip-coords` | 六个逗号分隔浮点数 | `clip_coords` | 裁剪：`slon,elon,slat,elat,dlon,dlat` | 省略为 `None` |
-| `--pro-count` | 整数 | `pro_count` | 多进程 worker 数量 | 默认 **4** |
-| `--split-lat` | 整数 | `split_lat` | 纬度方向分区数 | 默认 **1** |
-| `--split-lon` | 整数 | `split_lon` | 经度方向分区数 | 默认 **1** |
+| 参数 | 类型 | 含义 |
+| ------------ | ------ | ------ |
+| `--time-inputs` | `list[str]` | 起报时刻列表，如 `202507010800,202507012000`；对应 `time_inputs`；**必选**、不可为空 |
+| `--predict-valid-list` | `list[int]` | 预报时效（小时），如 `36,60,84,...,252`；对应 `predict_valid_list`；省略则 `36..252`、步长 **24** |
+| `--para-path` | `path` | `para_24.ini` 路径（相对/绝对均可）；对应 `para_path`；省略为 `None` → `resource/mait_24.ini` 的 `para_ini` |
+| `--beta-path` | `str` | beta 目录模板（可含 `YYYYMMDDHH`）；对应 `beta_path`；省略为 `None` → `resource/mait_24.ini` 的 `bate_file` |
+| `--is-obs-bjt` | `bool` | 实况是否按北京时间；对应 `is_obs_bjt`；默认 **True** |
+| `--is-multi` | `bool` | 是否对多个 `time_input` 多进程；对应 `is_multi`；默认关闭，需多进程时加上 `--is-multi` |
+| `--clip-coords` | `list[float]` | 裁剪：`slon,elon,slat,elat,dlon,dlat`；对应 `clip_coords`；省略为 `None` |
+| `--pro-count` | `int` | 多进程 worker 数量；对应 `pro_count`；默认 **4** |
+| `--split-lat` | `int` | 纬度方向分区数；对应 `split_lat`；默认 **1** |
+| `--split-lon` | `int` | 经度方向分区数；对应 `split_lon`；默认 **1** |
 
 **说明：**
 
 - 列表在命令行中为**逗号分隔**，不要带方括号；路径含空格时请按所用 shell 规则加引号或转义。
 - CLI 在导入前会把 **`src`** 与**项目根目录**加入 `sys.path`（`mait_24h._bootstrap_paths`），一般**无需**再设 `PYTHONPATH`。
 
-**全参数示例（与 7.3 节取值一致，一行可复制）：**
+**全参数示例（与 §7.5 取值一致，一行可复制）：**
 
 ```text
 python -m cli --time-inputs=202507010800,202507012000 --predict-valid-list=36,60,84,108,132,156,180,204,228,252 --is-obs-bjt=True --is-multi --clip-coords=70.0,140.0,0.0,60.0,0.1,0.1 --pro-count=8 --split-lat=2 --split-lon=2
@@ -478,7 +521,7 @@ python -m cli --time-inputs=202507010800
 - **meteva_base**；主流程及部分检验脚本还需 **meteva**
 - **xarray**（`utils/util_new.py` 等）
 - 掩码与边界工具：`geopandas`、`shapely`（`utils/util_mask_file.py`）
-- 使用 7.4 节命令行时：**clize**（≥5，见 `requirements-cli.txt`）
+- 使用 §7.6 命令行时：**clize**（≥5，见 `requirements-cli.txt`）
 
 具体版本请与业务环境（如 107 服务器/Meteva 栈）对齐。
 

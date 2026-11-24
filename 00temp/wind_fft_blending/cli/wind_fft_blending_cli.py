@@ -1,226 +1,286 @@
 # -*- coding: utf-8 -*-
-"""多风场 FFT 融合命令行。
+"""多风场 FFT 融合。
 
-在本包目录执行::
+``process`` 只排任务。一个任务在 ``_process``：读入 → ``FFTMergePlugin.process`` → 写出。
+``pro_count>1`` 时用 ``SimpleParallelTool``，否则串行。显式 ``is_multi=False`` 强制串行。
 
-    python -m cli --main-uv <主风场.m11> --ass-uv <辅助风场.m11>
-    python cli/wind_fft_blending_cli.py --main-uv <主风场.m11> --ass-uv <辅助风场.m11>
+由 ``python -m wind_fft_blending`` 或 ``python -m utils.nimm_cli wind_fft_blending`` 启动。
 """
 from __future__ import annotations
 
-import argparse
+import os
+import shutil
 import sys
-from pathlib import Path
-from typing import Optional, Sequence
+import time
+from datetime import datetime
+from typing import List, Optional, Sequence, Union
 
-_ROOT = Path(__file__).resolve().parent.parent
-_SRC = _ROOT / "src"
-_00TEMP = _ROOT.parent
-for _p in (str(_ROOT), str(_SRC), str(_00TEMP)):
-    if _p in sys.path:
-        sys.path.remove(_p)
-sys.path.insert(0, str(_00TEMP))
-sys.path.insert(0, str(_SRC))
-sys.path.insert(0, str(_ROOT))
+_CLI_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_CLI_DIR)
+_SRC_DIR = os.path.join(_ROOT_DIR, "src")
+for _p in (_SRC_DIR, _ROOT_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-_TEST_DATA = (
-    _ROOT.parents[1].parent
-    / "NIMM_pip_testdata"
-    / "multi_wind_fft_blending"
-    / "test_data"
-)
-
-from utils.cli_base import CliBase
-
-_CONFIG_HELP = "运行配置文件，传给入口函数。相对路径按项目根目录解析。省略则用包内默认 ini。"
+from utils.merge_params import merge_params
+from utils.multipro_plugin import SimpleParallelTool
+from utils.util_env import PRESET
 
 
-class WindFftBlendingCli(CliBase):
-    """``wind_fft_blending`` 的命令行。``run`` 转调 ``main.process``。"""
+def _pkg_path(path: str) -> str:
+    expanded = os.path.expanduser(str(path))
+    if os.path.isabs(expanded):
+        return os.path.normpath(expanded)
+    return os.path.normpath(os.path.join(_ROOT_DIR, expanded))
 
-    description = (
-        "多风场 FFT 融合执行入口。\n"
-        "未在命令行给出的项先读 resource/conf.ini，ini 无该项再用代码预设。"
+
+def _as_str_list(value: Union[str, os.PathLike, Sequence]) -> List[str]:
+    if isinstance(value, (str, os.PathLike)):
+        text = os.fspath(value)
+        if "," in text:
+            return [_pkg_path(item.strip()) for item in text.split(",") if item.strip()]
+        return [_pkg_path(text)]
+    return [_pkg_path(os.fspath(item)) for item in value]
+
+
+def _netcdf_encoding(da):
+    name = da.name if da.name else "data0"
+    return {name: {"dtype": "int32", "scale_factor": 0.001, "_FillValue": -9999, "zlib": True}}
+
+
+def _del_dir_or_file(src_path):
+    try:
+        if not os.path.exists(src_path):
+            return True
+        if os.path.isdir(src_path):
+            shutil.rmtree(src_path, ignore_errors=True)
+        else:
+            os.remove(src_path)
+    except Exception:
+        pass
+
+
+def _prefix_list(value) -> List[str]:
+    if isinstance(value, (str, os.PathLike)):
+        text = os.fspath(value)
+        if "," in text:
+            return [item.strip() for item in text.split(",") if item.strip()]
+        return [text]
+    return [os.fspath(item) for item in value]
+
+
+def _normalize_cases(main_uv_path, ass_uv_path, output_dir, output_prefix):
+    """将入口参数规范为任务列表。"""
+    mains = _as_str_list(main_uv_path)
+    prefixes = _prefix_list(output_prefix)
+    output_dir = _pkg_path(output_dir)
+
+    if len(mains) == 1:
+        if len(prefixes) != 1:
+            raise ValueError("单主场时 output_prefix 只能有一个")
+        if isinstance(ass_uv_path, (str, os.PathLike)):
+            text = os.fspath(ass_uv_path)
+            ass = [_pkg_path(item.strip()) for item in text.split(",") if item.strip()] if "," in text else [_pkg_path(text)]
+        else:
+            ass = [_pkg_path(os.fspath(item)) for item in ass_uv_path]
+        if not ass:
+            raise ValueError("ass_uv_path 不能为空")
+        return [{
+            "main_uv_path": mains[0],
+            "ass_uv_path": ass,
+            "output_dir": output_dir,
+            "output_prefix": prefixes[0],
+        }]
+
+    if len(prefixes) != len(mains):
+        raise ValueError("多主场时 output_prefix 数量须与 main_uv_path 一致")
+    if isinstance(ass_uv_path, (str, os.PathLike)):
+        raise ValueError("多主场时 ass_uv_path 须为与主场等长的列表")
+    ass_list = list(ass_uv_path)
+    if len(ass_list) != len(mains):
+        raise ValueError("多主场时 ass_uv_path 数量须与 main_uv_path 一致")
+
+    cases = []
+    for main_p, ass_p, prefix in zip(mains, ass_list, prefixes):
+        if isinstance(ass_p, (str, os.PathLike)):
+            ass_one = _pkg_path(os.fspath(ass_p))
+        else:
+            ass_one = [_pkg_path(os.fspath(item)) for item in ass_p]
+        cases.append({
+            "main_uv_path": main_p,
+            "ass_uv_path": ass_one,
+            "output_dir": output_dir,
+            "output_prefix": prefix,
+        })
+    return cases
+
+
+def _filled(value, key):
+    return PRESET[key] if value is None else value
+
+
+def _process(
+    main_uv_path: str,
+    ass_uv_path,
+    output_dir: str,
+    output_prefix: str,
+    feature_border: int = 128,
+    max_iterations: int = 1024,
+    move_percent: float = 1.0,
+    write_linear_compare: bool = True,
+    weight_value: float = 0.1,
+    power_model: int = 2,
+    l_scale: int = 1,
+    reflect_pad: int = 25,
+) -> bool:
+    """一个融合任务：读入风场，插件做频域对齐，写出结果。"""
+    if isinstance(ass_uv_path, (str, os.PathLike)):
+        ass_uv_paths: List[str] = [os.fspath(ass_uv_path)]
+    else:
+        ass_uv_paths = [os.fspath(item) for item in ass_uv_path]
+    if not ass_uv_paths:
+        print("ass_uv_path 不能为空")
+        return False
+    if not os.path.isfile(main_uv_path):
+        print(f"主风场不存在: {main_uv_path}")
+        return False
+    for path in ass_uv_paths:
+        if not os.path.isfile(path):
+            print(f"辅助风场不存在: {path}")
+            return False
+    if not (0.0 < float(move_percent) <= 1.0):
+        print("move_percent 须满足 (0, 1]")
+        return False
+
+    from meteva import base as meb
+    from wind_fft_blending_plugin import FFTMergePlugin
+
+    os.makedirs(output_dir, exist_ok=True)
+    prefix = str(output_prefix).strip() or "fft_merge"
+    print(f"主风场: {main_uv_path}")
+    print(f"辅助风场: {ass_uv_paths}")
+    print(f"执行结果保存目录：{output_dir}")
+
+    # 读入主场与辅助场
+    print("******开始读取输入数据")
+    uv1_da = meb.read_gridwind_from_micaps11(main_uv_path)
+    print(f"读取完成：{main_uv_path}")
+    uv2_da_list = []
+    for path in ass_uv_paths:
+        da = meb.read_gridwind_from_micaps11(path)
+        uv2_da_list.append(da)
+        print(f"读取完成：{path}")
+
+    muv_path = os.path.join(output_dir, f"{prefix}_fft_uv.nc")
+    muv_m11_path = os.path.join(output_dir, f"{prefix}_fft_uv.m11")
+    _del_dir_or_file(muv_path)
+    _del_dir_or_file(muv_m11_path)
+
+    # 频域对齐融合
+    print("******开始进行FFT融合")
+    s_time = time.time()
+    muv_da = FFTMergePlugin(
+        weight_value=weight_value,
+        power_model=power_model,
+        l_scale=l_scale,
+        reflect_pad=reflect_pad,
+    ).process(
+        uv1_da,
+        uv2_da_list,
+        feature_border=int(feature_border),
+        max_iterations=int(max_iterations),
+        move_percent=float(move_percent),
     )
-    epilog = (
-        "命令行示例（在本包根目录执行）:\n"
-        "  python -m cli --help\n"
-        "  python -m cli --main-uv <主风场.m11> --ass-uv <辅助风场.m11> "
-        "--output-dir resource/output --output-prefix sample_a\n\n"
-        "样例数据目录（与 NIMM_pip_repos 同级）:\n"
-        f"  {_TEST_DATA}\n\n"
-        "单任务示例:\n"
-        "  python -m cli \\\n"
-        f"    --main-uv {_TEST_DATA}/sample_a1_uv.m11 \\\n"
-        f"    --ass-uv {_TEST_DATA}/sample_a2_uv.m11 \\\n"
-        f"    --output-dir {_TEST_DATA} \\\n"
-        "    --output-prefix sample_a\n\n"
-        "多任务 + 多进程示例:\n"
-        "  python -m cli \\\n"
-        f"    --main-uv {_TEST_DATA}/sample_a1_uv.m11 {_TEST_DATA}/sample_b1_uv.m11 \\\n"
-        f"    --ass-uv {_TEST_DATA}/sample_a2_uv.m11 {_TEST_DATA}/sample_b2_uv.m11 \\\n"
-        "    --output-prefix sample_a sample_b \\\n"
-        f"    --output-dir {_TEST_DATA} \\\n"
-        "    --is-multi --pro-count 2\n"
+    muv_da.to_netcdf(muv_path, encoding=_netcdf_encoding(muv_da))
+    print(f"FFT融合结果保存成功: {muv_path}")
+    print(f"FFT融合完成, 耗时：{round(time.time() - s_time, 4)}s")
+    meb.write_griddata_to_micaps11(muv_da, muv_m11_path)
+    print(f"FFT风速结果micaps11保存成功（为了方便对比结果）:{muv_m11_path}")
+
+    # 可选：线性平均对比场
+    if write_linear_compare:
+        luv_path = os.path.join(output_dir, f"{prefix}_line_uv.nc")
+        luv_m11_path = os.path.join(output_dir, f"{prefix}_line_uv.m11")
+        _del_dir_or_file(luv_path)
+        _del_dir_or_file(luv_m11_path)
+        print("******开始进行线性插值")
+        s_time = time.time()
+        luv_da = uv1_da
+        for da in uv2_da_list:
+            luv_da = luv_da + da
+        luv_da = luv_da / float(1 + len(uv2_da_list))
+        luv_da.to_netcdf(luv_path, encoding=_netcdf_encoding(luv_da))
+        print(f"线性插值结果保存成功: {luv_path}")
+        print(f"线性插值执行完成, 耗时：{round(time.time() - s_time, 4)}s")
+        meb.write_griddata_to_micaps11(luv_da, luv_m11_path)
+        print(f"线性插值风速micaps11结果保存成功（为了方便对比结果）:{luv_m11_path}")
+
+    print("执行完毕")
+    return True
+
+
+@merge_params(anchor=__file__)
+def process(
+    main_uv_path=None,
+    ass_uv_path=None,
+    output_dir: str = None,
+    output_prefix=None,
+    feature_border: int = None,
+    max_iterations: int = None,
+    move_percent: float = None,
+    write_linear_compare: bool = None,
+    is_multi: bool = None,
+    pro_count: int = None,
+    weight_value: float = None,
+    power_model: int = None,
+    l_scale: int = None,
+    reflect_pad: int = None,
+    config=None,
+):
+    """展开融合任务。``pro_count>1`` 时并行调用 ``_process``。"""
+    _ = config
+    if main_uv_path is None:
+        raise ValueError("main_uv_path 未显式传入，且 resource/conf.ini 的 main_uv_path 为空")
+    if ass_uv_path is None:
+        raise ValueError("ass_uv_path 未显式传入，且 resource/conf.ini 的 ass_uv_path 为空")
+    output_dir = _filled(output_dir, "output_dir")
+    output_prefix = _filled(output_prefix, "output_prefix")
+    common = dict(
+        feature_border=int(_filled(feature_border, "feature_border")),
+        max_iterations=int(_filled(max_iterations, "max_iterations")),
+        move_percent=float(_filled(move_percent, "move_percent")),
+        write_linear_compare=bool(_filled(write_linear_compare, "write_linear_compare")),
+        weight_value=float(_filled(weight_value, "weight_value")),
+        power_model=int(_filled(power_model, "power_model")),
+        l_scale=int(_filled(l_scale, "l_scale")),
+        reflect_pad=int(_filled(reflect_pad, "reflect_pad")),
     )
+    cases = _normalize_cases(main_uv_path, ass_uv_path, output_dir, output_prefix)
+    count = int(_filled(pro_count, "pro_count") or 1)
+    # 旧调用仍可传 is_multi；真正的分支只看进程数
+    if is_multi is False:
+        count = 1
+    elif is_multi is True and count <= 1:
+        count = 2
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--main-uv",
-            dest="main_uv_path",
-            nargs="+",
-            default=None,
-            help="主风场 Micaps11；可传多个表示多个任务。省略则读 ini 的 main_uv_path",
-        )
-        parser.add_argument(
-            "--ass-uv",
-            dest="ass_uv_path",
-            nargs="+",
-            default=None,
-            help="辅助风场 Micaps11。单主场时可多个，多主场时数量须与主场一致。省略则读 ini 的 ass_uv_path",
-        )
-        parser.add_argument(
-            "--output-dir",
-            default=None,
-            help="输出目录。省略则读 ini 的 output_dir，预设 resource/output",
-        )
-        parser.add_argument(
-            "--output-prefix",
-            nargs="+",
-            default=None,
-            help="输出文件名前缀；多主场时数量须与主场一致。省略则读 ini，预设 fft_merge",
-        )
-        parser.add_argument(
-            "--feature-border",
-            type=int,
-            default=None,
-            help="FFT 特征匹配网格边长。省略则读 ini 的 feature_border，预设 128",
-        )
-        parser.add_argument(
-            "--max-iterations",
-            type=int,
-            default=None,
-            help="位移场求解最大迭代次数。省略则读 ini，预设 1024",
-        )
-        parser.add_argument(
-            "--move-percent",
-            type=float,
-            default=None,
-            help="主场向辅助场移动比例 (0, 1]。省略则读 ini，预设 1.0",
-        )
-        parser.add_argument(
-            "--write-linear-compare",
-            dest="write_linear_compare",
-            action="store_true",
-            default=None,
-            help="写出线性平均对比结果。省略则读 ini，预设开启",
-        )
-        parser.add_argument(
-            "--no-write-linear-compare",
-            dest="write_linear_compare",
-            action="store_false",
-            default=None,
-            help="不写出线性平均对比结果",
-        )
-        parser.add_argument(
-            "--is-multi",
-            dest="is_multi",
-            action="store_true",
-            default=None,
-            help="多任务时多进程执行。省略则读 ini，预设关闭（串行）",
-        )
-        parser.add_argument(
-            "--no-is-multi",
-            dest="is_multi",
-            action="store_false",
-            default=None,
-            help="多任务时串行执行",
-        )
-        parser.add_argument(
-            "--pro-count",
-            type=int,
-            default=None,
-            help="多进程并行数（--is-multi 时生效）。省略则读 ini，预设 4",
-        )
-        parser.add_argument(
-            "--weight-value", dest="weight_value", type=float, default=None,
-            help="频域约束权重。省略则读 ini，预设 0.1",
-        )
-        parser.add_argument(
-            "--power-model", dest="power_model", type=int, default=None,
-            help="平滑滤波幂律指数，2 或 4。省略则读 ini，预设 2",
-        )
-        parser.add_argument(
-            "--l-scale", dest="l_scale", type=int, default=None,
-            help="FFT 谱域尺度比率。省略则读 ini，预设 1",
-        )
-        parser.add_argument(
-            "--reflect-pad", dest="reflect_pad", type=int, default=None,
-            help="反射边界像素。省略则读 ini，预设 25",
-        )
-        parser.add_argument(
-            "--config",
-            dest="config",
-            default=None,
-            metavar="PATH",
-            help=_CONFIG_HELP,
-        )
-
-    def run(
-        self,
-        main_uv_path=None,
-        ass_uv_path=None,
-        output_dir=None,
-        output_prefix=None,
-        feature_border=None,
-        max_iterations=None,
-        move_percent=None,
-        write_linear_compare=None,
-        is_multi=None,
-        pro_count=None,
-        weight_value=None,
-        power_model=None,
-        l_scale=None,
-        reflect_pad=None,
-        config=None,
-    ) -> int:
-        from main import process
-
-        try:
-            result = process(
-                main_uv_path=main_uv_path,
-                ass_uv_path=ass_uv_path,
-                output_dir=output_dir,
-                output_prefix=output_prefix,
-                feature_border=feature_border,
-                max_iterations=max_iterations,
-                move_percent=move_percent,
-                write_linear_compare=write_linear_compare,
-                is_multi=is_multi,
-                pro_count=pro_count,
-                weight_value=weight_value,
-                power_model=power_model,
-                l_scale=l_scale,
-                reflect_pad=reflect_pad,
-                config=config,
-            )
-        except Exception as exc:
-            print(f"执行失败: {exc}", file=sys.stderr)
-            return 1
-
-        if isinstance(result, list):
-            return 0 if result and all(result) else 1
-        return 0 if result else 1
-
-
-def _build_arg_parser() -> argparse.ArgumentParser:
-    return WindFftBlendingCli().build_parser()
-
-
-def wind_fft_blending_cli(argv: Optional[Sequence[str]] = None) -> int:
-    """命令行入口。``python -m cli`` 与直接运行本文件都进这里。"""
-    return WindFftBlendingCli().main(argv)
-
-
-if __name__ == "__main__":
-    raise SystemExit(wind_fft_blending_cli())
+    if count > 1 and len(cases) > 1:
+        sw_all = datetime.now()
+        results = SimpleParallelTool(
+            target_func=_process,
+            parallel_mode="async",
+            with_return=True,
+            num_process=count,
+            fixed_params=common,
+        ).process({
+            "main_uv_path": [case["main_uv_path"] for case in cases],
+            "ass_uv_path": [case["ass_uv_path"] for case in cases],
+            "output_dir": [case["output_dir"] for case in cases],
+            "output_prefix": [case["output_prefix"] for case in cases],
+        })
+        print(">>> Time elasped: " + str((datetime.now() - sw_all).total_seconds()))
+        results = list(results) if results is not None else []
+    else:
+        results = [_process(**case, **common) for case in cases]
+    if len(cases) == 1:
+        return results[0]
+    return results

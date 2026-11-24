@@ -41,7 +41,7 @@ def test_resolve_existing_path_missing_returns_none(tmp_path):
 
 
 def test_describe_task_io_finds_m4_suffix(tmp_path):
-    from runner import _describe_task_io
+    from frequency_matching_rain03_plugin_util import describe_task_io
 
     dt = datetime(2026, 8, 20, 0, 0)
     model_dir = tmp_path / "20260820"
@@ -49,7 +49,7 @@ def test_describe_task_io_finds_m4_suffix(tmp_path):
     (model_dir / "2026082000.003.m4").write_text("x", encoding="utf-8")
     model_tpl = str(tmp_path / "YYYYMMDD" / "YYYYMMDDHH.VVV")
     out_tpl = str(tmp_path / "out" / "YYYYMMDDHH.VVV")
-    info = _describe_task_io(model_tpl, out_tpl, dt, 3)
+    info = describe_task_io(model_tpl, out_tpl, dt, 3)
     assert info["model_missing"] is False
     assert info["model_path"].endswith(".m4")
     assert info["output_exists"] is False

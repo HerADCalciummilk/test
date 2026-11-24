@@ -1,3 +1,7 @@
+
+from utils.point_data import PointData
+from utils.scatter_data import ScatterData
+
 class LineData:
     def __init__(self, *args):
         if len(args) == 2:
@@ -42,14 +46,11 @@ class LineData:
             raise Exception("LineData: invalid arguments")
 
     def to_scatter_data(self):
-        from utils.point_data import PointData
-        from utils.scatter_data import ScatterData
         arr = [PointData(self.point_lon[i], self.point_lat[i], self.line_value)
                for i in range(self.point_num)]
         return ScatterData(arr)
 
     def to_point_data_array(self):
-        from utils.point_data import PointData
         return [PointData(self.point_lon[i], self.point_lat[i], self.line_value)
                 for i in range(self.point_num)]
 

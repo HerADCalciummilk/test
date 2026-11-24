@@ -268,17 +268,24 @@ $$
 
 ---
 
-## 6. 配置与参数说明
+## 6. 参数说明
 
-### 6.1 `resource/qpf_fm.ini`
+### 6.1 运行参数（`resource/qpf_fm.ini`）
 
-| 键 | 默认值 | 说明 |
-|----|--------|------|
-| `log_file` | `log/YYYYMMDD.txt` | 运行日志路径模板 |
-| `config_json` | `resource/config.json` | 网格与分块配置 |
-| `path_json` | `resource/path.json` | 模式/实况/输出路径 |
-| `station_info` | `resource/sta.info` | 站点列表 |
-| `mask_file` | `resource/mask010.dat` | 区域掩膜 |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `log_file` | `str` | 运行日志路径模板；默认 `log/YYYYMMDD.txt` |
+| `config_json` | `path` | 网格与分块配置；默认 `resource/config.json` |
+| `path_json` | `path` | 模式/实况/输出路径；默认 `resource/path.json` |
+| `station_info` | `path` | 站点列表；默认 `resource/sta.info` |
+| `mask_file` | `path` | 区域掩膜；默认 `resource/mask010.dat` |
+| `data_key` | `str` | 模式键（`configs` 下）；默认 `path.json` 的 `default` |
+| `run_times` | `list[str]` | 起报时刻或闭区间（步长 1 h）；默认当前时刻 |
+| `pro_count` | `int` | 起报循环并行进程数；默认 `1` |
+| `sample_workers` | `int` | 历史样本加载线程数；默认 4 |
+| `block_workers` | `int` | 空间分块线程数；默认 1 |
+| `valid_workers` | `int` | 时效级进程池 worker 上限；默认 1 |
+| `fixed_seed` | `int` | 频率匹配排序随机种子（可复现） |
 
 相对路径均相对**仓库根目录**展开为绝对路径。
 
@@ -297,38 +304,38 @@ $$
 }
 ```
 
-| 字段 | 说明 |
-|------|------|
-| `default` | 未指定模式键时的默认 config |
-| `model_template` | 模式 1 h 降水路径；支持 `YYYY MM DD HH VVV` 占位 |
-| `fact_template` | 实况 MICAPS3 路径；时效 0 表示观测时刻 |
-| `output_template` | 输出前缀（程序自动追加 `.m3` / `.m4`） |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `default` | `str` | 未指定模式键时的默认 config |
+| `model_template` | `str` | 模式 1 h 降水路径；支持 `YYYY MM DD HH VVV` 占位 |
+| `fact_template` | `str` | 实况 MICAPS3 路径；时效 0 表示观测时刻 |
+| `output_template` | `str` | 输出前缀（程序自动追加 `.m3` / `.m4`） |
 
 **路径占位符**（`date_replace`）：
 
-| 占位符 | 含义 | 示例 |
+| 参数 | 类型 | 含义 |
 |--------|------|------|
-| `YYYY` / `YY` | 年 | 2026 |
-| `MM` / `DD` / `HH` / `NN` / `SS` | 月日时分秒 | 04 / 08 / 11 / 30 / 00 |
-| `VVV` / `VV` | 预报时效（小时，零填充） | 012 / 12 |
+| `YYYY` / `YY` | `str` | 年；示例 2026 |
+| `MM` / `DD` / `HH` / `NN` / `SS` | `str` | 月日时分秒；示例 04 / 08 / 11 / 30 / 00 |
+| `VVV` / `VV` | `str` | 预报时效（小时，零填充）；示例 012 / 12 |
 
 ### 6.3 `resource/config.json`
 
-| 字段 | 默认 | 说明 |
+| 参数 | 类型 | 含义 |
 |------|------|------|
-| `lon_start` / `lon_end` | 70 / 140 | 目标域经度范围（°E） |
-| `lat_start` / `lat_end` | 0 / 60 | 目标域纬度范围（°N） |
-| `dlon` / `dlat` | 0.1 / 0.1 | 输出网格分辨率（°） |
-| `expand` | 1.0 | 分块样本区相对订正区的外扩（°） |
-| `background_stride` | 5 | MICAPS4 背景场稀疏采样步长（格点） |
-| `short_lon_edges` | 9 个经度点 | 短时效经向分块边界 |
-| `short_lat_edges` | 8 个纬度点 | 短时效纬向分块边界 |
-| `long_lon_edges` | [70, 140] | 长时效经向边界（整域） |
-| `long_lat_edges` | [0, 60] | 长时效纬向边界（整域） |
-| `mask_file` | `mask010.dat` | 掩膜文件名（位于 `mask_file` 所在 resource 目录） |
-| `mask_source_*` | 70–140°E, 0–60°N, 0.1° | 掩膜原始二进制网格定义 |
+| `lon_start` / `lon_end` | `float` | 目标域经度范围（°E）；默认 70 / 140 |
+| `lat_start` / `lat_end` | `float` | 目标域纬度范围（°N）；默认 0 / 60 |
+| `dlon` / `dlat` | `float` | 输出网格分辨率（°）；默认 0.1 / 0.1 |
+| `expand` | `float` | 分块样本区相对订正区的外扩（°）；默认 1.0 |
+| `background_stride` | `int` | MICAPS4 背景场稀疏采样步长（格点）；默认 5 |
+| `short_lon_edges` | `list[float]` | 短时效经向分块边界；默认 9 个经度点 |
+| `short_lat_edges` | `list[float]` | 短时效纬向分块边界；默认 8 个纬度点 |
+| `long_lon_edges` | `list[float]` | 长时效经向边界（整域）；默认 [70, 140] |
+| `long_lat_edges` | `list[float]` | 长时效纬向边界（整域）；默认 [0, 60] |
+| `mask_file` | `str` | 掩膜文件名（位于 `mask_file` 所在 resource 目录）；默认 `mask010.dat` |
+| `mask_source_*` | `float` | 掩膜原始二进制网格定义；默认 70–140°E, 0–60°N, 0.1° |
 
-### 6.4 算法内置常量（`src/runner.py`）
+### 6.4 算法内部常量（代码内，非 ini / JSON）
 
 **分块订正等级 `FACT_LEVEL`（mm）**：
 
@@ -342,7 +349,7 @@ $$
 
 `0.01, 0.1, 0.5, 1, 2.5, 5, 7.5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 250`
 
-### 6.5 命令行参数
+### 6.5 命令行参数（CLI / `process`）
 
 ```powershell
 python -m cli --help
@@ -352,17 +359,17 @@ python -m cli ecmwf 202604081130 202604081800   # 起报时次范围（步长 1 
 python -m cli --data-key ecmwf --start 202604081130 --end 202604081800
 ```
 
-| 参数形式 | 说明 |
-|----------|------|
-| `--data-key` / 第 1 个非时间 token | 模式键（对应 `path.json` → `configs`） |
-| `--start` / `YYYYMMDDHHMM` × 1 | 单个运行时刻 |
-| `--end` / `YYYYMMDDHHMM` × 2 | 起止时刻，闭区间，步长 1 小时 |
-| 缺省时刻 | 使用 `datetime.now()` |
-| 模块调用 | `from runner import process` → `process(data_key=..., run_times=...)` |
+| 参数 | 类型 | 含义 |
+|----------|------|------|
+| `--data-key` / 第 1 个非时间 token | `str` | 模式键（对应 `path.json` → `configs`） |
+| `--start` / `YYYYMMDDHHMM` × 1 | `str` | 单个运行时刻 |
+| `--end` / `YYYYMMDDHHMM` × 2 | `str` | 起止时刻，闭区间，步长 1 小时 |
+| 缺省时刻 | — | 使用 `datetime.now()` |
+| 模块调用 | — | `from runner import process` → `process(data_key=..., run_times=...)` |
 
 ---
 
-## 7. 运行方式
+## 7. 运行示例
 
 ### 7.1 环境准备
 

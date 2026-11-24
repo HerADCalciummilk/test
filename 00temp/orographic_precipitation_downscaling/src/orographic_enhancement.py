@@ -44,11 +44,11 @@ from orographic_precipitation_downscaling.src.utils._grid import (
     _regrid_scalar_field,
     _sort_spatial_dataarray,
 )
-from orographic_precipitation_downscaling.src.utils._numerics import (
+from orographic_precipitation_downscaling.src.util_plugin import (
     _regridded_adjacent_gradient,
     _square_neighbourhood_mean,
+    calculate_svp_in_air,
 )
-from orographic_precipitation_downscaling.src.utils._svp import calculate_svp_in_air
 
 R_WATER_VAPOUR = 461.6  # 水汽气体常数，单位 J K-1 kg-1
 
@@ -747,6 +747,7 @@ class OrographicEnhancement(BasePlugin):
         # --- 7. 地形增强计算内核（二维）---
         vgradz = self._calculate_vgradz(self.uwind, self.vwind, self.topography, y_spacing_m, x_spacing_m)
         mask = self._generate_mask(self.topography, self.humidity, vgradz)
+        # 饱和水汽压查表后得到格点增强，再叠加上游贡献
         svp = calculate_svp_in_air(self.temperature, self.pressure)
         point_orogenh = self._point_orogenh(self.temperature, self.humidity, svp, vgradz, mask)
         orogenh_mmh = self._add_upstream_component(point_orogenh)

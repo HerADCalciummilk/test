@@ -3,7 +3,7 @@
 
 取值优先级：显式参数 > ini 非空项 > ``PRESET``。
 站点 ``sta`` 必填；``grid`` / ``background`` 至少其一；
-``reprocess=true`` / ``idw_delta`` 时须 ``background``。
+``reprocess=true`` 时须 ``background``。
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ PRESET: Dict[str, Any] = {
     "effect_r": 1000,
     "near_num": 8,
     "decrease": 2,
+    "gaussian": False,
     "half_r": 20,
     "kriging_model": "spherical",
     "kriging_near_num": 20,
@@ -30,7 +31,7 @@ PRESET: Dict[str, Any] = {
     "cressman_near_num": 100,
 }
 
-# total 为旧入口别名，等价于 idw
+# total 为 idw 旧别名；delta / idw-delta 为 idw_delta 旧别名
 _MODULE_ALIASES = {
     "total": "idw",
     "delta": "idw_delta",
@@ -255,6 +256,7 @@ def resolve_args(
     effect_r: Optional[int] = None,
     near_num: Optional[int] = None,
     decrease: Optional[int] = None,
+    gaussian: Any = None,
     half_r: Optional[int] = None,
     kriging_model: Optional[str] = None,
     kriging_sill: Optional[float] = None,
@@ -288,6 +290,7 @@ def resolve_args(
             effect_r=effect_r,
             near_num=near_num,
             decrease=decrease,
+            gaussian=gaussian,
             half_r=half_r,
             kriging_model=kriging_model,
             kriging_sill=kriging_sill,
@@ -346,6 +349,7 @@ def _resolve_args(
     effect_r: Optional[int] = None,
     near_num: Optional[int] = None,
     decrease: Optional[int] = None,
+    gaussian: Any = None,
     half_r: Optional[int] = None,
     kriging_model: Optional[str] = None,
     kriging_sill: Optional[float] = None,
@@ -367,7 +371,7 @@ def _resolve_args(
         reprocess, "cli", "reprocess", bool(PRESET["reprocess"])
     )
     if name == "idw_delta":
-        # 兼容模块：固定偏差路径，与 --reprocess true 相同，且须 background
+        # 历史模块：固定偏差路径，须 background
         do_reprocess = True
     if not grid_path and not bg_path:
         raise ValueError(
@@ -446,10 +450,30 @@ def _resolve_args(
             raise ValueError("near_num 必须大于等于 1")
         return resolved
 
-    # idw / idw_delta：共用 effect_r / near_num / decrease（节名与 module 同名）
-    resolved["effect_r"] = _pick_int(effect_r, name, "effect_r", int(PRESET["effect_r"]))
-    resolved["near_num"] = _pick_int(near_num, name, "near_num", int(PRESET["near_num"]))
-    resolved["decrease"] = _pick_int(decrease, name, "decrease", int(PRESET["decrease"]))
+    # idw / idw_delta：effect_r / near_num / decrease / gaussian（参数节优先 [idw]）
+    param_sec = "idw" if name in ("idw", "idw_delta") else name
+    resolved["effect_r"] = _pick_int(
+        effect_r, param_sec, "effect_r", int(PRESET["effect_r"])
+    )
+    resolved["near_num"] = _pick_int(
+        near_num, param_sec, "near_num", int(PRESET["near_num"])
+    )
+    resolved["decrease"] = _pick_int(
+        decrease, param_sec, "decrease", int(PRESET["decrease"])
+    )
+    if name == "idw_delta":
+        resolved["gaussian"] = True
+    elif gaussian is not None and not (
+        isinstance(gaussian, str) and not str(gaussian).strip()
+    ):
+        resolved["gaussian"] = _as_bool(gaussian, False)
+    else:
+        raw_g = _raw("idw", "gaussian")
+        if raw_g is not None:
+            resolved["gaussian"] = _as_bool(raw_g, False)
+        else:
+            # 未显式指定：reprocess=True 默认 IDW×高斯
+            resolved["gaussian"] = bool(do_reprocess)
     if resolved["effect_r"] <= 0:
         raise ValueError("effect_r 必须大于 0")
     if resolved["near_num"] < 1:

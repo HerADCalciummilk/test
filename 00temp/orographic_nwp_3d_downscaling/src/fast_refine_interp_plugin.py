@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+from utils.base_plugin import BasePlugin
 
 _THRESHOLD_KEYS = (
     "2t",
@@ -20,7 +28,7 @@ _THRESHOLD_KEYS = (
 
 
 @dataclass
-class FastRefineInterpPlugin:
+class FastRefineInterpPlugin(BasePlugin):
     """快速精细化插值插件。
 
     插件只负责接收显式参数并调用算法入口；具体的模式数据、地形数据、
@@ -74,7 +82,16 @@ class FastRefineInterpPlugin:
         Para_parallel=None,
         Para_max_pcount=None,
         Para_timeout=None,
-        **threshold,
+        _2t=None,
+        _2rh=None,
+        _10ws=None,
+        _10u=None,
+        _10v=None,
+        _2t_max=None,
+        _2t_min=None,
+        _2rh_max=None,
+        _2rh_min=None,
+        _10ws_max=None,
     ):
         """Run fast refined interpolation with the configured parameters.
 
@@ -84,16 +101,24 @@ class FastRefineInterpPlugin:
         其余参数对应 resource/conf.ini。``None`` 表示用 ini；ini 缺键时用 conf.ini 里的预设。
         ``validate`` 是 InstantInfo.validate，``maxmin_validate`` 是 MaxMinInfo.validate。
         ``maxmin_update`` 是 MaxMinInfo.update，与构造参数 ``update``（0/1 强制更新）不是同一项。
-        阈值键 ``2t``、``2rh``、``10ws``、``10u``、``10v``、``2t_max``、``2t_min``、
-        ``2rh_max``、``2rh_min``、``10ws_max`` 用关键字传入。
+        阈值要素写成具名参数 ``_2t``、``_2rh``、``_10ws``、``_10u``、``_10v``、
+        ``_2t_max``、``_2t_min``、``_2rh_max``、``_2rh_min``、``_10ws_max``，
+        再写回 ``threshold.2t`` 等键。
         """
         from .fast_refine_interp import run_fast_refine
 
-        unknown = sorted(set(threshold) - _THRESHOLD_KEYS)
-        if unknown:
-            names = ", ".join(unknown)
-            raise TypeError(f"未知参数: {names}")
-
+        threshold = {
+            "2t": _2t,
+            "2rh": _2rh,
+            "10ws": _10ws,
+            "10u": _10u,
+            "10v": _10v,
+            "2t_max": _2t_max,
+            "2t_min": _2t_min,
+            "2rh_max": _2rh_max,
+            "2rh_min": _2rh_min,
+            "10ws_max": _10ws_max,
+        }
         overrides = {}
         if self.ini_overrides:
             for key, value in self.ini_overrides.items():

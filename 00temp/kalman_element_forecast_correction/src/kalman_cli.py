@@ -130,6 +130,7 @@ def process(
                 print(f"错误：预报文件不存在：{fcst_file}")
                 continue
             fcst = _read_forecast(fcst_file, grid_info)
+            # 用平均误差场订正预报
             result = KalmanFix()(fcst, me_before=kal_me)
 
             if maskout is not None:
@@ -172,6 +173,7 @@ def kalman_me_update_timerange(
 ):
     """Update Kalman ME from ``time_back`` to ``time_max``."""
     meb = require_meteva_base()
+    # 用最新预报和实况更新平均误差
     kalme_plugin = KalmanME(alpha=alpha, is_mae=is_mae)
     flag, time_kal = find_files_in_timerange(
         kalme_path,

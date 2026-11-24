@@ -2,9 +2,11 @@
 """ini 补齐与统一 CLI 缺省参数。"""
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
-from kalman_element_forecast_correction.cli import parse_args
+from kalman_element_forecast_correction.cli.kalman_element_forecast_correction_cli import process
 from kalman_element_forecast_correction.utils.util_env import (
     clear_ini_cache,
     resolve_kalman,
@@ -43,12 +45,10 @@ def test_trans_explicit_overrides_ini() -> None:
 
 
 def test_cli_omitted_args_are_none() -> None:
-    args = parse_args([])
-    assert args.module is None
-    assert args.start_date is None
-    assert args.alpha is None
-    chosen = parse_args(["--module", "kalman", "--start-date", "20260401", "--variables", "SWVL"])
-    assert chosen.module == "kalman"
-    assert chosen.start_date == "20260401"
-    assert chosen.variables == "SWVL"
-    assert chosen.back_days is None
+    params = inspect.signature(process).parameters
+    assert params["module"].default is None
+    assert params["start_date"].default is None
+    assert params["alpha"].default is None
+    assert params["date"].default is None
+    assert params["back_days"].default is None
+    assert params["variables"].default is None

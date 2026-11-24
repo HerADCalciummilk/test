@@ -1,107 +1,113 @@
-"""统一命令行入口。在本包目录执行 ``python -m cli``。
+# -*- coding: utf-8 -*-
+"""Kalman 要素预报订正。
 
-也可直接运行本文件::
-
-    python cli/kalman_element_forecast_correction_cli.py --module kalman
+``process`` 按 ``module`` 调度订正或拷贝。
+订正链路调用 ``run_variable``，其中使用 ``KalmanME`` 与 ``KalmanFix``。
+配置键都是具名参数。``None`` 再读 ini。
 """
 from __future__ import annotations
 
-import argparse
-import importlib
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Sequence
+
+_ROOT = Path(__file__).resolve().parent.parent
+_PARENT = _ROOT.parent
+for _path in (str(_ROOT), str(_PARENT)):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+from kalman_element_forecast_correction.utils.util_env import (
+    resolve_kalman,
+    resolve_module,
+    resolve_trans,
+)
+from utils.merge_params import merge_params
 
 
-def _bootstrap_paths() -> None:
-    root = Path(__file__).resolve().parent.parent
-    parent = root.parent
-    root_s = str(root)
-    parent_s = str(parent)
-    if root_s not in sys.path:
-        sys.path.insert(0, root_s)
-    if parent_s not in sys.path:
-        sys.path.append(parent_s)
+def _date_range(start_date: str, end_date: str) -> tuple[datetime, datetime]:
+    if start_date:
+        start_time = datetime.strptime(start_date, "%Y%m%d")
+        end_time = datetime.strptime(end_date or start_date, "%Y%m%d")
+        print(f"手动模式：处理 {start_time:%Y%m%d} 至 {end_time:%Y%m%d}")
+        return start_time, end_time
+    yesterday = datetime.now() - timedelta(days=1)
+    start_time = datetime(yesterday.year, yesterday.month, yesterday.day)
+    print(f"实时模式：自动处理前一天 {start_time:%Y-%m-%d}")
+    return start_time, start_time
 
 
-_bootstrap_paths()
-
-from kalman_element_forecast_correction.utils.util_env import resolve_module
-from utils.cli_base import CliBase
-
-
-def _load_cli(name: str):
-    if __package__:
-        return importlib.import_module(f".{name}", __package__)
-    return importlib.import_module(f"kalman_element_forecast_correction.cli.{name}")
-
-
-class KalmanElementForecastCorrectionCli(CliBase):
-    """Kalman 要素预报订正命令行。用 --module 选择订正或拷贝。"""
-
-    prog = "python -m cli"
-    description = (
-        "Kalman 要素预报订正命令行。\n"
-        "用 --module 选择：kalman（订正）、trans（拷贝源数据）。\n"
-        "未给出的项先读 resource/conf.ini，再没有则用预设。"
-    )
-    epilog = (
-        "示例（在本包目录执行）:\n"
-        "  python -m cli --module kalman\n"
-        "  python cli/kalman_element_forecast_correction_cli.py --module kalman\n"
-        "  python -m cli --module kalman --start-date 20260401 --end-date 20260405\n"
-        "  python cli/kalman_data.py --start-date 20260401 --end-date 20260405\n"
-        "  python -m cli --module trans --date 20260401\n"
-        "  python cli/trans_data.py --date 20260401\n"
-    )
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--module",
-            default=None,
-            choices=["kalman", "kalman_data", "trans", "trans_data"],
-            help="kalman=订正，trans=拷贝源数据。省略则读 ini 的 [cli] module",
-        )
-        parser.add_argument("--start-date", default=None, help="仅 kalman：开始日期 YYYYMMDD。省略则读 ini，再没有则用前一天")
-        parser.add_argument("--end-date", default=None, help="仅 kalman：结束日期 YYYYMMDD。省略则读 ini，再没有则等于开始日期")
-        parser.add_argument("--base-dir", default=None, help="仅 kalman：产品根目录。省略则读 ini，预设 /data234/GUO_data/Kalman_data")
-        parser.add_argument("--obs-root", default=None, help="仅 kalman：CLDAS 实况根目录。省略则读 ini")
-        parser.add_argument("--alpha", type=float, default=None, help="仅 kalman：误差更新系数。省略则读 ini，预设 0.15")
-        parser.add_argument("--back-days", type=int, default=None, help="仅 kalman：向前回溯天数。省略则读 ini，预设 5")
-        parser.add_argument("--variables", default=None, help="仅 kalman：逗号分隔变量。省略则读 ini，预设 SWVL,STL")
-        parser.add_argument("--obs-end-time", default=None, help="仅 kalman：最新观测时间 YYYYMMDDHH。省略则读 ini，空表示不限制")
-        parser.add_argument("--date", default=None, help="仅 trans：拷贝日期 YYYYMMDD。省略则读 ini，再没有则用前一天")
-        parser.add_argument("--swvl-source", default=None, help="仅 trans：SWVL 源目录。省略则读 ini")
-        parser.add_argument("--stl-source", default=None, help="仅 trans：STL 源目录。省略则读 ini")
-        parser.add_argument("--target-base", default=None, help="仅 trans：目标 process_data 根目录。省略则读 ini")
-        parser.add_argument(
-            "--config",
-            default=None,
-            metavar="PATH",
-            help="运行配置 ini。相对路径按本包目录解析。省略则使用 resource/conf.ini。",
+@merge_params(sections=("cli", "kalman", "trans"), anchor=__file__)
+def process(
+    module: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    base_dir: str = None,
+    obs_root: str = None,
+    alpha: float = None,
+    back_days: int = None,
+    variables: str = None,
+    obs_end_time: str = None,
+    date: str = None,
+    swvl_source: str = None,
+    stl_source: str = None,
+    target_base: str = None,
+    config: str = None,
+):
+    """按 module 运行订正或源数据拷贝。"""
+    name = resolve_module(module, config=config)
+    if name == "trans":
+        from kalman_element_forecast_correction.src.data_transfer import (
+            DEFAULT_TRANSFER_CONFIG,
+            TransferConfig,
+            copy_process_data,
         )
 
-    def run(self, config=None, module=None, **params) -> int:
-        name = resolve_module(module, config=config)
-        ns = argparse.Namespace(config=config, module=module, **params)
-        if name == "trans":
-            code = _load_cli("trans_data").run(ns)
-        else:
-            code = _load_cli("kalman_data").run(ns)
-        return 0 if code is None else int(code)
+        resolved = resolve_trans(
+            date=date,
+            swvl_source=swvl_source,
+            stl_source=stl_source,
+            target_base=target_base,
+            config=config,
+        )
+        run_date = datetime.strptime(resolved["date"], "%Y%m%d") if resolved["date"] else None
+        config_obj = TransferConfig(
+            source_bases={"SWVL": resolved["swvl_source"], "STL": resolved["stl_source"]},
+            target_base=resolved["target_base"],
+            level_mapping=DEFAULT_TRANSFER_CONFIG.level_mapping,
+        )
+        # 把 SWVL/STL 源场拷到处理目录
+        copy_process_data(run_date, config=config_obj)
+        return 0
 
+    resolved = resolve_kalman(
+        start_date=start_date,
+        end_date=end_date,
+        base_dir=base_dir,
+        obs_root=obs_root,
+        alpha=alpha,
+        back_days=back_days,
+        variables=variables,
+        obs_end_time=obs_end_time,
+        config=config,
+    )
+    start_time, end_time = _date_range(resolved["start_date"], resolved["end_date"])
+    variables_list = [item.strip().upper() for item in resolved["variables"].split(",") if item.strip()]
+    obs_end = datetime.strptime(resolved["obs_end_time"], "%Y%m%d%H") if resolved["obs_end_time"] else None
+    from kalman_element_forecast_correction.src.kalman_cli import run_variable
 
-def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    return KalmanElementForecastCorrectionCli().build_parser().parse_args(argv)
-
-
-def kalman_element_forecast_correction_cli(argv: Optional[Sequence[str]] = None) -> int:
-    """命令行入口。``python -m cli`` 与直接运行本文件都进这里。"""
-    return KalmanElementForecastCorrectionCli().main(argv)
-
-
-main = kalman_element_forecast_correction_cli
-
-
-if __name__ == "__main__":
-    raise SystemExit(kalman_element_forecast_correction_cli())
+    total_success = 0
+    # run_variable 内调用 KalmanME 与 KalmanFix
+    for variable in variables_list:
+        total_success += run_variable(
+            variable,
+            start_time,
+            end_time,
+            base_dir=resolved["base_dir"],
+            obs_root=resolved["obs_root"],
+            alpha=resolved["alpha"],
+            back_days=resolved["back_days"],
+            obs_end_time=obs_end,
+        )
+    print(f"全部 Kalman 任务完成，成功任务数：{total_success}")
+    return 0

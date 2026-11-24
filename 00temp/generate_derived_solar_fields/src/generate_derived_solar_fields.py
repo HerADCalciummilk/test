@@ -17,7 +17,7 @@ import meteva_base as meb
 from numpy import ndarray
 
 from generate_derived_solar_fields.utils.base_plugin import BasePlugin
-from generate_derived_solar_fields.src.utils.solar import (
+from generate_derived_solar_fields.src.util_plugin import (
     DAYS_IN_YEAR,
     MINUTES_IN_HOUR,
     SECONDS_IN_MINUTE,
@@ -80,6 +80,7 @@ class GenerateSolarTime(BasePlugin):
             raise TypeError("time 必须为 datetime。")
         valid_time = time
         _, lons_2d = extract_lat_lon_mesh(target_grid)
+        # 由日序和世界时计算地方太阳时
         day_of_year = get_day_of_year(valid_time)
         utc_hour = get_hour_of_day(valid_time)
         solar_time_data_2d = calc_solar_time(lons_2d, day_of_year, utc_hour, normalise=True)
@@ -276,6 +277,7 @@ class GenerateClearskySolarRadiation(BasePlugin):
         if not isinstance(time, datetime):
             raise TypeError("time 必须为 datetime。")
         valid_time = time
+        # 补齐海拔与 Linke 浑浊度
         surface_altitude, linke_turbidity = self._prepare_optional_inputs(
             target_grid, surface_altitude, linke_turbidity
         )
@@ -286,6 +288,7 @@ class GenerateClearskySolarRadiation(BasePlugin):
 
         surface_altitude_2d = np.asarray(surface_altitude.values.squeeze(), dtype=np.float32)
         linke_turbidity_2d = np.asarray(linke_turbidity.values.squeeze(), dtype=np.float32)
+        # 沿时间窗积分晴空辐射
         solar_radiation_2d = self._calc_clearsky_solar_radiation_data(
             target_grid,
             irradiance_times,

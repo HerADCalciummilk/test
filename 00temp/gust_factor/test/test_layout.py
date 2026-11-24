@@ -22,17 +22,27 @@ def test_required_paths_exist():
     assert not missing, "缺少路径:\n" + "\n".join(missing)
 
 
-def test_cli_help_runs():
-    import subprocess
-    import sys
+def test_process_signature():
+    import inspect
 
-    r = subprocess.run(
-        [sys.executable, "-m", "cli", "--help"],
-        cwd=str(_ROOT),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    assert r.returncode == 0, r.stderr
-    assert "gust_factor" in (r.stdout + r.stderr)
+    from cli.gust_factor_cli import process
+
+    assert callable(process)
+    names = inspect.signature(process).parameters
+    for dest in (
+        "mode",
+        "station_csv_dir",
+        "fore_hours",
+        "factor_path",
+        "u_path",
+        "v_path",
+        "fore_hour",
+        "output_path",
+        "make_png",
+        "show_png",
+        "ws_path",
+        "png_path",
+        "log_file",
+        "config",
+    ):
+        assert dest in names

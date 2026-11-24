@@ -1,4 +1,5 @@
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime, time
 from pathlib import Path
@@ -8,6 +9,13 @@ import h5py
 import numpy as np
 import xarray as xr
 
+_SRC = Path(__file__).resolve().parent
+_ROOT = _SRC.parent
+for _path in (str(_SRC), str(_ROOT)):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+from utils.base_plugin import BasePlugin
 from fy4agri.metadata import CHANNELS, attr_scalar, common_attrs, parse_channels
 from fy4agri.projection import latlon_to_fy4_grid
 from fy4agri.reader import read_calibrated_channel, sample_to_latlon
@@ -75,7 +83,7 @@ def parse_fy4_filename(path: Union[str, Path]) -> Optional[FY4FileInfo]:
     )
 
 
-class FY4BatchLatLonChannelPlugin:
+class FY4BatchLatLonChannelPlugin(BasePlugin):
     """Batch FY-4B AGRI L1 HDF parser plugin.
 
     It scans a base directory for 1050E/1330E FY-4B HDF files in a time range,
@@ -220,6 +228,7 @@ class FY4BatchLatLonChannelPlugin:
                 }
             )
 
+            # 逐通道定标并重采样到规则经纬度网格
             for channel_number in self.channels:
                 output_path = self._channel_output_path(channel_number, file_info)
                 source = read_calibrated_channel(hdf, channel_number)

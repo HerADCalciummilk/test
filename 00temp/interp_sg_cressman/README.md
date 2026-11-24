@@ -17,9 +17,9 @@ interp_sg_cressman/
 ├── nbs/              # Jupyter 说明
 ├── resource/         # interp_sg_cressman.ini 等
 ├── src/
-│   ├── runner.py              # 主程序 process
-│   ├── interp_sg_cressman.py  # 算法核心
-│   └── utils/util_env.py      # 读 ini
+│   ├── runner.py                       # 主程序 process
+│   ├── interp_sg_cressman_plugin.py    # InterpSgCressman
+│   └── utils/util_env.py               # 读 ini
 ├── test/
 ├── 00log/ / 00temp/
 └── utils/            # 仅 __init__：合并 ../../utils + src/utils

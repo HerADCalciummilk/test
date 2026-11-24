@@ -17,7 +17,7 @@
 
 输入为 meteva 经纬度网格；``level`` 维可大于 1，表示多仰角叠在同一 lat/lon 上
 （与体扫逐库计算对应，需预处理将各扫网格化后写入 ``level``）。单层网格等价于
-``level=1``。对比 Py-ART 单扫结果时可使用 ``radar_qpe_retrieval.cli.grid_prep.select_grid_level`` 取指定层。
+``level=1``。对比 Py-ART 单扫结果时可使用 ``radar_qpe_retrieval.cli.polar_qc.select_grid_level`` 取指定层。
 """
 
 from __future__ import annotations

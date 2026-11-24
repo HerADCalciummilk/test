@@ -30,7 +30,7 @@ from numpy import ndarray
 from numpy.ma.core import MaskedArray
 
 from generate_ancillary.src.generate_ancillary import GenerateOrographyBandAncils
-from generate_ancillary.src.utils._make_mask_griddata import make_mask_griddata
+from generate_ancillary.src.util_plugin import band_weights, make_mask_griddata
 from generate_ancillary.utils.base_plugin import BasePlugin
 
 __all__ = ["GenerateTopographicZoneWeights"]
@@ -105,10 +105,7 @@ class GenerateTopographicZoneWeights(BasePlugin):
     @staticmethod
     def calculate_weights(points: ndarray, band: Sequence[float]) -> ndarray:
         """按带中点=1、边界=0.5 对高度做线性插值得到权重。"""
-        weights = np.array([0.5, 1.0, 0.5], np.float32)
-        midpoint = np.mean(band)
-        band_points = np.array([band[0], midpoint, band[1]], np.float32)
-        return np.interp(points, band_points, weights).astype(np.float32)
+        return band_weights(points, band)
 
     @staticmethod
     def _squeeze_to_2d(values: ndarray, name: str) -> ndarray:

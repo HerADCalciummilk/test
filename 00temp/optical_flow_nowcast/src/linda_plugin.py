@@ -12,6 +12,10 @@ import meteva_base as meb
 import datetime
 from datetime import timedelta
 
+from .utils import feature_get_method
+
+
+
 
 @deprecate_args(
     {
@@ -1013,7 +1017,6 @@ def _linda_deterministic_init(
     num_workers,
     measure_time,
 ):
-    from .utils import feature_get_method
     """Initialize the deterministic LINDA nowcast model."""
     forecast_gen = {}
     forecast_gen["velocity"] = velocity

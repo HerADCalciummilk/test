@@ -1,155 +1,118 @@
 # -*- coding: utf-8 -*-
-"""格站融合命令行。
+"""格站融合调度。读格点与站点，调用 ``GridStatMergePlugin``，写出 Micaps4。"""
+from __future__ import annotations
 
-在本包目录执行::
-
-    python -m cli --grid=resource/demo_grid.m4 --sta=resource/demo_sta.m3
-    python cli/grid_stat_merge_cli.py --grid=resource/demo_grid.m4 --sta=resource/demo_sta.m3
-"""
-import argparse
+import os
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+
+_CLI_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_CLI_DIR)
+_SRC_DIR = os.path.join(_ROOT_DIR, "src")
+for _p in (_ROOT_DIR, _SRC_DIR):
+    if _p in sys.path:
+        sys.path.remove(_p)
+for _p in (_SRC_DIR, _ROOT_DIR):
+    sys.path.insert(0, _p)
+
+from utils.merge_params import merge_params
+from utils.util_env import get_merge_params, get_repo_root, get_resolved_paths, set_main_ini
 
 
-def _bootstrap_paths():
-    _root = Path(__file__).resolve().parent.parent
-    _src = _root / "src"
-    for p in (str(_root), str(_src)):
-        if p not in sys.path:
-            sys.path.insert(0, p)
+def _abs_repo(path):
+    if path is None:
+        return ""
+    text = str(path).strip()
+    if not text:
+        return ""
+    raw = Path(text).expanduser()
+    if raw.is_absolute():
+        return os.path.normpath(str(raw))
+    return os.path.normpath(str((Path(get_repo_root()) / raw).resolve()))
 
 
-_bootstrap_paths()
-
-from runner import process
-from utils.cli_base import CliBase
-from utils.util_env import get_resolved_paths, get_merge_params, set_main_ini
-
-_CONFIG_HELP = "运行配置文件，传给入口函数。相对路径按项目根目录解析。省略则用包内默认 ini。"
-
-
-def _parse_bool(s):
-    if s is None:
+def _as_domain(value):
+    if value is None or value == "":
         return None
-    t = str(s).strip().lower()
-    if t in ("", "none"):
-        return None
-    if t in ("1", "true", "yes", "y", "on"):
-        return True
-    if t in ("0", "false", "no", "n", "off"):
-        return False
-    raise argparse.ArgumentTypeError("期望布尔值：true/false/1/0")
+    if isinstance(value, str):
+        parts = [float(item.strip()) for item in value.split(",") if item.strip()]
+    else:
+        parts = [float(item) for item in value]
+    if len(parts) != 6:
+        raise ValueError("domain 须为 6 个数：sou,nor,wst,est,dlon,dlat")
+    return parts
 
 
-def _parse_domain(s):
-    if s is None or not str(s).strip():
-        return None
-    vals = [float(x.strip()) for x in str(s).split(",") if x.strip()]
-    if len(vals) != 6:
-        raise argparse.ArgumentTypeError("domain 须为 6 个数：sou,nor,wst,est,dlon,dlat")
-    return vals
-
-
-class GridStatMergeCli(CliBase):
-    """``grid_stat_merge`` 的命令行。``run`` 转调 ``runner.process``。"""
-
-    description = (
-        "grid_stat_merge：格站融合（站点偏差高斯订正网格）。\n"
-        "未给出的项从 resource/conf.ini 读取。"
-    )
-    epilog = (
-        "示例:\n"
-        "  python -m cli --help\n"
-        "  python -m cli\n"
-        "  python -m cli --grid=a.m4 --sta=b.m3 --output=out.m4\n"
-        "  python -m cli --R=200 --use-heatflux false\n"
-    )
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("--grid", dest="grid_path", default=None, metavar="PATH", help="输入格点 Micaps4/NC")
-        parser.add_argument("--sta", dest="sta_path", default=None, metavar="PATH", help="输入站点 Micaps3")
-        parser.add_argument("--output", dest="output_path", default=None, metavar="PATH", help="输出格点 Micaps4")
-        parser.add_argument("--terr", dest="terr_path", default=None, metavar="PATH", help="可选地形格点")
-        parser.add_argument("--R", dest="R", type=float, default=None, help="误差传播半径（默认 ini）")
-        parser.add_argument(
-            "--domain", type=_parse_domain, default=None,
-            metavar="sou,nor,wst,est,dlon,dlat",
-            help="业务域；省略则从格点推断或读 ini",
-        )
-        parser.add_argument(
-            "--use-heatflux", dest="b_use_heatflux_equation", type=_parse_bool, default=None, metavar="BOOL",
-            help="是否热传导去牛眼",
-        )
-        parser.add_argument(
-            "--hf-iters", dest="hf_eq_iter_nums", type=int, default=None, metavar="N",
-            help="热传导迭代次数",
-        )
-        parser.add_argument("--log-file", dest="log_file", default=None, metavar="PATH", help="日志路径模板")
-        parser.add_argument("--grid-type", dest="grid_type", default=None, metavar="TYPE", help="格点格式 m4/nc")
-        parser.add_argument("--sta-type", dest="sta_type", default=None, metavar="TYPE", help="站点格式 m3/nc")
-        parser.add_argument("--sta-val-col", dest="sta_val_col", default=None, metavar="COL", help="站点数值列名")
-        parser.add_argument("--sta-lon-col", dest="sta_lon_col", default=None, metavar="COL", help="站点经度列名")
-        parser.add_argument("--sta-lat-col", dest="sta_lat_col", default=None, metavar="COL", help="站点纬度列名")
-        parser.add_argument(
-            "--config", dest="config", default=None, metavar="PATH",
-            help=_CONFIG_HELP,
-        )
-
-    def run(
-        self,
-        grid_path=None,
-        sta_path=None,
-        output_path=None,
-        terr_path=None,
-        R=None,
-        domain=None,
-        b_use_heatflux_equation=None,
-        hf_eq_iter_nums=None,
-        log_file=None,
-        grid_type=None,
-        sta_type=None,
-        sta_val_col=None,
-        sta_lon_col=None,
-        sta_lat_col=None,
-        config=None,
-    ) -> int:
+@merge_params()
+def process(
+    grid_path=None,
+    sta_path=None,
+    output_path=None,
+    terr_path=None,
+    R: float = None,
+    domain=None,
+    b_use_heatflux_equation: bool = None,
+    hf_eq_iter_nums: int = 20,
+    log_file=None,
+    grid_type: str = "m4",
+    sta_type: str = "m3",
+    sta_val_col: str = "data0",
+    sta_lon_col: str = "lon",
+    sta_lat_col: str = "lat",
+    config=None,
+):
+    """格点与站点融合。``config`` 只换配置文件。``R`` 的 ini 键为小写 ``r``，缺省再取 200。"""
+    if config:
+        set_main_ini(config)
+    try:
+        paths = get_resolved_paths()
+        params = get_merge_params()
+    finally:
         if config:
-            set_main_ini(config)
-        try:
-            get_resolved_paths()
-            get_merge_params()
-            process(
-                grid_path=grid_path,
-                sta_path=sta_path,
-                output_path=output_path,
-                terr_path=terr_path,
-                R=R,
-                domain=domain,
-                b_use_heatflux_equation=b_use_heatflux_equation,
-                hf_eq_iter_nums=hf_eq_iter_nums,
-                log_file=log_file,
-                grid_type=grid_type,
-                sta_type=sta_type,
-                sta_val_col=sta_val_col,
-                sta_lon_col=sta_lon_col,
-                sta_lat_col=sta_lat_col,
-                config=config,
-            )
-        finally:
-            if config:
-                set_main_ini(None)
-        return 0
+            set_main_ini(None)
 
+    _ = log_file
+    import meteva.base as meb
 
-def _build_parser():
-    return GridStatMergeCli().build_parser()
+    from grid_stat_merge import GridStatMergePlugin
+    from runner import _read_grid, _read_sta, _read_terr
 
+    grid_path = _abs_repo(grid_path) or paths["grid_path"]
+    sta_path = _abs_repo(sta_path) or paths["sta_path"]
+    output_path = _abs_repo(output_path) or paths["output_path"]
+    terr_path = _abs_repo(terr_path) if terr_path else (paths.get("terr_path") or "")
+    if R is None:
+        R = params["R"]
+    if domain is None:
+        domain = params["domain"]
+    else:
+        domain = _as_domain(domain)
+    if b_use_heatflux_equation is None:
+        b_use_heatflux_equation = params["b_use_heatflux_equation"]
+    if hf_eq_iter_nums is None:
+        hf_eq_iter_nums = params["hf_eq_iter_nums"]
 
-def grid_stat_merge_cli(argv: Optional[Sequence[str]] = None) -> int:
-    """命令行入口。``python -m cli`` 与直接运行本文件都进这里。"""
-    return GridStatMergeCli().main(argv)
+    grd = _read_grid(grid_path, grid_type)
+    sta = _read_sta(sta_path, sta_type)
+    terr = _read_terr(terr_path) if terr_path else None
+    val_col = sta_val_col
+    if val_col not in sta.columns and "data0" in sta.columns:
+        val_col = "data0"
 
+    grd_out = GridStatMergePlugin(
+        R=R,
+        domain=domain,
+        terr_mat=terr,
+        b_use_heatflux_equation=b_use_heatflux_equation,
+        hf_eq_iter_nums=hf_eq_iter_nums if b_use_heatflux_equation else None,
+        sta_val_col=val_col,
+        sta_lon_col=sta_lon_col,
+        sta_lat_col=sta_lat_col,
+    ).process(grd, sta)
 
-if __name__ == "__main__":
-    raise SystemExit(grid_stat_merge_cli())
+    out_dir = os.path.dirname(output_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    meb.write_griddata_to_micaps4(grd_out, output_path, creat_dir=True)
+    print("格站融合完成 →", output_path)
+    return grd_out

@@ -6,10 +6,15 @@ from pathlib import Path
 
 import numpy as np
 
-from steps_multi_time_fusion.src.noise import generate_ar2_noise, to_db, train_noise_filter
+from utils.base_plugin import BasePlugin
+from steps_multi_time_fusion.src.util_plugin import (
+    generate_ar2_noise,
+    noise_to_db as to_db,
+    train_noise_filter,
+)
 
 
-class StepsNoisePlugin:
+class StepsNoisePlugin(BasePlugin):
     """Train non-parametric noise filters and generate AR(2) noise fields."""
 
     def __init__(

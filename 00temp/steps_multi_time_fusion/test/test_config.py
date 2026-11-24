@@ -2,9 +2,12 @@
 """ini 补齐与 CLI 缺省参数。"""
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
-from steps_multi_time_fusion.cli import parse_args
+from steps_multi_time_fusion.cli.steps_multi_time_fusion_cli import process
+from utils.merge_params import parse_kv_argv
 from steps_multi_time_fusion.utils.util_env import (
     clear_ini_cache,
     resolve_blending,
@@ -56,11 +59,11 @@ def test_module_selection() -> None:
         resolve_module()
     assert resolve_module("blending") == "blending"
     assert resolve_module("skill") == "climatological_skill"
-    args = parse_args([])
-    assert args.module is None
-    assert args.nowcast is None
-    assert args.issue_time is None
-    chosen = parse_args(["--module", "blending", "--nowcast", "a.npy", "--nwp", "b.npy"])
-    assert chosen.module == "blending"
-    assert chosen.nowcast == "a.npy"
-    assert chosen.nwp == "b.npy"
+    params = inspect.signature(process).parameters
+    assert params["module"].default is None
+    assert params["nowcast"].default is None
+    assert params["issue_time"].default is None
+    chosen = parse_kv_argv(["module=blending", "nowcast=a.npy", "nwp=b.npy"])
+    assert chosen["module"] == "blending"
+    assert chosen["nowcast"] == "a.npy"
+    assert chosen["nwp"] == "b.npy"

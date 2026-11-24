@@ -4,7 +4,7 @@
 
 包内两类能力：
 
-- **等距经纬插值（InterpGg\*）**：`InterpGgLinear` / `Nearest` / `Cubic`；越界用 `outer_value`。
+- **等距经纬插值（InterpGg\*）**：`InterpGgLinear` / `Nearest` / `Cubic` / `Conservative`；越界用 `outer_value`。
 - **海陆感知重网格（LandSea）**：`InterpGgLandSea` 等；scipy / `*-2` 路径；可选海陆掩码。
 
 ---
@@ -16,11 +16,12 @@
 | `InterpGgLinear` | 格点→格点双线性；四邻点距离加权 |
 | `InterpGgNearest` | 格点→格点最近邻；索引四舍五入 |
 | `InterpGgCubic` | 格点→格点双三次；三次卷积核加权 |
+| `InterpGgConservative` | 格点→格点一阶面积加权（对齐 Iris `AreaWeighted`） |
 | `InterpGgLandSea` | 重网格统一入口：按 `regrid_mode` 分派 scipy 或 `*-2`，可选海陆 |
 | `InterpGgLandSea2` | `*-2` 路径实现（规则网索引 + 距离/双线性；可选掩码） |
 | `AdjustLandSeaPoints` | `nearest-with-mask` 事后海陆订正（通常由 `InterpGgLandSea` 调用） |
 
-辅助：`regrid_rectilinear`（`src/utils/grid.py`）为 scipy 规则网插值，供 LandSea 的 `bilinear` / `nearest` 使用。
+辅助：`regrid_rectilinear`（`src/utils/grid.py`）为 scipy 规则网插值，供 LandSea 的 `bilinear` / `nearest` 使用；`area_weighted`（`src/utils/area_weighted.py`）供 Conservative 使用。
 
 ---
 
@@ -29,7 +30,7 @@
 | 路径 | 内容 |
 | --- | --- |
 | `src/` | 插件 |
-| `src/utils/` | LandSea 内核（经包级 `utils` 暴露） |
+| `src/utils/` | 内核（LandSea、`area_weighted` 等；经包级 `utils` 暴露） |
 | `cli/` | Gg：`python -m cli`；LandSea：`python -m cli.tran_regrid` |
 | `resource/conf.ini` | InterpGg CLI 缺省 |
 | `test/` | 单元与示例 |
@@ -85,6 +86,40 @@ result = InterpGgNearest(outer_value=0.0).process(grd, grid)
 from interp_gg_cubic_plugin import InterpGgCubic
 result = InterpGgCubic(outer_value=0.0).process(grd, grid)
 ```
+
+### 3.5 `InterpGgConservative`
+
+正交规则经纬网上的一阶面积加权（AreaWeighted），算法对齐 Iris `iris.analysis.AreaWeighted`。适合**高分辨率→低分辨率**、需近似守恒的通量类场；点插值（Linear / Nearest / Cubic）不保证面积平均意义下的守恒。
+
+**流程概要**
+
+1. 由等距中心生成 contiguous 经/纬格边（`contiguous_bounds_1d`）。
+2. 一维源/目标格边求重叠权重，经 × 纬外积成稀疏矩阵 `W`（行=目标、列=源；flatten 约定 `(lat, lon)`）。
+3. 球面默认：经度弧度（可周期），纬度边界取 `sin(lat)`，等价面积因子 `Δlon × Δsin(lat)`。
+4. `data @ W.T`，再按有效覆盖归一化；`mdtol` 控制缺测/域外容差（同 Iris）。
+5. 越界约定与 Linear 一致：先算重叠区，再 `expand_to_contain_another_grid`；未给 `outer_value` 时返回 `None`。
+
+数值核在 `src/utils/area_weighted.py`（`build_area_weighted_weights` / `apply_area_weighted`）；插件负责 meb 六维场与越界展开。
+
+| 参数 | 位置 | 必填 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| `outer_value` | 构造 | 条件 | `None` | 目标超出源域或覆盖不足时的填充值 |
+| `mdtol` | 构造 | 否 | `1` | 缺测/覆盖容差 `[0,1]`，语义同 Iris |
+| `spherical` | 构造 | 否 | `True` | 是否按球面面积因子计算 |
+| `grd` | `process` | 是 | — | 源格点场 |
+| `grid` | `process` | 是 | — | 目标网格 |
+
+```python
+from interp_gg_conservative_plugin import InterpGgConservative
+import meteva_base as meb
+
+grd = meb.read_griddata_from_nc("source.nc")
+# 高→低：目标步长大于源步长
+grid = meb.basicdata.grid([70, 140, 0.5], [15, 55, 0.5])
+result = InterpGgConservative(outer_value=0.0, mdtol=1.0).process(grd, grid)
+```
+
+CLI：`--module conservative`，可选 `--mdtol`（ini `[conservative]`）。
 
 ---
 
@@ -227,14 +262,15 @@ InterpGgLandSea2(
 
 ### 5.1 InterpGg：`python -m cli`
 
-`--module` 选 `linear` / `nearest` / `cubic`。目标网格须给 `--glon`+`--glat`，或 `--domain`，或 `--grid-template`。未写参数先读 `resource/conf.ini`，再无则用预设；`grid` 为空报错。
+`--module` 选 `linear` / `nearest` / `cubic` / `conservative`。目标网格须给 `--glon`+`--glat`，或 `--domain`，或 `--grid-template`。未写参数先读 `resource/conf.ini`，再无则用预设；`grid` 为空报错。
 
-源场 / 模板格式：`--grid-type` / `--grid-template-type`（或 ini `[input]` 对应项）显式指定 `nc`/`m4`；未指定则按扩展名（`.nc`→nc，否则 m4）。输出仍写 Micaps4。
+源场 / 模板格式：`--grid-type` / `--grid-template-type`（或 ini `[input]` 对应项）显式指定 `nc`/`m4`；未指定则按扩展名（`.nc`→nc，否则 m4）。输出仍写 Micaps4。`conservative` 额外支持 `--mdtol`（ini `[conservative] mdtol`）。
 
 ```bash
 python -m cli --module linear --grid a.nc --domain 20,50,70,140,0.1,0.1 --outer-value 0
 python -m cli --module nearest --grid a.nc --domain 20,50,70,140,0.1,0.1 --outer-value 0
 python -m cli --module cubic --grid a.m4 --glon 70,140,0.1 --glat 15,55,0.1 --output out.m4
+python -m cli --module conservative --grid a.nc --domain 20,50,70,140,0.25,0.25 --outer-value 0 --mdtol 1
 python -m cli --module linear --grid data/no_ext --grid-type nc --domain 20,50,70,140,0.1,0.1
 ```
 
@@ -276,9 +312,10 @@ result = process(
 ## 6. 选型与注意
 
 1. **融合 / 背景对齐（meb 等距经纬）**：优先 `InterpGgLinear` / `Nearest` / `Cubic`。
-2. **IMPROVER 式海陆重网格**：`InterpGgLandSea`；掩码模式需源、目标两份掩码。
-3. 等距经纬、域内：`InterpGgLinear` 与 LandSea `bilinear` 通常接近；最近邻在格心附近可能有格点级差。
-4. 输入宜已规范化为六维 meb 场；`*-2` 源场仅支持经纬规则网。
-5. 依赖：`meteva_base`、`numpy`、`scipy`（LandSea）、包内 / 共享 `utils.base_plugin`。
+2. **高→低分辨率、近似守恒**：`InterpGgConservative`（AreaWeighted）；通量类场优于点插值。
+3. **IMPROVER 式海陆重网格**：`InterpGgLandSea`；掩码模式需源、目标两份掩码。
+4. 等距经纬、域内：`InterpGgLinear` 与 LandSea `bilinear` 通常接近；最近邻在格心附近可能有格点级差。
+5. 输入宜已规范化为六维 meb 场；`*-2` 源场仅支持经纬规则网；Conservative 仅正交规则经纬网。
+6. 依赖：`meteva_base`、`numpy`、`scipy`（LandSea / Conservative）、包内 / 共享 `utils.base_plugin`。
 
 说明与对比 Notebook：`nbs/interpolation_grid_grid_说明.ipynb`、`nbs/cmp_gg_vs_regrid.ipynb`。

@@ -392,6 +392,7 @@ class StationDataInterp2GridDataProcess(PostProcessingPlugin):
                                                self.grid_base)
         return gd_final_output
 
+
 class DataFlgProcess(PostProcessingPlugin):
     """统计历史/当前模式到齐个数；全缺时后续集成应退出。"""
 

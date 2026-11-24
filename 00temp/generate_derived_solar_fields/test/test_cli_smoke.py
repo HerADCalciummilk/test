@@ -15,10 +15,10 @@ import xarray as xr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from generate_derived_solar_fields.cli.cal_generate_clearsky_solar_radiation import (
+from generate_derived_solar_fields.cli.generate_derived_solar_fields_cli import (
     process as cal_clearsky_process,
 )
-from generate_derived_solar_fields.cli.cal_generate_solar_time import (
+from generate_derived_solar_fields.cli.cal_generate_solar_time_cli import (
     process as cal_solar_time_process,
 )
 

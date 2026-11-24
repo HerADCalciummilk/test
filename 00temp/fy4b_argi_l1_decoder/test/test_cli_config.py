@@ -2,9 +2,11 @@
 """ini 补齐与 CLI 缺省参数。"""
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
-from cli.fy4_main import build_parser
+from cli.fy4b_argi_l1_decoder_cli import process
 from utils.util_env import clear_ini_cache, resolve_batch, resolve_module, resolve_single
 
 
@@ -62,9 +64,9 @@ def test_invalid_module() -> None:
 
 
 def test_cli_omitted_args_are_none() -> None:
-    args = build_parser().parse_args([])
-    assert args.module is None
-    assert args.input_root is None
-    assert args.resolution is None
-    assert args.overwrite is None
-    assert args.recursive is None
+    params = inspect.signature(process).parameters
+    assert params["module"].default is None
+    assert params["input_root"].default is None
+    assert params["resolution"].default is None
+    assert params["overwrite"].default is None
+    assert params["recursive"].default is None

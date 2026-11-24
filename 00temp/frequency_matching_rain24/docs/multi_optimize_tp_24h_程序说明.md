@@ -47,14 +47,13 @@
 
 ### 3.3 光流订正
 
-两个主程序，调度和频率匹配相同，各自固定光流、Cressman 和双线性：
+调度和频率匹配固定使用本包光流、Cressman 和双线性：
 
 | 主程序 | 调用 | 光流 / 半拉格朗日 | Cressman | 双线性 |
 |--------|------|-------------------|----------|--------|
 | `src/correct_tp_24h.py` | `from correct_tp_24h import process`，或 `python -m cli` | `src/cal_optical_flow.py` | `src/interpolation.py` 的 `GressManInterpolation` | `src/interpolation.py` 的 `mesh_val` / `bilinear_interp` |
-| `src/correct_tp_24h_nowcast.py` | `from correct_tp_24h_nowcast import process`，或 `python src/correct_tp_24h_nowcast.py` | `src/cal_optical_flow_nowcast.py` → 子模块 `optical_flow_nowcast.LK` / `Extrapolation` | `src/interpolation_sg_cressman.py` → `interpolation_station_grid.InterpSgCressman`（半径由度换算为米） | `src/interpolation_gg_linear.py`：格点→格点 → 子模块 `interp_gg_linear` / `InterpGgLinear`，格点→站点 `meteva.base.interp_gs_linear` |
 
-两个 `process` 的参数相同（`plugin` / `is_multi` / `pro_count` / `rpt_times`）。光流只在 **dtime ≤ 60** 时启用。
+光流只在 **dtime ≤ 60** 时启用。
 
 ### 3.4 频率匹配
 
@@ -91,16 +90,12 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 
 | 文件 | 功能 |
 |------|------|
-| `src/correct_tp_24h.py` | **主程序（原算法）**：`cal_optical_flow` + `interpolation.GressManInterpolation`；`python -m cli` |
-| `src/correct_tp_24h_nowcast.py` | **主程序（项目算法）**：`cal_optical_flow_nowcast` + `interpolation_sg_cressman` + `interpolation_gg_linear` |
+| `src/correct_tp_24h.py` | **主程序**：`cal_optical_flow` + `interpolation.GressManInterpolation`；`python -m cli` |
 | `src/cal_similarity.py` | **核心算法**：历史—当前模式相似度 |
 | `src/cal_slice_tp.py` | **核心算法**：切片光流 + 频率匹配订正 |
-| `src/cal_optical_flow.py` | 原主程序的光流 / 半拉格朗日平流 |
-| `src/cal_optical_flow_nowcast.py` | 项目主程序的光流：→ `optical_flow_nowcast.LK` / `Extrapolation` |
+| `src/cal_optical_flow.py` | 光流 / 半拉格朗日平流 |
 | `src/cal_frequency_match.py` | **核心算法**：频率匹配（站点/格点） |
-| `src/interpolation.py` | 原主程序的 Cressman 与双线性 |
-| `src/interpolation_sg_cressman.py` | 项目主程序的 Cressman：→ `interpolation_station_grid.InterpSgCressman` |
-| `src/interpolation_gg_linear.py` | 项目主程序的双线性：格点→格点 `interp_gg_linear`，格点→站点 `interp_gs_linear` |
+| `src/interpolation.py` | Cressman 与双线性 |
 | `src/utils/data_proc.py` | **工具**：格点/站点预处理、平滑、掩膜（`from utils.data_proc`） |
 | `src/utils/data_save.py` | **工具**：MICAPS3/4/NC 写出 |
 | `src/utils/config.py` | **工具**：算法内部常量参数 |
@@ -112,38 +107,39 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 
 ---
 
-## 5. 关键参数说明
+## 5. 参数说明
 
-### 5.1 运行参数（`resource/optimize_tp_24.ini`）
+### 5.1 运行参数（`resource/conf.ini` / CLI）
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `log_file` | `log/YYYYMMDD.txt` | 日志文件路径模板 |
-| `station_info` | `resource/sta.m3` | 站点模板（MICAPS3） |
-| `mask_nc` | `resource/mask010.nc` | 陆地掩码 |
-| `default_plugin` | `resource/ecmwf.json` | 默认模式路径配置 |
-| `rpt_list` | 空 | 起报时间：`空`=实时；`2025010100`=单个；`2025010100,2025010112`=范围 |
-| `ipt_model` | `0` | 模式时间：`0` 国际时，`1` 北京时间 |
-| `ipt_obs` | `1` | 实况时间：`0` 国际时，`1` 北京时间 |
-| `ipt_type` | `m4` | 输入模式格式：`m4` 或 `nc` |
-| `opt_type` | `m4` | 输出格点格式：`m4` 或 `nc` |
-| `over_w` | `0` | 是否覆盖已有产品：`0` 跳过，`1` 覆盖 |
-| `start_dtime` | `36` | 订正起始预报时效（h） |
-| `end_dtime` | `252` | 订正结束预报时效（h，含） |
-| `inter_dtime1` | `12` | ≤60 h 时效步长 |
-| `inter_dtime2` | `12` | >60 h 时效步长 |
-| `report_inter` | `12` | 起报时间间隔（h） |
-| `res` | `0.1` | 输出分辨率（度） |
-| `clip_coords` | `70,140,0,60` | 订正范围：起始/结束经度、纬度 |
-| `pool_num` | `8` | 并行进程数 |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `match_mode` | `str` | 订正实现：`aligned` / `original`；默认 `aligned` |
+| `plugin` | `path` | 模式路径 JSON（`tp_model` / `tp_obs` / `correct_tp_outpath`）；默认 `resource/ecmwf_aligned.json` |
+| `rpt_times` | `list[str]` | 起报列表；空则实时；默认见 conf |
+| `log_file` | `str` | 日志文件路径模板；默认 `log/YYYYMMDD.txt` |
+| `station_info` | `path` | 站点模板（MICAPS3）；默认 `resource/sta.m3` |
+| `mask_nc` | `path` | 陆地掩码；默认 `resource/mask010.nc` |
+| `ipt_model` | `int` | 模式时间：`0` 国际时，`1` 北京时间；默认 `0` |
+| `ipt_obs` | `int` | 实况时间：`0` 国际时，`1` 北京时间；默认 `1` |
+| `ipt_type` | `str` | 输入模式格式：`m4` 或 `nc`；默认 `m4` |
+| `opt_type` | `str` | 输出格点格式：`m4` 或 `nc`；默认 `m4` |
+| `over_w` | `int` | 是否覆盖已有产品：`0` 跳过，`1` 覆盖；默认 `0` |
+| `start_dtime` | `int` | 订正起始预报时效（h）；默认 `36` |
+| `end_dtime` | `int` | 订正结束预报时效（h，含）；默认 `252` |
+| `inter_dtime1` | `int` | ≤60 h 时效步长；默认 `12` |
+| `inter_dtime2` | `int` | >60 h 时效步长；默认 `12` |
+| `report_inter` | `int` | 起报时间间隔（h）；默认 `12` |
+| `res` | `float` | 输出分辨率（度）；默认 `0.1` |
+| `clip_coords` | `list[float]` | 订正范围：起始/结束经度、纬度；默认 `70,140,0,60` |
+| `pro_count` | `int` | 并行进程数；默认 `4`（conf）/ `8`（`optimize_tp_24.ini`） |
 
 ### 5.2 模式路径（plugin JSON，如 `resource/ecmwf.json`）
 
-| 字段 | 说明 |
-|------|------|
-| `tp_model` | 模式 24 h 降水路径，占位符 `{rpt}`、`{dtime}` |
-| `tp_obs` | 实况 24 h 降水路径（MICAPS3 站点） |
-| `correct_tp_outpath` | 订正结果输出路径前缀（程序自动追加 `.m3` / `.m4`） |
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `tp_model` | `str` | 模式 24 h 降水路径，占位符 `{rpt}`、`{dtime}` |
+| `tp_obs` | `str` | 实况 24 h 降水路径（MICAPS3 站点） |
+| `correct_tp_outpath` | `str` | 订正结果输出路径前缀（程序自动追加 `.m3` / `.m4`） |
 
 路径示例（ECMWF）：
 
@@ -162,19 +158,23 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 {tp_obs}   → .../r24/sfc/25011212.000  （实况时间含 ipt 时区换算）
 ```
 
-### 5.3 算法参数（`src/utils/config.py`，一般无需修改）
+### 5.3 算法内部常量（`src/utils/config.py`，一般无需修改）
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `expansion` | `1.0` | 切片外扩范围（度） |
-| `inter_dis` | `5` | 背景场抽稀间隔（格点数） |
-| `smooth_num` | `30` | 9 点平滑迭代次数 |
-| `sum_similar_threshold` | `2.4` | 相似样本累计得分阈值 |
-| `his_day` | `15` | 历史样本日历窗口（天） |
-| `his_year` | `3` | 历史样本回溯年数 |
-| `fact_level` | 0.1～500 mm 等级 | 切片频率匹配分级 |
-| `fact_level1` | 0.01～250 mm 等级 | 格点频率匹配分级 |
-| `similar_level` | `[25.0, 50.0]` | 相似度检验量级（mm） |
+历史窗与相似度、样本约束主要由此表控制；累计时效窗见 §5.1 的 `start_dtime`/`end_dtime`/`inter_dtime*`。
+
+| 参数 | 类型 | 含义 |
+|------|------|------|
+| `expansion` | `float` | 切片外扩范围（度）；默认 `1.0` |
+| `inter_dis` | `int` | 背景场抽稀间隔（格点数）；默认 `5` |
+| `smooth_num` | `int` | 9 点平滑迭代次数；默认 `30` |
+| `sum_similar_threshold` | `float` | 相似样本累计得分门槛（不足则样本偏少）；默认 `2.4` |
+| `his_day` | `int` | 历史样本日历窗口（天）；默认 `15` |
+| `his_year` | `int` | 历史样本回溯年数；默认 `3` |
+| `fact_level` | `list[float]` | 切片（站点）频率匹配分级；默认 0.1～500 mm 等级 |
+| `fact_level1` | `list[float]` | 格点频率匹配分级；默认 0.01～250 mm 等级 |
+| `similar_level` | `list[float]` | 相似度检验量级（mm）；默认 `[25.0, 50.0]` |
+
+当前预报由 plugin 的 `tp_model` 读入；短时效（≤60 h）可再走光流后做频率匹配（见 §3）。
 
 ---
 
@@ -191,16 +191,16 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 
 ### 6.2 输出
 
-每个起报时间、每个预报时效各生成：
+每个起报 × 时效：切片内相似个例与频率匹配先得到 **站点订正**，再插值 + 格点频率匹配得到 **格点场**：
 
 | 产品 | 路径 | 格式 |
 |------|------|------|
 | 订正站点 | `{correct_tp_outpath}.m3` | MICAPS3 |
-| 订正格点 | `{correct_tp_outpath}.{opt_type}` | MICAPS4 或 NC |
+| 订正格点 | `{correct_tp_outpath}.{opt_type}` | MICAPS4 或 NC（`opt_type`） |
 
 ---
 
-## 7. 调用方法
+## 7. 运行示例
 
 ### 7.1 环境要求
 
@@ -216,40 +216,29 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 
 ### 7.3 命令行
 
+站点订正与格点写出示例（本包根目录；起报也可写在 conf 的 `rpt_list`）：
+
 ```bash
-# 原光流 cal_optical_flow + 原 Cressman interpolation
-python -m cli
-python -m cli --plugin=resource/ecmwf.json
-
-# 切换其他模式（仍是原主程序）
-python -m cli --plugin=resource/CMA_MESO.json
-
-# 项目光流 + 项目 Cressman
-python src/correct_tp_24h_nowcast.py
+python -m cli match_mode=aligned plugin=resource/ecmwf.json \
+  rpt_times=2026081200,2026081312 \
+  start_dtime=36 end_dtime=84 \
+  opt_type=m4 pro_count=4
 ```
-
-模块调用，两个入口参数相同：
 
 ```python
-from correct_tp_24h import process
-process(plugin="resource/ecmwf.json", is_multi=True, pro_count=8)
-
-from correct_tp_24h_nowcast import process
-process(plugin="resource/ecmwf.json", is_multi=True, pro_count=8)
+from cli.frequency_matching_rain24_cli import process
+process(
+    match_mode="aligned",
+    plugin="resource/ecmwf.json",
+    rpt_times=["2026081200", "2026081312"],
+    start_dtime=36,
+    end_dtime=84,
+    pro_count=4,
+    opt_type="m4",
+)
 ```
 
-**起报时间** 不在命令行传入，在 `optimize_tp_24.ini` 的 `rpt_list` 中配置：
-
-```ini
-# 实时
-rpt_list=
-
-# 回算单个起报
-rpt_list=2025010100
-
-# 回算起报范围（从结束到开始，按 report_inter 递减）
-rpt_list=2025010100,2025010112
-```
+读 conf 默认起报/时效时直接 `python -m cli`。产物见 §6.2：每个 `(起报, 时效)` 一对 `.m3` 与格点文件。
 
 ### 7.4 运行逻辑摘要
 
@@ -275,12 +264,12 @@ rpt_list=2025010100,2025010112
 ## 9. 目录结构
 
 ```
-multi_optimize_tp_24h/
+frequency_matching_rain24/
 ├── cli/          # 命令行入口 (python -m cli)
 ├── docs/         # 程序说明文档
-├── nbs/          # Jupyter 说明笔记本（与 docs 内容一致）
-├── resource/     # 配置文件、站点模板、掩码、plugin
-├── src/          # 核心算法
+├── nbs/          # Jupyter 说明笔记本
+├── resource/     # 配置、站点、掩码、plugin JSON
+├── src/          # 核心算法（plugin / util）
 ├── test/         # 测试
-└── utils/        # 配置读取、日志
+└── utils/        # 包级合并入口
 ```

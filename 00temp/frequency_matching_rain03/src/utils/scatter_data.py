@@ -6,6 +6,11 @@ from scipy.interpolate import RegularGridInterpolator
 from utils.file_flag import FileFlag
 from utils.point_data import PointData
 
+from utils.io_meb import norm_sta_id
+from utils.io_meb import resolve_existing_path, read_stadata_rows
+from utils.io_meb import write_stadata_m3
+
+
 
 def _read_text_lines(str_input_file_path):
     with open(str_input_file_path, 'rb') as f:
@@ -108,7 +113,6 @@ class ScatterData:
         return self._lat_arr
 
     def _read_from_m3(self, str_input_file_path):
-        from utils.io_meb import resolve_existing_path, read_stadata_rows
         path = resolve_existing_path(str_input_file_path, (".m3",)) or str_input_file_path
         rows = read_stadata_rows(path)
         lst, dct = [], {}
@@ -125,7 +129,6 @@ class ScatterData:
         for line in _read_text_lines(str_input_file_path):
             arr = line.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').split()
             if len(arr) >= 3:
-                from utils.io_meb import norm_sta_id
                 text = norm_sta_id(arr[0].strip())
                 db_lon = float(arr[1].strip())
                 db_lat = float(arr[2].strip())
@@ -141,7 +144,6 @@ class ScatterData:
         for line in _read_text_lines(str_input_file_path):
             arr = line.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').split()
             if len(arr) >= 4:
-                from utils.io_meb import norm_sta_id
                 text = norm_sta_id(arr[0].strip())
                 db_lon = float(arr[1].strip())
                 db_lat = float(arr[2].strip())
@@ -154,7 +156,6 @@ class ScatterData:
 
     def read_val_from_micaps3(self, str_input_file_path):
         """按站号从 Micaps3 更新 ``val``。"""
-        from utils.io_meb import resolve_existing_path, read_stadata_rows
         path = resolve_existing_path(str_input_file_path, (".m3",)) or str_input_file_path
         rows = read_stadata_rows(path)
         dct = self._get_dictionary_data()
@@ -187,7 +188,6 @@ class ScatterData:
 
         ``title`` 仅作说明文字（可选），不要传原版整行 ``diamond 3 …`` 文件头。
         """
-        from utils.io_meb import write_stadata_m3
         write_stadata_m3(
             (pd.id for pd in self.sta_data),
             (pd.lon for pd in self.sta_data),

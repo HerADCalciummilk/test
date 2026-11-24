@@ -438,13 +438,50 @@ def test_estimate_output_covers_all_neighbour_sites():
     assert len(result) == len(all_ids)
 
 
+def test_estimate_and_apply_process_signature():
+    """两条命令的配置键都是 process 的具名参数。"""
+    import inspect
+
+    from station_height_difference_correction.cli.apply_cli import process as apply_process
+    from station_height_difference_correction.cli.station_height_difference_correction_cli import (
+        process as estimate_process,
+    )
+
+    estimate_names = inspect.signature(estimate_process).parameters
+    for key in (
+        "forecast_path",
+        "truth_path",
+        "neighbour_path",
+        "forecast_period",
+        "forecast_data_name",
+        "truth_data_name",
+        "output_path",
+        "dz_lower_bound",
+        "dz_upper_bound",
+        "config",
+    ):
+        assert key in estimate_names
+    apply_names = inspect.signature(apply_process).parameters
+    for key in (
+        "forecast_path",
+        "scaled_dz_path",
+        "forecast_data_name",
+        "output_path",
+        "frt_hour_leniency",
+        "config",
+    ):
+        assert key in apply_names
+
+
 @pytest.mark.skipif(
     not (EST_CLI_INPUT / "T1200Z_forecast.csv").exists(),
     reason="缺少 estimate CLI 样例输入",
 )
 def test_cli_estimate_process_smoke():
     """CLI process 对官方样例输入可跑通（含 land_constraint）。"""
-    from station_height_difference_correction.cli.dsc_estimate_dz_rescaling import process
+    from station_height_difference_correction.cli.station_height_difference_correction_cli import (
+        process,
+    )
 
     result = process(
         EST_CLI_INPUT / "T1200Z_forecast.csv",

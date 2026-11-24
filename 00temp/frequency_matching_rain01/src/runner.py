@@ -251,10 +251,10 @@ def _edges_cover_domain(
     )
 
 
-def _load_grid_config(base: Path | None, log: Log) -> GridConfig:
+def _load_grid_config(base: Path | None, log: Log, config_json=None) -> GridConfig:
     _ = base
     cfg = _default_grid_config()
-    config_path = get_env_paths().config_json
+    config_path = Path(config_json) if config_json else get_env_paths().config_json
     if not config_path.exists():
         return cfg
     try:
@@ -330,10 +330,10 @@ def _load_grid_config(base: Path | None, log: Log) -> GridConfig:
 
 
 def _load_path_configs(
-    base: Path | None, log: Log
+    base: Path | None, log: Log, path_json=None,
 ) -> tuple[dict[str, ParaConfig], str | None]:
     _ = base
-    path_json = get_env_paths().path_json
+    path_json = Path(path_json) if path_json else get_env_paths().path_json
     if not path_json.exists():
         log.write_error("Path Json File Is Not Exist!", 1)
         raise RuntimeError("Path Json File Is Not Exist!")
@@ -1114,6 +1114,24 @@ def process(
     station_info: Optional[str] = None,
     mask_file: Optional[str] = None,
 ) -> int:
+    return _process_entry(data_key=data_key, run_times=run_times, sample_workers=sample_workers, block_workers=block_workers, fixed_seed=fixed_seed, is_multi=is_multi, pro_count=pro_count, config=config, log_file=log_file, config_json=config_json, path_json=path_json, station_info=station_info, mask_file=mask_file)
+
+def _process_entry(
+    *,
+    data_key: Optional[str] = None,
+    run_times: Optional[Sequence[Union[str, datetime]]] = None,
+    sample_workers: Optional[int] = None,
+    block_workers: Optional[int] = None,
+    fixed_seed: Optional[int] = None,
+    is_multi: bool = False,
+    pro_count: int = 4,
+    config: Optional[str] = None,
+    log_file: Optional[str] = None,
+    config_json: Optional[str] = None,
+    path_json: Optional[str] = None,
+    station_info: Optional[str] = None,
+    mask_file: Optional[str] = None,
+) -> int:
     """逐 1 小时降水频率匹配入口。``config`` 非空时本次调用改读该 ini。
 
     ``log_file`` / ``config_json`` / ``path_json`` / ``station_info`` / ``mask_file``
@@ -1148,6 +1166,8 @@ def process(
             set_main_ini(None)
     finally:
         clear_call_overrides()
+
+process.__doc__ = _process_entry.__doc__
 
 
 def _process_impl(

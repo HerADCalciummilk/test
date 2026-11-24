@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-# -----------------------------------------------------------------------------
-# Copyright (c) 2022， CMA National Meteorological Centre.
-# All rights reserved.
-#
-# Distributed under the terms of the GPL v2 License.
-#
+"""坐标投影转换：主算法在 lonlat/equal 两个 plugin；辅助见 util_plugin。"""
 
-from .cube_base import *
+from .util_plugin import *  # noqa: F401,F403

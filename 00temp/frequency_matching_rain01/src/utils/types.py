@@ -297,10 +297,6 @@ class GridData:
         self.val = values.copy() if lat1 < lat2 else np.flipud(values).copy()
 
     def _read_nc_legacy(self, path: Path) -> None:
-        try:
-            import xarray as xr  # type: ignore
-        except Exception as exc:
-            raise RuntimeError("xarray is required for fallback nc reading") from exc
         with xr.open_dataset(str(path), decode_times=False) as ds:
             lon_name = next(
                 (k for k in ["lon", "longitude", "x"] if k in ds.coords or k in ds),

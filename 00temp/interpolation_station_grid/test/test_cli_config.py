@@ -2,9 +2,11 @@
 """ini 补齐与 CLI 缺省参数。"""
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
-from cli.fusion_main import build_parser
+from cli.fusion_main import process
 from utils.util_env import (
     clear_ini_cache,
     resolve_args,
@@ -90,17 +92,38 @@ def test_required_paths_raise_when_empty() -> None:
         resolve_args(sta=r"D:\sta.csv")
     with pytest.raises(ValueError, match="background"):
         resolve_args(sta=r"D:\sta.csv", grid=r"D:\grid.nc", reprocess=True)
-    with pytest.raises(ValueError, match="grid 或 background"):
-        resolve_args(module="idw_delta", sta=r"D:\sta.csv")
+
+
+def test_idw_reprocess_defaults_gaussian() -> None:
+    got = resolve_args(
+        module="idw",
+        sta=r"D:\sta.csv",
+        background=r"D:\bg.nc",
+        reprocess=True,
+    )
+    assert got["module"] == "idw"
+    assert got["reprocess"] is True
+    assert got["gaussian"] is True
+    off = resolve_args(
+        module="idw",
+        sta=r"D:\sta.csv",
+        background=r"D:\bg.nc",
+        reprocess=True,
+        gaussian=False,
+    )
+    assert off["gaussian"] is False
 
 
 def test_idw_delta_requires_background() -> None:
+    with pytest.raises(ValueError, match="grid 或 background"):
+        resolve_args(module="idw_delta", sta=r"D:\sta.csv")
     with pytest.raises(ValueError, match="background"):
         resolve_args(module="idw_delta", sta=r"D:\sta.csv", grid=r"D:\grid.nc")
     only_bg = resolve_args(
         module="idw_delta", sta=r"D:\sta.csv", background=r"D:\bg.nc"
     )
     assert only_bg["reprocess"] is True
+    assert only_bg["gaussian"] is True
     assert only_bg["grid"] is None
     assert only_bg["background"] == r"D:\bg.nc"
     both = resolve_args(
@@ -120,17 +143,18 @@ def test_invalid_module() -> None:
 
 
 def test_cli_omitted_args_are_none() -> None:
-    args = build_parser().parse_args([])
-    assert args.module is None
-    assert args.sta is None
-    assert args.grid is None
-    assert args.background is None
-    assert args.reprocess is None
-    assert args.effect_r is None
-    assert args.half_r is None
-    assert args.sta_type is None
-    assert args.grid_type is None
-    assert args.output is None
+    params = inspect.signature(process).parameters
+    assert params["module"].default is None
+    assert params["sta"].default is None
+    assert params["grid"].default is None
+    assert params["background"].default is None
+    assert params["reprocess"].default is None
+    assert params["gaussian"].default is None
+    assert params["effect_r"].default is None
+    assert params["half_r"].default is None
+    assert params["sta_type"].default is None
+    assert params["grid_type"].default is None
+    assert params["output"].default is None
 
 
 def test_resolve_io_and_sta_type() -> None:

@@ -25,7 +25,7 @@ import meteva_base as meb
 _TEMP_ROOT = Path(__file__).resolve().parents[2]
 if str(_TEMP_ROOT) not in sys.path:
     sys.path.insert(0, str(_TEMP_ROOT))
-from db_trans.src import dB_trans
+from db_trans.src.db_trans_plugin import DbTransPlugin
 
 def forecast(
         input_images,
@@ -927,7 +927,7 @@ class  LK(PostProcessingPlugin):
         else:
             method=transform_mapping[self.transform_method]
             
-            transform=getattr(dB_trans,method)
+            transform=getattr(DbTransPlugin(), method)
 
             np_array, metadata = transform(np_array,**self.transform_para)
 

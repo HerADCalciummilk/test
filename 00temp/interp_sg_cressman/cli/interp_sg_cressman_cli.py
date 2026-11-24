@@ -1,26 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Cressman 站点→格点命令行。
+"""Cressman 站点→格点：``InterpSgCressman``（``reprocess`` 默认 false）。
 
-在本包目录执行::
-
-    python -m cli --sta=resource/demo_sta.m3 --domain=20,50,70,140,0.1,0.1
-    python cli/interp_sg_cressman_cli.py --sta=resource/demo_sta.m3 --domain=20,50,70,140,0.1,0.1
+- ``reprocess=false``：km 核，``r_list`` 为米；可带背景作初值。
+- ``reprocess=true``：差值累加再处理，``r_list`` 为度；须 ``background_path``。
 """
-import argparse
+from __future__ import annotations
+
+import os
 import sys
-from pathlib import Path
-from typing import Optional, Sequence
+from typing import List
 
 
-def _bootstrap_paths():
-    _root = Path(__file__).resolve().parent.parent
-    _src = _root / "src"
-    for p in (str(_root), str(_src)):
-        if p not in sys.path:
-            sys.path.insert(0, p)
+from utils.merge_params import merge_params
 
 
-_bootstrap_paths()
 
 from runner import process
 from utils.cli_base import CliBase
@@ -29,28 +22,18 @@ from utils.util_env import get_cressman_params, get_resolved_paths, set_main_ini
 _CONFIG_HELP = "运行配置文件，传给入口函数。相对路径按项目根目录解析。省略则用包内默认 ini。"
 
 
-def _parse_float_list(s, n=None, name="list"):
-    if s is None or not str(s).strip():
+def _float_seq(value, n=None):
+    if value is None:
         return None
     vals = [float(x.strip()) for x in str(s).split(",") if x.strip()]
     if n is not None and len(vals) != n:
-        raise argparse.ArgumentTypeError("%s 须为 %d 个数" % (name, n))
+        raise ValueError("期望 %d 个数，得到 %d 个" % (n, len(vals)))
     return vals
 
 
 class InterpSgCressmanCli(CliBase):
     """``interp_sg_cressman`` 的命令行。``run`` 转调 ``runner.process``。"""
 
-    description = (
-        "interp_sg_cressman：站点→格点 Cressman 插值。\n"
-        "未给出的项从 resource/conf.ini 读取。"
-    )
-    epilog = (
-        "示例:\n"
-        "  python -m cli --help\n"
-        "  python -m cli --sta=a.m3 --background=b.m4 --output=out.m4\n"
-        "  python -m cli --sta=a.m3 --domain=20,50,70,140,0.1,0.1 --r-list=60000,40000,20000\n"
-    )
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--sta", dest="sta_path", default=None, metavar="PATH", help="输入站点 Micaps3/NC")

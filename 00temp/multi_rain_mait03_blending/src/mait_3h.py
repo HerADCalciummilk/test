@@ -7,7 +7,7 @@
 
 调用::
 
-    from mait_3h import process
+from mait_3h import process
     process(time_inputs=["202608200000", "202608201200"], is_multi=False, pro_count=3)
 
     python -m cli --time-inputs=202608200000
@@ -255,6 +255,25 @@ def process(
     station_info=None,
     mask_dat=None,
 ):
+    return _process_entry(time_inputs=time_inputs, time_input=time_input, para_path=para_path, beta_path=beta_path, background_path=background_path, is_obs_bjt=is_obs_bjt, is_interp=is_interp, is_multi=is_multi, clip_coords=clip_coords, pro_count=pro_count, predict_valid_list=predict_valid_list, config=config, log_file=log_file, station_info=station_info, mask_dat=mask_dat)
+
+def _process_entry(
+    time_inputs=None,
+    time_input=None,
+    para_path=None,
+    beta_path=None,
+    background_path=None,
+    is_obs_bjt=None,
+    is_interp=None,
+    is_multi=None,
+    clip_coords=None,
+    pro_count=None,
+    predict_valid_list=None,
+    config=None,
+    log_file=None,
+    station_info=None,
+    mask_dat=None,
+):
     """3 小时集成入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
     kwargs = dict(
         time_inputs=time_inputs,
@@ -279,6 +298,8 @@ def process(
         return _process_impl(**kwargs)
     finally:
         set_main_ini(None)
+
+process.__doc__ = _process_entry.__doc__
 
 
 def _process_impl(

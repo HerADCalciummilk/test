@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from radar_qpe_retrieval.cli.qpe import process
+from radar_qpe_retrieval.cli.radar_qpe_retrieval_cli import process
 from radar_qpe_retrieval.src.qpe import QPEPlugin
 
 INPUT_DIR = Path(__file__).resolve().parents[1] / "test_data" / "qpe" / "cli_input"

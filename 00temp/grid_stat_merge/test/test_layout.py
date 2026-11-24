@@ -23,17 +23,28 @@ def test_required_paths_exist():
     assert not missing, "缺少路径:\n" + "\n".join(missing)
 
 
-def test_cli_help_runs():
-    import subprocess
-    import sys
+def test_process_signature():
+    import inspect
 
-    r = subprocess.run(
-        [sys.executable, "-m", "cli", "--help"],
-        cwd=str(_ROOT),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    assert r.returncode == 0, r.stderr
-    assert "grid_stat_merge" in (r.stdout + r.stderr)
+    from cli.grid_stat_merge_cli import process
+
+    assert callable(process)
+    names = inspect.signature(process).parameters
+    for dest in (
+        "grid_path",
+        "sta_path",
+        "output_path",
+        "terr_path",
+        "R",
+        "domain",
+        "b_use_heatflux_equation",
+        "hf_eq_iter_nums",
+        "log_file",
+        "grid_type",
+        "sta_type",
+        "sta_val_col",
+        "sta_lon_col",
+        "sta_lat_col",
+        "config",
+    ):
+        assert dest in names

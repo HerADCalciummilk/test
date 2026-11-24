@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from pathlib import Path
-import subprocess
-import sys
+import importlib
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +8,9 @@ _ROOT = Path(__file__).resolve().parents[1]
 def test_required_paths_exist():
     required = [
         _ROOT / "cli" / "__main__.py",
-        _ROOT / "src" / "runner.py",
+        _ROOT / "src" / "frequency_matching_rain03_plugin.py",
+        _ROOT / "src" / "frequency_matching_rain03_plugin_util.py",
+        _ROOT / "cli" / "frequency_matching_rain03_cli.py",
         _ROOT / "src" / "proc" / "frequency_match.py",
         _ROOT / "src" / "utils" / "util_env.py",
         _ROOT / "utils" / "__init__.py",
@@ -22,14 +23,8 @@ def test_required_paths_exist():
     assert not missing, "缺少:\n" + "\n".join(missing)
 
 
-def test_cli_help():
-    r = subprocess.run(
-        [sys.executable, "-m", "cli", "--help"],
-        cwd=str(_ROOT),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    assert r.returncode == 0, r.stderr
-    assert "3" in (r.stdout + r.stderr)
+def test_cli_process_importable():
+    mod = importlib.import_module("cli.frequency_matching_rain03_cli")
+    assert callable(getattr(mod, "process", None))
+    assert callable(getattr(mod, "_process", None))
+    assert "3" in (mod.__doc__ or "")

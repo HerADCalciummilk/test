@@ -33,15 +33,18 @@ from feels_like_temperature.utils.utils import (
     convert_units,
     rebuild_to_meb_griddata,
 )
-from feels_like_temperature.src.utils._feels_like import (
-    _calculate_svp_in_air,
-    _prepare_meb_inputs,
+from feels_like_temperature.src.util_plugin import (
+    apparent_temperature as _calculate_apparent_temperature,
+    feels_like_blend as _feels_like_temperature,
+    wind_chill_celsius,
 )
+from feels_like_temperature.src.utils._feels_like import _prepare_meb_inputs
 
 _MEB_VALID_VAL = (-np.inf, np.inf, np.nan)
 
 __all__ = [
     "CalculateWindChill",
+    "FeelsLikeTemperature",
     "calculate_feels_like_temperature",
 ]
 
@@ -72,14 +75,7 @@ class CalculateWindChill(BasePlugin):
         np.ndarray
             风寒温度，单位为摄氏度。
         """
-        # 4.824 km/h 为公式适用的最低有效风速（对应文献中的步行风速下限）
-        eqn_component = np.clip(wind_speed, 4.824, None) ** 0.16
-        return (
-            13.12
-            + 0.6215 * temperature
-            - 11.37 * eqn_component
-            + 0.3965 * temperature * eqn_component
-        ).astype(np.float32)
+        return wind_chill_celsius(temperature, wind_speed)
 
     def process(
         self,
@@ -156,79 +152,70 @@ class CalculateWindChill(BasePlugin):
         return wind_chill_data
 
 
-def _calculate_apparent_temperature(
-    temperature: np.ndarray,
-    wind_speed: np.ndarray,
-    relative_humidity: np.ndarray,
-    pressure: np.ndarray,
-) -> np.ndarray:
-    """计算显温。
+class FeelsLikeTemperature(BasePlugin):
+    """综合显温与风寒温度，计算体感温度。"""
 
-    参数
-    ----------
-    temperature : np.ndarray
-        气温，单位为摄氏度。
-    wind_speed : np.ndarray
-        10 米风速，单位为米每秒。
-    relative_humidity : np.ndarray
-        相对湿度，使用 0 到 1 的分数表示。
-    pressure : np.ndarray
-        气压，单位为 Pa。
+    def process(
+        self,
+        temperature: Union[xr.DataArray, np.ndarray],
+        wind_speed: Union[xr.DataArray, np.ndarray],
+        relative_humidity: Union[xr.DataArray, np.ndarray],
+        pressure: Union[xr.DataArray, np.ndarray],
+    ) -> Union[xr.DataArray, np.ndarray]:
+        """计算体感温度。DataArray 须带单位；ndarray 默认 ℃、m/s、分数、Pa。"""
+        t_template = _prepare_meb_inputs(temperature, wind_speed, relative_humidity, pressure)
 
-    返回
-    -------
-    np.ndarray
-        显温，单位为摄氏度。
-    """
-    t_kelvin = temperature + 273.15
-    svp = _calculate_svp_in_air(t_kelvin, pressure)  # Pa
-    # Steadman 回归式中水汽压单位为 hPa，故 svp(Pa) × RH 后再 ×0.001
-    avp = 0.001 * svp * relative_humidity
-    return (-2.7 + 1.04 * temperature + 2.0 * avp - 0.65 * wind_speed).astype(np.float32)
+        # 统一到 ℃、m/s、相对湿度分数、Pa
+        t_celsius = (
+            convert_units(temperature, "degC")
+            if isinstance(temperature, xr.DataArray)
+            else np.asarray(temperature, dtype=np.float32)
+        )
+        w_ms = (
+            convert_units(wind_speed, "m s-1")
+            if isinstance(wind_speed, xr.DataArray)
+            else np.asarray(wind_speed, dtype=np.float32)
+        )
+        rh_frac = (
+            convert_units(relative_humidity, "1")
+            if isinstance(relative_humidity, xr.DataArray)
+            else np.asarray(relative_humidity, dtype=np.float32)
+        )
+        p_pa = (
+            convert_units(pressure, "Pa")
+            if isinstance(pressure, xr.DataArray)
+            else np.asarray(pressure, dtype=np.float32)
+        )
 
+        apparent = _calculate_apparent_temperature(t_celsius, w_ms, rh_frac, p_pa)
+        wind_chill_result = CalculateWindChill().process(temperature, wind_speed)
+        if isinstance(wind_chill_result, xr.DataArray):
+            wind_chill = np.asarray(wind_chill_result.values, dtype=np.float32)
+        else:
+            wind_chill = np.asarray(wind_chill_result, dtype=np.float32)
 
-def _feels_like_temperature(
-    temperature: np.ndarray,
-    apparent_temperature: np.ndarray,
-    wind_chill: np.ndarray,
-) -> np.ndarray:
-    """融合显温与风寒温度，得到最终体感温度。
+        # 按气温区间融合风寒与显温
+        feels_like_degc = _feels_like_temperature(t_celsius, apparent, wind_chill)
 
-    计算规则如下：
+        if t_template is not None:
+            output_units = str(t_template.attrs["units"]).strip()
+        else:
+            output_units = "degC"
+        if output_units == "K":
+            out_values = Unit("degC").convert(
+                feels_like_degc.astype(np.float64), Unit("K")
+            ).astype(np.float32)
+        else:
+            out_values = feels_like_degc.astype(np.float32)
 
-    - 当气温低于 10 摄氏度时，体感温度取风寒温度；
-    - 当气温高于 20 摄氏度时，体感温度取显温；
-    - 当气温位于 10 到 20 摄氏度之间时，在风寒温度和显温之间进行线性过渡。
-
-    参数
-    ----------
-    temperature : np.ndarray
-        气温，单位为摄氏度。
-    apparent_temperature : np.ndarray
-        显温，单位为摄氏度。
-    wind_chill : np.ndarray
-        风寒温度，单位为摄氏度。
-
-    返回
-    -------
-    np.ndarray
-        体感温度，单位为摄氏度。
-    """
-    feels_like_temperature = np.zeros(temperature.shape, dtype=np.float32)
-
-    # 低温区：直接采用风寒温度
-    feels_like_temperature[temperature < 10] = wind_chill[temperature < 10]
-
-    # 过渡区（10–20℃）：按气温线性加权融合显温与风寒温度
-    alpha = (temperature - 10.0) / 10.0  # 10℃ 时 alpha=0，20℃ 时 alpha=1
-    temp_flt = alpha * apparent_temperature + ((1 - alpha) * wind_chill)
-    between = (temperature >= 10) & (temperature <= 20)
-    feels_like_temperature[between] = temp_flt[between]
-
-    # 高温区：直接采用显温
-    feels_like_temperature[temperature > 20] = apparent_temperature[temperature > 20]
-
-    return feels_like_temperature
+        if t_template is not None:
+            return rebuild_to_meb_griddata(
+                out_values,
+                template=t_template,
+                name="feels_like_temperature",
+                units=output_units,
+            )
+        return out_values
 
 
 def calculate_feels_like_temperature(
@@ -271,58 +258,6 @@ def calculate_feels_like_temperature(
         若输入为 ``numpy.ndarray``，返回 ``numpy.ndarray``。
         输出温度单位与输入温度单位保持一致。
     """
-    t_template = _prepare_meb_inputs(temperature, wind_speed, relative_humidity, pressure)
-
-    t_celsius = (
-        convert_units(temperature, "degC")
-        if isinstance(temperature, xr.DataArray)
-        else np.asarray(temperature, dtype=np.float32)
+    return FeelsLikeTemperature().process(
+        temperature, wind_speed, relative_humidity, pressure
     )
-    w_ms = (
-        convert_units(wind_speed, "m s-1")
-        if isinstance(wind_speed, xr.DataArray)
-        else np.asarray(wind_speed, dtype=np.float32)
-    )
-    rh_frac = (
-        convert_units(relative_humidity, "1")
-        if isinstance(relative_humidity, xr.DataArray)
-        else np.asarray(relative_humidity, dtype=np.float32)
-    )
-    p_pa = (
-        convert_units(pressure, "Pa")
-        if isinstance(pressure, xr.DataArray)
-        else np.asarray(pressure, dtype=np.float32)
-    )
-
-    apparent_temperature = _calculate_apparent_temperature(
-        t_celsius, w_ms, rh_frac, p_pa
-    )
-    wind_chill_result = CalculateWindChill().process(temperature, wind_speed)
-    if isinstance(wind_chill_result, xr.DataArray):
-        wind_chill = np.asarray(wind_chill_result.values, dtype=np.float32)
-    else:
-        wind_chill = np.asarray(wind_chill_result, dtype=np.float32)
-
-    feels_like_degc = _feels_like_temperature(
-        t_celsius, apparent_temperature, wind_chill
-    )
-
-    if t_template is not None:
-        output_units = str(t_template.attrs["units"]).strip()
-    else:
-        output_units = "degC"
-    if output_units == "K":
-        out_values = Unit("degC").convert(
-            feels_like_degc.astype(np.float64), Unit("K")
-        ).astype(np.float32)
-    else:
-        out_values = feels_like_degc.astype(np.float32)
-
-    if t_template is not None:
-        return rebuild_to_meb_griddata(
-            out_values,
-            template=t_template,
-            name="feels_like_temperature",
-            units=output_units,
-        )
-    return out_values

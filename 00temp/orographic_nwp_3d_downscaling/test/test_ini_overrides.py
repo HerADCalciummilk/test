@@ -108,7 +108,50 @@ def test_override_replaces_ini_and_missing_key_uses_preset():
 
 
 def test_plugin_accepts_ini_parameters():
+    import inspect
+
     plugin = FastRefineInterpPlugin(work_dir="D:/tmp/EC_12P5KM", model_region="EC_12P5KM")
     assert plugin.ini_overrides is None
     assert "maxmin_update" in plugin.process.__code__.co_varnames
     assert "validate" in plugin.process.__code__.co_varnames
+    assert "_2t" in plugin.process.__code__.co_varnames
+    assert not any(
+        param.kind is inspect.Parameter.VAR_KEYWORD
+        for param in inspect.signature(plugin.process).parameters.values()
+    )
+
+
+def test_cli_process_names_cover_conf_keys():
+    """resource/conf.ini 的键（含阈值要素）都是 process 的具名参数。"""
+    import inspect
+
+    from cli.orographic_nwp_3d_downscaling_cli import process
+
+    names = inspect.signature(process).parameters
+    for key in (
+        "work_dir",
+        "config",
+        "update",
+        "dem_head",
+        "interp_time",
+        "validate",
+        "maxmin_update",
+        "maxmin_validate",
+        "forecast_time",
+        "custom_path",
+        "fh_parallel",
+        "fh_max_pcount",
+        "pq_shortname",
+        "_2t",
+        "_2rh",
+        "_10ws",
+        "_10u",
+        "_10v",
+        "_2t_max",
+        "_2t_min",
+        "_2rh_max",
+        "_2rh_min",
+        "_10ws_max",
+    ):
+        assert key in names
+    assert not any(item.kind is inspect.Parameter.VAR_KEYWORD for item in names.values())

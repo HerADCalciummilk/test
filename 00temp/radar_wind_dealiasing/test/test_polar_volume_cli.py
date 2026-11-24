@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from radar_wind_dealiasing.cli import _write_griddata_to_nc
-from radar_wind_dealiasing.cli.polar_volume_main import (
+from radar_wind_dealiasing.cli.polar_volume_cli import (
     pyart_radar_to_polar_volume,
     read_polar_volume,
     validate_polar_volume,
@@ -147,7 +147,7 @@ def test_validate_polar_volume_rejects_wrong_nyquist_count():
 
 def test_extract_polar_volume_sweep_keeps_single_layer_layout():
     """截取单个扫描层后应重置为单层边界并保留六维约定。"""
-    from radar_wind_dealiasing.cli.polar_volume_main import extract_polar_volume_sweep
+    from radar_wind_dealiasing.cli.polar_volume_cli import extract_polar_volume_sweep
 
     volume = pyart_radar_to_polar_volume(_FakeRadar(), "velocity")
     sweep1 = extract_polar_volume_sweep(volume, sweep_index=1)

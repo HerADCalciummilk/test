@@ -14,9 +14,9 @@ import xarray as xr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from generate_ancillary.cli.anc_generate_landmask_ancillary import process as anc_process
-from generate_ancillary.cli.dsc_generate_topography_bands_mask import process as dsc_process
-from generate_ancillary.cli.dsc_generate_topographic_zone_weights import (
+from generate_ancillary.cli.generate_ancillary_cli import process as anc_process
+from generate_ancillary.cli.dsc_generate_topography_bands_mask_cli import process as dsc_process
+from generate_ancillary.cli.dsc_generate_topographic_zone_weights_cli import (
     process as weights_process,
 )
 

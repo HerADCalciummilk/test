@@ -257,6 +257,25 @@ def process(*,
             mask_nc: str = None,
             config=None,
             ):
+    return _process_entry(time_inputs=time_inputs, predict_valid_list=predict_valid_list, para_path=para_path, beta_path=beta_path, is_obs_bjt=is_obs_bjt, is_multi=is_multi, clip_coords=clip_coords, pro_count=pro_count, split_lat=split_lat, split_lon=split_lon, log_file=log_file, background_ini=background_ini, station_info=station_info, mask_nc=mask_nc, config=config)
+
+def _process_entry(*,
+            time_inputs: list = None,
+            predict_valid_list: list = None,
+            para_path: str = None,
+            beta_path: str = None,
+            is_obs_bjt = None,
+            is_multi = None,
+            clip_coords: list = None,
+            pro_count = None,
+            split_lat = None,
+            split_lon = None,
+            log_file: str = None,
+            background_ini: str = None,
+            station_info: str = None,
+            mask_nc: str = None,
+            config=None,
+            ):
     """24 小时集成入口。``config`` 非空时本次调用改读该 ini，结束后恢复默认。"""
     kwargs = dict(
         time_inputs=time_inputs,
@@ -281,6 +300,8 @@ def process(*,
         return _process_impl(**kwargs)
     finally:
         set_main_ini(None)
+
+process.__doc__ = _process_entry.__doc__
 
 
 def _process_impl(*,

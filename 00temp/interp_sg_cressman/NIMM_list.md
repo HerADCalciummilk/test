@@ -21,8 +21,8 @@
 
 | 类别 | 路径 | 作用 |
 |------|------|------|
-| **主程序** | `src/runner.py` | `process(...)` 读站/背景 → `interp_sg_cressman` → 写 Micaps4 |
-| **算法核心** | `src/interp_sg_cressman.py` | `interp_sg_cressman` / `InterpSGCressmanPlugin` |
+| **主程序** | `src/runner.py` | `process(...)` 转调 CLI |
+| **算法核心** | `src/interp_sg_cressman_plugin.py` | `InterpSgCressman(reprocess=False/True)` |
 | CLI | `cli/__main__.py` | argparse → `runner.process`；中文 `--help` |
 | 本包工具 | `src/utils/util_env.py` | 读 `resource/interp_sg_cressman.ini` |
 | 共享插件 | 仓库根 `utils/base_plugin.py`、`interp_gg_pulgin.py`（及可选 `interp_sg_cressman_plugin.py`） | 经本包根 `utils/__init__.py` 合并 |

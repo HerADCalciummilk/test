@@ -2,7 +2,7 @@
 
 将站点观测融合到规则格点场。面向 `meteva_base` 站点表与六维格点场。
 
-四个插件接口统一为：
+**推荐对外入口**：`InterpSg(method=...)`，由 `method` 分派到各算法插件。各 `InterpSg*` 仍可单独使用。接口统一为：
 
 ```text
 process(sta, grid=None, background=None)
@@ -20,10 +20,78 @@ process(sta, grid=None, background=None)
 
 | 插件 | 功能简介 |
 | --- | --- |
+| `InterpSg` | **统一入口**：`method` 选算法，再转调下列插件 |
 | `InterpSgIdw` | 反距离权重（IDW）；默认绝对值+远点回退背景；`reprocess=True` 为偏差订正 |
 | `InterpSgGaussian` | 最近邻 × 高斯；默认绝对值+`d>halfR` 回退背景；`reprocess=True` 为偏差订正 |
 | `InterpSgKriging` | 局部普通克里金（OK）；`reprocess=False` 绝对值（背景可只取网格）；`True` 偏差订正（无远点填背景） |
 | `InterpSgCressman` | Cressman：默认 km 绝对值加权；可选 `reprocess` 差值累加 |
+
+### 1.1 `InterpSg`（统一入口）
+
+构造参数全部显式列出；按 `method` 选用子集，其余忽略。CLI `--module` 与 `method` 同值域，内部已走本入口。
+
+| `method` | 子插件 | 说明 |
+| --- | --- | --- |
+| `idw` | `InterpSgIdw` | 绝对值默认纯 IDW；`reprocess=True` 默认 IDW×高斯 |
+| `idw_delta` | `InterpSgIdw(gaussian=True, reprocess=True)` | 历史模块名；须背景 |
+| `gaussian` | `InterpSgGaussian` | |
+| `kriging` | `InterpSgKriging` | |
+| `cressman` | `InterpSgCressman` | |
+| `total` | → `idw` | 旧别名 |
+
+| 参数 | 默认 | 适用 `method` | 说明 |
+| --- | --- | --- | --- |
+| `method` | `idw` | 全部 | 见上表 |
+| `reprocess` | `False` | 除 `idw_delta` | `idw_delta` 固定 `True` |
+| `outer_value` | `None` | 全部 | 背景对齐越界填充 |
+| `effectR` | `1000` | `idw` / `idw_delta` | 硬截断或高斯尺度（米） |
+| `nearNum` | `None` | `idw` / `idw_delta` / `kriging` / `cressman` | `None`→子插件默认 8/20/100 |
+| `decrease` | `2` | `idw` / `idw_delta` | 距离衰减指数 |
+| `gaussian` | `None` | `idw` | `None`：随 `reprocess`（True→高斯）；`idw_delta` 固定 True |
+| `halfR` | `20` | `gaussian` | 高斯半径（米） |
+| `model` | `spherical` | `kriging` | 变异函数：`spherical` / `exponential` / `gaussian` |
+| `sill` | `None` | `kriging` | 基台；`None` 时用站点方差 |
+| `range_` | `None` | `kriging` | 变程（米量级） |
+| `nugget` | `0.0` | `kriging` | 块金 |
+| `r_list` | `None` | `cressman` | 影响半径；`None` 时按路径用子插件默认 |
+| `rain_limit` | `None` | `cressman`（`reprocess=True`） | 创新量路径降水阈值等 |
+| `num_limit` | `1.0` | 同上 | |
+| `smooth` | `0.001` | 同上 | |
+| `power_param` | `2.0` | 同上 | |
+| `r_km_scale` | `1.35` | 同上 | |
+| `innov_gain` | `1.0` | 同上 | |
+| `residual_passes` | `0` | 同上 | |
+| `residual_degree_polish` | `True` | 同上 | |
+| `residual_polish_rounds` | `1` | 同上 | |
+| `degree_blend` | `0.85` | 同上 | |
+| `station_anchor_radius` | `0.35` | 同上 | |
+| `station_anchor_strength` | `0.0` | 同上 | |
+| `sta` / `grid` / `background` | — | `process` | 同各 `InterpSg*` |
+
+```python
+from interp_sg_plugin import InterpSg
+
+result = InterpSg(
+    method="idw", effectR=1000, nearNum=8, decrease=2, reprocess=False
+).process(sta, grid, background=bg)
+
+# reprocess=True 时默认已是 IDW×高斯（也可显式 gaussian=True）
+result = InterpSg(method="idw", reprocess=True, effectR=1000, nearNum=8).process(
+    sta, background=bg
+)
+# 历史别名，与上一行等价
+result = InterpSg(method="idw_delta", effectR=1000, nearNum=8).process(
+    sta, background=bg
+)
+
+result = InterpSg(method="gaussian", halfR=20).process(sta, grid)
+result = InterpSg(
+    method="kriging", model="spherical", nearNum=20, reprocess=True
+).process(sta, background=bg)
+result = InterpSg(
+    method="cressman", r_list=[60000, 40000, 20000], nearNum=100
+).process(sta, grid)
+```
 
 ---
 
@@ -227,13 +295,13 @@ result = InterpSgCressman(
 
 在本包目录执行 `python -m cli`。未写参数先读 `resource/conf.ini`，再无则用预设。`sta` 必填；`--grid` 与 `--background` 至少其一。
 
-| `--module` | 插件 |
+| `--module` | `InterpSg(method=...)` |
 | --- | --- |
-| `idw` | `InterpSgIdw(gaussian=False)` |
-| `idw_delta` | `InterpSgIdw(gaussian=True, reprocess=True)`；须 `--background` |
-| `gaussian` | `InterpSgGaussian` |
-| `kriging` | `InterpSgKriging` |
-| `cressman` | `InterpSgCressman` |
+| `idw` | `method="idw"`；`--reprocess true` 默认高斯权重，可用 `--no-gaussian` 关闭 |
+| `idw_delta` | 固定高斯 IDW × 偏差订正；须 `--background` |
+| `gaussian` | `method="gaussian"` |
+| `kriging` | `method="kriging"` |
+| `cressman` | `method="cressman"` |
 | `total` | `idw` 旧别名 |
 
 | 数据 / 开关 | 支持格式 | 参数 |
@@ -247,24 +315,26 @@ result = InterpSgCressman(
 python -m cli --module idw --sta sta.csv --grid grid.nc
 python -m cli --module idw --sta sta.csv --background bg.nc
 python -m cli --module idw --sta sta.csv --background bg.nc --reprocess true
+python -m cli --module idw --sta sta.csv --background bg.nc --reprocess true --no-gaussian
 python -m cli --module idw --sta sta.m3 --grid grid.m4 --output out.nc
 python -m cli --module idw_delta --sta sta.csv --background bg.nc
-python -m cli --module idw_delta --sta sta.csv --grid grid.nc --background bg.nc
 python -m cli --module gaussian --sta sta.csv --grid grid.nc --half-r 20
 python -m cli --module kriging --sta sta.csv --background bg.nc --reprocess true
 python -m cli --module cressman --sta sta.csv --grid grid.nc --r-list 60000,40000,20000
 python -m cli --module cressman --sta sta.csv --background bg.nc --reprocess true --r-list 1.0,0.8,0.6,0.4
 ```
 
-常用参数：`--reprocess`、`--effect-r` / `--near-num` / `--decrease`（IDW）、`--half-r`（Gaussian）、`--kriging-model` / `--kriging-sill` / `--kriging-range` / `--kriging-nugget`（Kriging）、`--r-list` / `--near-num`（Cressman）、`--output`、`--config`。
+常用参数：`--reprocess`、`--gaussian`（仅 idw）、`--effect-r` / `--near-num` / `--decrease`（IDW）、`--half-r`（Gaussian）、`--kriging-model` / `--kriging-sill` / `--kriging-range` / `--kriging-nugget`（Kriging）、`--r-list` / `--near-num`（Cressman）、`--output`、`--config`。
 
 ---
 
 ## 9. 选型提示
 
+业务侧优先 `InterpSg(method=...)`；下表为算法选择：
+
 | 场景 | 建议 |
 | --- | --- |
-| 通用站点插值 | `InterpSgIdw` |
-| 偏差订正且需平滑衰减 | `InterpSgIdw(gaussian=True)` 或 `InterpSgGaussian` |
-| 需显式变异函数 / 局部 OK | `InterpSgKriging` |
-| 多半径 Cressman（km 绝对值 / 可选差值累加） | `InterpSgCressman` |
+| 通用站点插值 | `method="idw"`（或直接 `InterpSgIdw`） |
+| 偏差订正且需平滑衰减 | `method="idw", reprocess=True`（默认高斯）/ `idw_delta`，或 `method="gaussian"` |
+| 需显式变异函数 / 局部 OK | `method="kriging"` |
+| 多半径 Cressman（km 绝对值 / 可选差值累加） | `method="cressman"` |

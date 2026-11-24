@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from steps_multi_time_fusion.src.steps_blending import blend_with_cascade, filter_gaussian
+from utils.base_plugin import BasePlugin
+from steps_multi_time_fusion.src.util_plugin import blend_with_cascade, filter_gaussian
 
 
-class StepsBlendingPlugin:
+class StepsBlendingPlugin(BasePlugin):
     """Blend nowcast and NWP precipitation fields using STEPS cascade weights."""
 
     def __init__(

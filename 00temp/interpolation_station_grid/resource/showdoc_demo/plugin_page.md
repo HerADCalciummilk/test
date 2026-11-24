@@ -3,7 +3,7 @@
 - **预报类型**: 语义与时空标准化
 - **算法类别**: `ancillaries`
 - **正式目录规划**: `NIMM/ancillaries/interpolation_station_grid/`
-- **对外入口**: `InterpSgIdw`、`InterpSgGaussian`、`InterpSgKriging`、`InterpSgCressman`
+- **对外入口**: `InterpSg`（`method`=`idw` / `idw_delta` / `gaussian` / `kriging` / `cressman`）；亦可直接用各 `InterpSg*`
 - **CLI 页**: [interpolation_station_grid](https://www.showdoc.com.cn/2598854776811541/11559060627727594)
 
 站点→格点插值：反距离（IDW / IDW×高斯）、最近邻×高斯、局部普通克里金、Cressman。统一接口 `process(sta, grid=None, background=None)`；由构造参数 **`reprocess`** 选择插值对象：`False` 直接用站点值插值，`True` 先算站点相对背景的偏差再对偏差插值并叠回（Cressman 为创新量累加）。`grid` 与 `background` 至少其一；缺 `grid` 时可从背景取水平网格。样例要素为阵风/风速（m/s）。读路径、写盘与命令行见 CLI 页。
@@ -12,22 +12,24 @@
 
 ```mermaid
 flowchart TB
-    STA[站点观测] --> ENT
-    GRID[目标网格可选] --> ENT
-    BG[背景场可选] -.-> ENT
-    subgraph ENT[入口四选一]
-        IDW[InterpSgIdw]
-        GAU[InterpSgGaussian]
-        KR[InterpSgKriging]
-        CR[InterpSgCressman]
-    end
-    ENT --> OUT[格点场]
+    STA[站点观测] --> FACADE
+    GRID[目标网格可选] --> FACADE
+    BG[背景场可选] -.-> FACADE
+    FACADE[InterpSg method]
+    FACADE --> IDW[InterpSgIdw]
+    FACADE --> GAU[InterpSgGaussian]
+    FACADE --> KR[InterpSgKriging]
+    FACADE --> CR[InterpSgCressman]
+    IDW --> OUT[格点场]
+    GAU --> OUT
+    KR --> OUT
+    CR --> OUT
 ```
 
 1. **输入**：站点表；`grid` / `background` 至少其一（均可只传背景）。
 2. **`reprocess=False`（默认）**：直接用站点值插值；IDW/Gaussian/Cressman 远点或圈外回退/保留背景初场；Kriging 无硬截断，有背景时**只取网格**。
-3. **`reprocess=True`**：须 `background`；先算站点与背景场的偏差，再对偏差插值并叠回（Cressman 为相对当前分析场的创新量累加）。
-4. **入口**：`InterpSgIdw`、`InterpSgGaussian`、`InterpSgKriging`、`InterpSgCressman`。
+3. **`reprocess=True`**：须 `background`；先算站点与背景场的偏差，再对偏差插值并叠回（Cressman 为相对当前分析场的创新量累加）。`idw` 默认 IDW×高斯（可用 `gaussian=False` 关闭）；`idw_delta` 固定高斯×偏差。
+4. **入口**：推荐 `InterpSg(method=...)`；亦可直接 `InterpSgIdw` / `InterpSgGaussian` / `InterpSgKriging` / `InterpSgCressman`。
 
 # InterpSgIdw
 
@@ -35,7 +37,7 @@ flowchart TB
 
 - `reprocess=False`：直接用站点值插值；`d > effectR` 回退背景（无背景填 0）。
 - `reprocess=True`：须背景；先算站点与背景场的偏差，再对偏差插值并叠回（超距 Δ=0 → 保留背景）。
-- `gaussian=True`：权重再乘 `exp(-(d/effectR)^2)`（CLI `--module idw_delta` 固定 `gaussian=True` + `reprocess=True`）。
+- `gaussian=True`：权重再乘 `exp(-(d/effectR)^2)`。统一入口 / CLI：`reprocess=True` 时默认开启；`idw_delta` 固定开启。
 
 **构造参数**
 

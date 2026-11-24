@@ -12,12 +12,14 @@ import pandas as pd
 import pytest
 import xarray as xr
 
+import inspect
+
 from orographic_temperature_downscaling.src.lapse_rate import (
     compute_lapse_rate_adjustment,
     ApplyGriddedLapseRate,
     LapseRate,
     DALR,
-    ELR
+    ELR,
 )
 
 
@@ -334,3 +336,34 @@ class TestLapseRate:
         # 验证窗口形状
         expected_shape = (3, 3, 3, 3)  # (height, width, window_height, window_width)
         assert actual_windows.shape == expected_shape, f"窗口形状错误: {actual_windows.shape} != {expected_shape}"
+
+
+def test_lapse_and_apply_process_signature():
+    """两条命令的配置键都是 process 的具名参数。"""
+    from orographic_temperature_downscaling.cli.apply_cli import process as apply_process
+    from orographic_temperature_downscaling.cli.orographic_temperature_downscaling_cli import (
+        process as lapse_process,
+    )
+
+    lapse_names = inspect.signature(lapse_process).parameters
+    for key in (
+        "temperature_path",
+        "orography_path",
+        "land_sea_mask_path",
+        "output_path",
+        "max_height_diff",
+        "nbhood_radius",
+        "dry_adiabatic",
+        "config",
+    ):
+        assert key in lapse_names
+    apply_names = inspect.signature(apply_process).parameters
+    for key in (
+        "temperature_path",
+        "lapse_rate_path",
+        "source_orography_path",
+        "target_orography_path",
+        "output_path",
+        "config",
+    ):
+        assert key in apply_names

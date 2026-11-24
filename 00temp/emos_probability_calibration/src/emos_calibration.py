@@ -72,6 +72,7 @@ def train_emos(
 
     输入为六维 xarray 或六列 DataFrame；逐 level 独立拟合后合并。
     """
+    # 统一六维预报、实况和附加场
     fo, ob, add = normalize_grid_inputs(
         historic_forecasts,
         truths,
@@ -90,6 +91,7 @@ def train_emos(
     lon = fo[GRID_LON_DIM].values
     point_by_point = bool(trainer_kwargs.get("point_by_point", False))
 
+    # 逐层拟合系数，再合并成一套系数场
     level_coeffs: List[xr.Dataset] = []
     for level in levels_to_process(fo, levels):
         level_coeffs.append(

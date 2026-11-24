@@ -31,6 +31,8 @@ import skimage.segmentation as skis
 from scipy import optimize
 import re
 from datetime import timedelta
+
+
 try:
     from skimage import feature as ski_feature
     SKIMAGE_IMPORTED = True
@@ -48,9 +50,15 @@ except ImportError:
     PANDAS_IMPORTED = False
 try:
     import cv2
+
     CV2_IMPORTED = True
 except ImportError:
     CV2_IMPORTED = False
+
+import numpy.fft as numpy_fft
+import pyfftw
+import pyfftw.interfaces.numpy_fft as pyfftw_fft
+import scipy.fftpack as scipy_fft
 
 def deprecate_args(old_new_args, deprecation_release):
     def _deprecate(func):
@@ -319,7 +327,6 @@ def spectral_mean(X, shape):
     return np.real(X[0, 0]) / (shape[0] * shape[1])
 
 def get_numpy(shape, fftn_shape=None, **kwargs):
-    import numpy.fft as numpy_fft
 
     f = {
         "fft2": numpy_fft.fft2,
@@ -338,8 +345,6 @@ def get_numpy(shape, fftn_shape=None, **kwargs):
 
 
 def get_scipy(shape, fftn_shape=None, **kwargs):
-    import numpy.fft as numpy_fft
-    import scipy.fftpack as scipy_fft
 
     # use numpy implementation of rfft2/irfft2 because they have not been
     # implemented in scipy.fftpack
@@ -360,8 +365,6 @@ def get_scipy(shape, fftn_shape=None, **kwargs):
 
 def get_pyfftw(shape, fftn_shape=None, n_threads=1, **kwargs):
     try:
-        import pyfftw.interfaces.numpy_fft as pyfftw_fft
-        import pyfftw
 
         pyfftw.interfaces.cache.enable()
     except ImportError:

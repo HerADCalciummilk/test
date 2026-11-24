@@ -2,9 +2,11 @@
 """ini 补齐与 CLI 缺省参数。"""
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
-from cli.interpolation_grid_grid_cli import build_parser
+from cli.interpolation_grid_grid_cli import process
 from utils.util_env import clear_ini_cache, resolve_args, resolve_io_type, resolve_module
 
 
@@ -45,6 +47,21 @@ def test_nearest_and_cubic_modules() -> None:
     assert cubic["module"] == "cubic"
     assert nearest["outer_value"] == 0.0
     assert cubic["outer_value"] == 0.0
+    assert nearest["mdtol"] is None
+    assert cubic["mdtol"] is None
+
+
+def test_conservative_module() -> None:
+    assert resolve_module("conservative") == "conservative"
+    got = resolve_args(
+        module="conservative",
+        grid=r"D:\grid.nc",
+        domain="20,50,70,140,0.25,0.25",
+        mdtol=0.25,
+    )
+    assert got["module"] == "conservative"
+    assert got["mdtol"] == 0.25
+    assert got["outer_value"] == 0.0
 
 
 def test_required_grid_raises_when_empty() -> None:
@@ -63,12 +80,13 @@ def test_invalid_module() -> None:
 
 
 def test_cli_omitted_args_are_none() -> None:
-    args = build_parser().parse_args([])
-    assert args.module is None
-    assert args.grid is None
-    assert args.outer_value is None
-    assert args.grid_type is None
-    assert args.grid_template_type is None
+    params = inspect.signature(process).parameters
+    assert params["module"].default is None
+    assert params["grid"].default is None
+    assert params["outer_value"].default is None
+    assert params["mdtol"].default is None
+    assert params["grid_type"].default is None
+    assert params["grid_template_type"].default is None
 
 
 def test_resolve_io_type_by_extension() -> None:

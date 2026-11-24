@@ -1,5 +1,5 @@
 {
-  "tp_model": "D:/data/test/ecmwf/{rpt:%Y%m%d}/{rpt:%Y%m%d%H}.{dtime:03d}",
-  "tp_obs": "D:/data/test/r24/sfc/{rpt:%y%m%d%H}.000",
-  "correct_tp_outpath": "D:/Work/NIMM_pip_repos/00temp/frequency_matching_rain24/resource/output/rain24/ecmwf/{rpt:%Y%m%d%H}/{rpt:%Y%m%d%H}.{dtime:03d}"
+  "tp_model": "//10.28.16.234/data1/nimm_test_data_tmp/frequency_matching_rain24/test_data/ecmwf/{rpt:%Y%m%d}/{rpt:%Y%m%d%H}.{dtime:03d}",
+  "tp_obs": "//10.28.16.234/data1/nimm_test_data_tmp/frequency_matching_rain24/test_data/Observation/r24/sfc/{rpt:%y%m%d%H}.000",
+  "correct_tp_outpath": "//10.28.16.234/data1/nimm_test_data_tmp/frequency_matching_rain24/test_data/output/ecmwf/{rpt:%Y%m%d%H}/{rpt:%Y%m%d%H}.{dtime:03d}"
 }

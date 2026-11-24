@@ -19,7 +19,7 @@ python -m cli --help
 python -m cli \
   --module {idw|idw_delta|gaussian|kriging|cressman} \
   --sta PATH [--grid PATH] [--background PATH] \
-  [--reprocess true|false] [--output PATH] \
+  [--reprocess true|false] [--gaussian|--no-gaussian] [--output PATH] \
   [--effect-r N] [--near-num N] [--decrease N] \
   [--half-r N] [--r-list R1,R2,...] \
   [--kriging-model spherical|exponential|gaussian] \
@@ -38,11 +38,11 @@ python cli/interpolation_station_grid_cli.py --module idw --sta PATH --backgroun
 
 # interpolation_station_grid_cli
 
-**调用插件**: `InterpSgIdw` / `InterpSgGaussian` / `InterpSgKriging` / `InterpSgCressman`（由 `--module` 选择）
+**调用插件**: `InterpSg`（由 `--module` 选择 `idw` / `idw_delta` / `gaussian` / `kriging` / `cressman`）
 
 对外 Python 入口为 `InterpolationStationGridCli.call`（关键字与 flag 同名）。未传入的可选项为 `None`，按参数优先级回落。
 
-<div style="margin:8px 0;padding:10px 14px;background:#e8f3ff;border-left:4px solid #1677ff;border-radius:4px;overflow-x:auto;"><div style="margin:0;padding:0;background:transparent;border:none;color:#1677ff;font-weight:600;font-size:16px;line-height:1.55;font-family:Consolas,Menlo,Monaco,monospace;white-space:pre;">InterpolationStationGridCli.call(<br>&nbsp;&nbsp;&nbsp;&nbsp;module=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;sta=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;grid=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;background=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;reprocess=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;sta_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;grid_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;background_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;output=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;output_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;effect_r=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;near_num=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;decrease=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;half_r=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;r_list=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_model=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_sill=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_range=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_nugget=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;config=None,<br>)</div></div>
+<div style="margin:8px 0;padding:10px 14px;background:#e8f3ff;border-left:4px solid #1677ff;border-radius:4px;overflow-x:auto;"><div style="margin:0;padding:0;background:transparent;border:none;color:#1677ff;font-weight:600;font-size:16px;line-height:1.55;font-family:Consolas,Menlo,Monaco,monospace;white-space:pre;">InterpolationStationGridCli.call(<br>&nbsp;&nbsp;&nbsp;&nbsp;module=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;sta=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;grid=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;background=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;reprocess=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;gaussian=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;sta_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;grid_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;background_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;output=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;output_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;effect_r=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;near_num=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;decrease=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;half_r=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;r_list=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_model=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_sill=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_range=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_nugget=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;config=None,<br>)</div></div>
 
 | 参数 | 说明 |
 | --- | --- |
@@ -50,7 +50,8 @@ python cli/interpolation_station_grid_cli.py --module idw --sta PATH --backgroun
 | <span style="color:#1677ff;font-weight:600;font-size:16px">sta</span> | 输入**站点场**路径（csv/m3，`--sta`）。读入后交给插件作观测源；必填（或由 ini 提供） |
 | <span style="color:#1677ff;font-weight:600;font-size:16px">grid</span> | 输入格点文件路径（nc/m4，`--grid`）。CLI **只取网格信息**传给插件，场值不参与插值。可与 `background` 二选一以提供网格；两者都缺则报错 |
 | <span style="color:#1677ff;font-weight:600;font-size:16px">background</span> | 输入**背景格点场**路径（nc/m4）。`reprocess=true` / `idw_delta` 时必需。`false` 时：IDW/Gaussian/Cressman 作远点填充或初场，Kriging 仅在缺 `grid` 时取网格。无 `grid` 时也可单独提供网格 |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">reprocess</span> | `false`：直接用站点值插值；`true`：先算站点与背景场的偏差再对偏差插值（透传插件；`idw_delta` 强制 `true`） |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">reprocess</span> | `false`：绝对值插值（背景可作远点填充）；`true`：偏差再插值。`idw` 在 `true` 且未指定 `--gaussian/--no-gaussian` 时默认 IDW×高斯；`idw_delta` 强制 `true` |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">gaussian</span> | 仅 `idw`：是否乘高斯核。省略时随 `reprocess`；`idw_delta` 固定高斯 |
 | <span style="color:#1677ff;font-weight:600;font-size:16px">output</span> | 可选输出格点路径；给出则写 nc/m4。`call` 只返回退出码，需要场对象时再读该文件；省略则仅 `print` |
 | <span style="color:#1677ff;font-weight:600;font-size:16px">effect_r</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">near_num</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">decrease</span> | IDW / 克里金近邻等 |
 | <span style="color:#1677ff;font-weight:600;font-size:16px">half_r</span> | 仅 `gaussian` |
@@ -60,7 +61,7 @@ python cli/interpolation_station_grid_cli.py --module idw --sta PATH --backgroun
 | <span style="color:#1677ff;font-weight:600;font-size:16px">config</span> | 运行配置 ini |
 | <span style="color:#1677ff;font-weight:400;font-size:16px">return</span> | `int` 退出码（`0` 成功）。场写入 `output`（若给定）；需要 `DataArray` 时再读该 nc |
 
-说明：`idw_delta` = `InterpSgIdw(gaussian=True, reprocess=True)`，须 `--background`（不再把 `--grid` 当背景场）。普通 `idw` 是否偏差订正仅由 `--reprocess` 控制，**不会**因有背景自动改成高斯×偏差。
+说明：`idw_delta` = 高斯 IDW × 偏差订正（须 `--background`）。普通 `idw` 是否偏差订正由 `--reprocess` 控制；`reprocess=true` 时默认乘高斯核，可用 `--no-gaussian` 关掉。**不会**仅因有背景就自动改成偏差路径。
 
 **使用示例**
 

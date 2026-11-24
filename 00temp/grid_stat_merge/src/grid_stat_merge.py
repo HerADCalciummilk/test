@@ -420,7 +420,10 @@ class GridStatMergePlugin(BasePlugin):
         ----
         订正后的 meteva 格点场
         """
-        return do_gs_merge(
+        import util_plugin
+
+        # 站点偏差按高斯权重订正格点
+        return util_plugin.do_gs_merge(
             ifcst_g,
             ifcst_s,
             R=kwargs.get("R", self.R),

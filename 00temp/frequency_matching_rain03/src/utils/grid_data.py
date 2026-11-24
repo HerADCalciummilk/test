@@ -12,6 +12,15 @@ from utils.val_type import ValType
 from utils.file_flag import FileFlag
 from utils.io_meb import meb, resolve_existing_path
 
+from utils.io_meb import (
+align_meb_grid_to_original,
+parse_micaps4_like_original,
+read_griddata_from_micaps4,
+)
+from utils.point_data import PointData
+from utils.scatter_data import ScatterData
+
+
 
 def _make_lon_arr(lon_start, d_lon, xn):
     """Create a float64 numpy array of longitudes using exact multiplication (same precision as list comprehension)."""
@@ -168,11 +177,6 @@ class GridData:
 
     def _read_val_from_micaps4(self, str_input_file_path):
         """meb 读入，再与原版南北约定对齐（业务场上 meb 可能相对原版颠倒）。"""
-        from utils.io_meb import (
-            align_meb_grid_to_original,
-            parse_micaps4_like_original,
-            read_griddata_from_micaps4,
-        )
         grd = read_griddata_from_micaps4(str_input_file_path)
         if grd is not None:
             self._fill_from_meb_grd(grd)
@@ -566,8 +570,6 @@ class GridData:
         return grid_data
 
     def to_scatter_data(self):
-        from utils.point_data import PointData
-        from utils.scatter_data import ScatterData
         total = self.xn * self.yn
         # Pre-allocate list with known size
         arr = [None] * total
@@ -591,8 +593,6 @@ class GridData:
         return int(np.sum((self.val >= db_limit_num1) & (self.val < db_limit_num2)))
 
     def to_scatter_data_greater_than(self, db_limit):
-        from utils.point_data import PointData
-        from utils.scatter_data import ScatterData
         mask = self.val >= db_limit
         idx_y, idx_x = np.where(mask)
         n = len(idx_y)
@@ -604,8 +604,6 @@ class GridData:
         return ScatterData(lst)
 
     def to_scatter_data_less_than(self, db_limit):
-        from utils.point_data import PointData
-        from utils.scatter_data import ScatterData
         mask = self.val < db_limit
         idx_y, idx_x = np.where(mask)
         n = len(idx_y)

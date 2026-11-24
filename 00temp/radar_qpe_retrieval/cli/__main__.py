@@ -1,11 +1,5 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright (c) 2019 NMC Developers.
-# Distributed under the terms of the GPL V3 License.
-"""Command line entrypoint for qpe CLI commands."""
+"""``python -m cli`` → 已装饰的 ``process``（合 conf.ini）。"""
+from .radar_qpe_retrieval_cli import process
 
-from . import main
-
-
-if __name__ == "__main__":
-    main()
+process()

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional
 
 import numpy as np
 import xarray as xr
@@ -123,19 +123,3 @@ def _write_griddata_to_nc(
         ) from exc
 
     return path_obj
-
-
-def main(argv: Optional[Sequence[str]] = None):
-    """列出带路径参数的命令行。"""
-    del argv
-    lines = [
-        "radar_wind_dealiasing 命令行参数由 flags 传入，先看 --help：",
-        "  python cli/region_dealias.py --help",
-        "  python cli/region_dealias.py --velocity-path PATH [--gatefilter-path PATH] [--output-path PATH] [--config PATH]",
-        "  python -m cli.region_dealias --help",
-        "  python cli/polar_volume_main.py --help",
-        "  python cli/polar_volume_main.py --radar-path PATH --field-name velocity [--output-path PATH] [--config PATH]",
-        "  python -m cli.polar_volume_main --help",
-    ]
-    print("\n".join(lines))
-    return 0

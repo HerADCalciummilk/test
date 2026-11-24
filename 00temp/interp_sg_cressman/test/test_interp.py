@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""手工对照：用本包 ``interp_sg_cressman`` 替代 meteva_base 同名接口。"""
+"""手工对照：``InterpSgCressman`` 插值出图。"""
 from __future__ import annotations
 
 import sys
@@ -13,12 +13,14 @@ for p in (str(_ROOT), str(_SRC)):
 
 import meteva_base as meb
 
-from interp_sg_cressman import interp_sg_cressman
+from interp_sg_cressman_plugin import InterpSgCressman
 
 sta_file = r"D:\Work\NIMM_pip_repos_tmp\interp_sg_cressman\resource\input\ecmf\2026052200.036.m3"
 sta = meb.read_stadata_from_micaps3(sta_file)
 grid0 = meb.grid([70, 140, 0.1], [15, 55, 0.1])
 
-grd1 = interp_sg_cressman(sta, grid0, r_list=[1000, 200, 100, 50], nearNum=100)
+grd1 = InterpSgCressman(
+    r_list=[1000, 200, 100, 50], nearNum=100
+).process(sta, grid=grid0)
 print(grd1)
 meb.plot_tools.contourf_2d_grid(grd1)

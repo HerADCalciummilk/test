@@ -1,0 +1,9 @@
+numpy
+scipy
+scikit-learn
+numba
+xarray
+netCDF4
+pandas
+meteva_base
+pyyaml

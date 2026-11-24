@@ -3,9 +3,8 @@
 """为 orographic_wind_downscaling 准备个例域 data/（辅料 + 可选风速）。
 
 复用降水个例的空间域（105–122°E / 18–31°N）与 1 km DEM。
-`a_over_s` / `sigma` 由 1 km DEM 近似生成（非 Met Office 官方 ancilla 流水线）：
-- sigma：邻域地形高度标准差（近似次网格起伏）
-- a_over_s：地形坡度模（上坡轮廓粗糙度的可运行近似）
+`sigma` 由插件 ``RoughnessCalculation`` 按模式格点统计 1 km 地形高度标准差，再写回 1 km 网格。
+`a_over_s` 是同一模式格点上的轮廓粗糙度：东西、南北截面的上坡增量除以截面长度后取平均。
 
 近地面 10 m 风与风速实况若尚未到位，本脚本只写辅料与说明；风速可随后补。
 """
@@ -41,7 +40,6 @@ CASE_DOMAIN = {
 }
 # EC 气压层约 0.2°；中纬粗算模式分辨率（米），供 CLI model_resolution
 EC_MODEL_RESOLUTION_M = 22000.0
-SIGMA_WINDOW = 5  # 1 km 网格上 5×5 邻域估 sigma
 
 
 def _ensure_path() -> None:
@@ -63,74 +61,11 @@ def _write(da: xr.DataArray, path: Path, name: str) -> None:
     out.to_dataset(name=name).to_netcdf(path, mode="w")
 
 
-def _as_meb2d(
-    values: np.ndarray,
-    lat: np.ndarray,
-    lon: np.ndarray,
-    *,
-    units: str,
-    name: str,
-    level: float = 0.0,
-) -> xr.DataArray:
-    arr = np.asarray(values, dtype=np.float32)[None, None, None, None, :, :]
-    da = xr.DataArray(
-        arr,
-        dims=("member", "level", "time", "dtime", "lat", "lon"),
-        coords={
-            "member": ["EC"],
-            "level": [level],
-            "time": [np.datetime64("1970-01-01T00:00:00")],
-            "dtime": [0],
-            "lat": lat,
-            "lon": lon,
-        },
-        name=name,
-        attrs={"units": units},
-    )
-    da.level.attrs["units"] = "m"
-    return da
-
-
 def _crop(da: xr.DataArray) -> xr.DataArray:
     return da.sel(
         lat=slice(CASE_DOMAIN["lat_min"], CASE_DOMAIN["lat_max"]),
         lon=slice(CASE_DOMAIN["lon_min"], CASE_DOMAIN["lon_max"]),
     )
-
-
-def _field2d(da: xr.DataArray) -> np.ndarray:
-    return np.asarray(da.values, dtype=np.float64).reshape(da.lat.size, da.lon.size)
-
-
-def _moving_std(z: np.ndarray, win: int) -> np.ndarray:
-    """简单邻域标准差（忽略 nan）。"""
-    from numpy.lib.stride_tricks import sliding_window_view
-
-    pad = win // 2
-    zp = np.pad(z, pad, mode="edge")
-    windows = sliding_window_view(zp, (win, win))
-    # windows: (ny, nx, win, win)
-    return np.nanstd(windows, axis=(-1, -2))
-
-
-def _slope_magnitude(z: np.ndarray, dlat_deg: float, dlon_deg: float, lat: np.ndarray) -> np.ndarray:
-    """地形坡度模 |∇h|（无量纲），作 a_over_s 可运行近似。"""
-    # 南北：米；东西：按纬度缩放
-    dy = dlat_deg * 111000.0
-    dx = dlon_deg * 111000.0 * np.cos(np.deg2rad(lat)).reshape(-1, 1)
-    dx = np.maximum(dx, 1.0)
-    dhz = np.zeros_like(z)
-    dhx = np.zeros_like(z)
-    dhz[1:-1, :] = (z[2:, :] - z[:-2, :]) / (2.0 * dy)
-    dhz[0, :] = (z[1, :] - z[0, :]) / dy
-    dhz[-1, :] = (z[-1, :] - z[-2, :]) / dy
-    for j in range(z.shape[0]):
-        row_dx = float(dx[j, 0])
-        dhx[j, 1:-1] = (z[j, 2:] - z[j, :-2]) / (2.0 * row_dx)
-        dhx[j, 0] = (z[j, 1] - z[j, 0]) / row_dx
-        dhx[j, -1] = (z[j, -1] - z[j, -2]) / row_dx
-    slope = np.hypot(dhx, dhz)
-    return np.clip(slope, 0.0, 0.5)
 
 
 def build_ancillaries() -> Dict[str, Path]:
@@ -150,13 +85,10 @@ def build_ancillaries() -> Dict[str, Path]:
         modoro, is_single=True, valid_val=(-np.inf, np.inf, np.nan)
     )
 
-    z = _field2d(dem)
-    lat = dem.lat.values
-    lon = dem.lon.values
-    dlat = float(lat[1] - lat[0])
-    dlon = float(lon[1] - lon[0])
-    sigma = _moving_std(z, SIGMA_WINDOW)
-    a_over_s = _slope_magnitude(z, dlat, dlon, lat)
+    _ensure_path()
+    from orographic_wind_downscaling.src.roughness import RoughnessCalculation
+
+    sigma_da, aos_da = RoughnessCalculation()(dem, orog)
 
     written = {}
     pairs = [
@@ -170,15 +102,19 @@ def build_ancillaries() -> Dict[str, Path]:
         _write(da, path, vname)
         written[key] = path
 
-    sigma_da = _as_meb2d(sigma, lat, lon, units="m", name="standard_deviation_of_height_in_grid_cell")
-    sigma_da.attrs["note"] = f"approx from {SIGMA_WINDOW}x{SIGMA_WINDOW} neighborhood of 1km DEM"
+    sigma_da.attrs["note"] = (
+        "std of 1 km height inside each full model-grid cell; "
+        "incomplete cells omitted then filled on the model grid and interpolated to 1 km"
+    )
     sigma_da.attrs["case_domain"] = CASE_DOMAIN["label"]
     path = OUT_ROOT / "ancil" / "sigma.nc"
     _write(sigma_da, path, sigma_da.name)
     written["sigma"] = path
 
-    aos_da = _as_meb2d(a_over_s, lat, lon, units="1", name="silhouette_roughness")
-    aos_da.attrs["note"] = "approx |grad h|; runnable proxy for silhouette roughness"
+    aos_da.attrs["note"] = (
+        "silhouette roughness of each full model-grid cell (111.195 km/deg); "
+        "incomplete cells omitted then filled on the model grid and interpolated to 1 km"
+    )
     aos_da.attrs["case_domain"] = CASE_DOMAIN["label"]
     path = OUT_ROOT / "ancil" / "a_over_s.nc"
     _write(aos_da, path, aos_da.name)
@@ -332,11 +268,11 @@ def write_readme(*, n_wind: int) -> None:
 | --- | --- | --- |
 | `ancil/pporo.nc` | 目标细地形 | `target_orography_path` |
 | `ancil/modoro.nc` | 模式地形→目标网格 | `standard_orography_path` |
-| `ancil/sigma.nc` | 高度标准差（邻域近似） | `sigma_path` |
-| `ancil/a_over_s.nc` | 轮廓粗糙度（坡度近似） | `silhouette_roughness_path` |
+| `ancil/sigma.nc` | 模式格点内 1 km 高度标准差 | `sigma_path` |
+| `ancil/a_over_s.nc` | 模式格点轮廓粗糙度 | `silhouette_roughness_path` |
 | `ancil/model_resolution.txt` | ≈{EC_MODEL_RESOLUTION_M} m | `model_resolution` |
 
-`sigma` / `a_over_s` 为可运行近似，非 Met Office 官方 ancilla 产品。
+`sigma` 与 `a_over_s` 都按完整模式格点统计；不满一整格的先在模式网格上填补，再插到 1 km。
 
 ## 风速（过渡）
 - 已从降水包同个例的 **850 hPa U/V** 合成并插到 1 km：`wind_speed/`（{n_wind} 个 3 h 时次）

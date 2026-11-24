@@ -14,7 +14,7 @@ import xarray as xr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from generate_orographic_smoothing_coefficients.cli.dsc_generate_orographic_smoothing_coefficients import (  # noqa: E402
+from generate_orographic_smoothing_coefficients.cli.generate_orographic_smoothing_coefficients_cli import (  # noqa: E402
     paired_output_paths,
     process,
 )

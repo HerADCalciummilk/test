@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from kalman_element_forecast_correction.utils.base_plugin import PostProcessingPlugin
+from kalman_element_forecast_correction.utils.base_plugin import BasePlugin
 
 
-class KalmanME(PostProcessingPlugin):
+class KalmanME(BasePlugin):
     """Update a Kalman mean-error or mean-absolute-error field."""
 
     def __init__(
@@ -61,6 +61,7 @@ class KalmanME(PostProcessingPlugin):
             print(err)
             return None
 
+        # 按 alpha 更新平均误差，不改更新公式
         return kalman_me(
             fcst,
             obs,

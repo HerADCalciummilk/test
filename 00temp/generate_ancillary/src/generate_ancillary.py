@@ -29,7 +29,7 @@ from cf_units import Unit as CfUnit
 from numpy import ndarray
 from numpy.ma.core import MaskedArray
 
-from generate_ancillary.src.utils._make_mask_griddata import make_mask_griddata
+from generate_ancillary.src.util_plugin import make_mask_griddata
 from generate_ancillary.utils.base_plugin import BasePlugin
 
 # 以下字典定义了默认的以米为单位的地形高度带（亦可作为 thresholds_dict 缺省配置）
@@ -105,6 +105,7 @@ class CorrectLandSeaMask(BasePlugin):
                 standard_landmask, valid_val=unbounded
             )
             data = np.asarray(standard_landmask.values, dtype=np.float32).copy()
+            # 小于 0.5 为海，否则为陆
             data[data < 0.5] = 0
             data[data >= 0.5] = 1
             result = xr.DataArray(
@@ -124,6 +125,7 @@ class CorrectLandSeaMask(BasePlugin):
             return result
 
         data = np.asarray(standard_landmask, dtype=np.float32).copy()
+        # 小于 0.5 为海，否则为陆
         data[data < 0.5] = 0
         data[data >= 0.5] = 1
         return data.astype(np.int8)

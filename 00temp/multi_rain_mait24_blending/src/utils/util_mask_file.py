@@ -8,6 +8,9 @@ import meteva_base as meb
 from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
+from PIL import Image
+
+
 
 
 def get_area_pre_max(arr, lats, lons):
@@ -99,7 +102,6 @@ def write_mask_dat(dat_path, mask_north_up, lon_array, lat_array):
 
 def write_mask_png(png_path, mask_north_up):
     """简单预览：区内浅红，区外黑色。"""
-    from PIL import Image
 
     h, w = mask_north_up.shape
     rgb = np.zeros((h, w, 3), dtype=np.uint8)
