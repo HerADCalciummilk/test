@@ -1,0 +1,42 @@
+<Slide style={{ width: 1280, height: 720, padding: 60, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', bottom: -200, left: 200, width: 900, height: 500, borderRadius: 250, background: 'radial-gradient(circle, rgba(36,66,143,0.16) 0%, rgba(11,21,33,0) 70%)' }} />
+
+  <Box style={{ position: 'relative', zIndex: 1, flexDirection: 'column', height: 600 }}>
+    <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>它能做什么：从包名到两份文档页</Text>
+    <Box style={{ width: '100%', height: 1, background: 'linear-gradient(90deg, #63A7D4 0%, rgba(99,167,212,0) 100%)', marginTop: 16, marginBottom: 40 }} />
+
+    <Box style={{ flexDirection: 'row', alignItems: 'stretch', gap: 0, flex: 1 }}>
+      {[
+        { n: '01', icon: 'box-open', title: '给输入', body: '包名 + 代码路径\n（可指定只改哪页）' },
+        { n: '02', icon: 'book-open', title: '对清单', body: '查预报种类 / 算法类别\n读代码入口与参数' },
+        { n: '03', icon: 'gear', title: '按模板生成', body: '套插件 / CLI 骨架\n写示例、出图、检验' },
+        { n: '04', icon: 'file-code', title: '得产出', body: '插件页 + CLI 页\n页末互链、示例齐全' },
+      ].map((s, i) => (
+        <Box key={i} style={{ flexDirection: 'row', flex: 1, alignItems: 'stretch' }}>
+          <Box style={{ flex: 1, background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: 24, flexDirection: 'column' }}>
+            <Box style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>{s.n}</Text>
+              <FAIcon name={s.icon} style={{ fill: '#8FBCE4', width: 26, height: 26 }} />
+            </Box>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 16, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{s.title}</Text>
+            <Text style={{ fontSize: 18, color: '#C9CCCE', lineHeight: 1.7, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+              {s.body.split('\n').map((line, j) => <Text key={j}>{line}<br /></Text>)}
+            </Text>
+          </Box>
+          {i < 3 ? (
+            <Box style={{ width: 34, justifyContent: 'center', alignItems: 'center' }}>
+              <FAIcon name='arrow-right' style={{ fill: '#63A7D4', width: 22, height: 22 }} />
+            </Box>
+          ) : null}
+        </Box>
+      ))}
+    </Box>
+
+    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 14, background: 'rgba(99,167,212,0.10)', border: '1px solid #2C405C', borderRadius: 8, padding: '14px 22px', marginTop: 24 }}>
+      <FAIcon name='circle-info' style={{ fill: '#63A7D4', width: 20, height: 20 }} />
+      <Text style={{ fontSize: 18, color: '#E7E8E9', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+        默认两页都写；可明确裁剪为「只要插件页 / 只要 CLI / 只改示例」。有批量场景写批量调度，检验默认不加。
+      </Text>
+    </Box>
+  </Box>
+</Slide>

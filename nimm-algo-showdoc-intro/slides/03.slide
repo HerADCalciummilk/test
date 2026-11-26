@@ -1,0 +1,80 @@
+<Slide style={{ width: 1280, height: 720, padding: 60, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', top: -120, right: -160, width: 620, height: 620, borderRadius: 310, background: 'radial-gradient(circle, rgba(99,167,212,0.16) 0%, rgba(11,21,33,0) 70%)' }} />
+
+  <Box style={{ position: 'relative', zIndex: 1, flexDirection: 'row', gap: 32, height: 600 }}>
+    <Box style={{ width: 340, background: '#63A7D4', borderRadius: 8, padding: 32, flexDirection: 'column', justifyContent: 'space-between' }}>
+      <Box>
+        <Text style={{ fontSize: 18, color: '#0F1920', letterSpacing: 2, fontFamily: 'Barlow Condensed, sans-serif', marginBottom: 12 }}>QUICK START</Text>
+        <Text style={{ fontSize: 76, fontWeight: 'bold', color: '#0F1920', lineHeight: 1.05, fontFamily: 'Barlow Condensed, sans-serif' }}>3 步</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#0F1920', lineHeight: 1.4, marginTop: 14, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>从安装到第一份文档页</Text>
+      </Box>
+
+      <Box style={{ flexDirection: 'column', gap: 18, marginTop: 24 }}>
+        {[
+          { n: '1', t: '安装技能', d: '拷到 .cursor/skills/' },
+          { n: '2', t: '连通 MCP', d: '配置 ShowDoc 服务' },
+          { n: '3', t: '对话调用', d: '@技能 + 包名 + 代码路径' },
+        ].map((s, i) => (
+          <Box key={i} style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+            <Box style={{ width: 30, height: 30, borderRadius: 15, background: '#0F1920', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Barlow Condensed, sans-serif' }}>{s.n}</Text>
+            </Box>
+            <Box>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F1920', lineHeight: 1.3, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{s.t}</Text>
+              <Text style={{ fontSize: 15, color: '#163A55', lineHeight: 1.4, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{s.d}</Text>
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
+      <Box style={{ background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: 20, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <FAIcon name='plug' style={{ fill: '#63A7D4', width: 20, height: 20 }} />
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>连通 MCP：ShowDoc 配置示例</Text>
+          <Text style={{ fontSize: 13, color: '#8FBCE4', marginLeft: 'auto', fontFamily: 'Barlow Condensed, sans-serif' }}>.cursor/mcp.json</Text>
+        </Box>
+        <CodeBlock
+          code={`{
+  "mcpServers": {
+    "showdoc": {
+      "type": "streamable-http",
+      "url": "https://www.showdoc.com.cn/mcp.php",
+      "headers": {
+        "Authorization": "Bearer <YOUR_SHOWDOC_TOKEN>"
+      }
+    }
+  }
+}`}
+          language='json'
+          width={640}
+          fontSize={12}
+          theme='github-dark'
+        />
+        <Text style={{ fontSize: 14, color: '#A9CFE7', lineHeight: 1.5, marginTop: 10, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          填入自己的 token，勿提交真实凭据；连通后确认 MCP 可用。数据须在 Cursor 本机可读，不经跳板 SSH 取数。
+        </Text>
+      </Box>
+
+      <Box style={{ background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: 20, flex: 1, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <FAIcon name='terminal' style={{ fill: '#63A7D4', width: 20, height: 20 }} />
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>基础话术（多数情况够用）</Text>
+        </Box>
+        <CodeBlock
+          code={`@nimm-algo-showdoc
+按 Skill 改 <包名> 的插件页和 CLI 页。
+代码路径：<包根>`}
+          language='text'
+          width={640}
+          fontSize={14}
+          theme='github-dark'
+        />
+        <Text style={{ fontSize: 14, color: '#A9CFE7', lineHeight: 1.5, marginTop: 12, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          按需再追加一行：只要插件页 / 只要 CLI；要批量调度；使用真实样例路径；要检验结果。
+        </Text>
+      </Box>
+    </Box>
+  </Box>
+</Slide>

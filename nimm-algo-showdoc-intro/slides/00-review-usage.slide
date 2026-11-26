@@ -1,0 +1,80 @@
+<Slide style={{ width: 1280, height: 720, padding: 60, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', top: -140, right: -120, width: 640, height: 640, borderRadius: 320, background: 'radial-gradient(circle, rgba(99,167,212,0.16) 0%, rgba(11,21,33,0) 70%)' }} />
+
+  <Box style={{ position: 'relative', zIndex: 1, flexDirection: 'column', height: 600 }}>
+    <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>在对话里让智能体审核</Text>
+    <Box style={{ width: '100%', height: 1, background: 'linear-gradient(90deg, #63A7D4 0%, rgba(99,167,212,0) 100%)', marginTop: 16, marginBottom: 20 }} />
+
+    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 14, background: 'rgba(99,167,212,0.10)', border: '1px solid #2C405C', borderRadius: 8, padding: '10px 20px', marginBottom: 14 }}>
+      <FAIcon name='comments' style={{ fill: '#63A7D4', width: 18, height: 18 }} />
+      <Text style={{ fontSize: 16, color: '#E7E8E9', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+        下面的每一步都由智能体完成，你不需要手动运行任何命令。
+      </Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'row', gap: 18, flex: 1 }}>
+      {/* 左：怎么说 + 智能体做什么 */}
+      <Box style={{ flex: 1.08, flexDirection: 'column', gap: 10 }}>
+        <Box style={{ background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px' }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>怎么说</Text>
+          {[
+            '审核一下 00temp/feels_like_temperature',
+            '对这个算法包做本地检查，出审核报告',
+            '合入前帮我预审 00temp/xxx',
+          ].map((t, i) => (
+            <Box key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+              <Text style={{ fontSize: 13, color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>›</Text>
+              <Text style={{ flex: 1, fontSize: 14, color: '#E7E8E9', lineHeight: 1.4, fontFamily: 'Consolas, monospace' }}>「{t}」</Text>
+            </Box>
+          ))}
+          <Text style={{ fontSize: 13, color: '#8FBCE4', lineHeight: 1.5, marginTop: 4, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            没给路径时列 00temp/ 候选让你选；也可输入 /nimm-algo-review 显式指定。
+          </Text>
+        </Box>
+
+        <Box style={{ background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px', flex: 1, flexDirection: 'column' }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>智能体会做什么</Text>
+          {[
+            ['1', '确认包路径，产物放 local-review-artifacts/'],
+            ['2', '选解释器，必要时装依赖'],
+            ['3', '机器检查：静态 + pytest → machine.json（约 1–3 分钟）'],
+            ['4', '读 docs/ src/ cli/ 代码 → 写 llm.json，列出读过的文件'],
+            ['5', '合并出 report.md / report.json（不重跑机器检查）'],
+            ['6', '读报告，按固定顺序汇报'],
+          ].map(([n, t], i) => (
+            <Box key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', padding: '3px 0' }}>
+              <Text style={{ width: 14, fontSize: 13, color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>{n}</Text>
+              <Text style={{ flex: 1, fontSize: 14, color: '#C9CCCE', lineHeight: 1.45, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{t}</Text>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+
+      {/* 右：为什么分两次 + 边界 */}
+      <Box style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
+        <Box style={{ background: 'rgba(36,66,143,0.22)', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px' }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>为什么程序分两次运行</Text>
+          <Text style={{ fontSize: 14, color: '#C9CCCE', lineHeight: 1.55, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            语义复核在机器检查之后、出报告之前，程序无法中途等待。所以先 --machine-only，复核后再用 --from-json 与 --llm-result 合并。
+          </Text>
+          <Text style={{ fontSize: 14, color: '#8FBCE4', lineHeight: 1.55, marginTop: 4, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            这三个参数是智能体流程专用，不在 --help 显示，人工运行用不到，日常无需关心。
+          </Text>
+        </Box>
+
+        <Box style={{ background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px', flex: 1, flexDirection: 'column', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>边界</Text>
+          {[
+            '不修改算法代码，只出报告；要改代码请另行提出',
+            '不读取、不打印、不复制 llm.toml 与任何 API Key',
+            '默认不调用外部 LLM API，也不绕过复核',
+            '不改判机器结果，冲突以机器检查为准',
+            '只依据 reviewed_files 列出的文件下结论；不运行被审包',
+          ].map((t, i) => (
+            <Text key={i} style={{ fontSize: 13, color: '#C9CCCE', lineHeight: 1.45, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>· {t}</Text>
+          ))}
+        </Box>
+      </Box>
+    </Box>
+  </Box>
+</Slide>

@@ -1,0 +1,81 @@
+<Slide style={{ width: 1280, height: 720, padding: 60, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', bottom: -200, left: 180, width: 900, height: 500, borderRadius: 250, background: 'radial-gradient(circle, rgba(36,66,143,0.16) 0%, rgba(11,21,33,0) 70%)' }} />
+
+  <Box style={{ position: 'relative', zIndex: 1, flexDirection: 'column', height: 600 }}>
+    <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>手动运行与 API 调用 LLM 模型复核</Text>
+    <Box style={{ width: '100%', height: 1, background: 'linear-gradient(90deg, #63A7D4 0%, rgba(99,167,212,0) 100%)', marginTop: 16, marginBottom: 20 }} />
+
+    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 14, background: 'rgba(99,167,212,0.10)', border: '1px solid #2C405C', borderRadius: 8, padding: '10px 20px', marginBottom: 14 }}>
+      <FAIcon name='circle-info' style={{ fill: '#63A7D4', width: 18, height: 18 }} />
+      <Text style={{ fontSize: 15, color: '#E7E8E9', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+        用于调试、脱离 Cursor 或接入脚本。完整流程的语义复核由程序调用外部 LLM 接口完成，需先配置接口。
+      </Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'row', gap: 18, flex: 1 }}>
+      {/* 左：配置 + 运行 */}
+      <Box style={{ flex: 1.12, flexDirection: 'column', gap: 10 }}>
+        <Box style={{ background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px' }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>1 · 配置 LLM</Text>
+          <Text style={{ fontSize: 14, color: '#C9CCCE', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            三项：api_key / base_url / model。可写 local_review/llm.toml，或用环境变量 OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL。
+          </Text>
+          <Text style={{ fontSize: 13, color: '#8FBCE4', lineHeight: 1.5, marginTop: 3, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            环境变量优先于配置文件；接口需兼容 OpenAI /chat/completions。llm.toml 含密钥，勿提交 git。
+          </Text>
+        </Box>
+
+        <Box style={{ background: 'rgba(36,66,143,0.22)', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px', flex: 1, flexDirection: 'column', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>2 · 运行</Text>
+          <Text style={{ fontSize: 13, color: '#8FBCE4', lineHeight: 1.4, marginBottom: 4, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            在仓库根，每个终端窗口先设一次 PYTHONPATH：
+          </Text>
+          <Text style={{ fontSize: 12.5, color: '#E7E8E9', lineHeight: 1.5, fontFamily: 'Consolas, monospace' }}>
+            $env:PYTHONPATH = ".cursor\skills\nimm-algo-review"
+          </Text>
+          <Text style={{ fontSize: 12.5, color: '#E7E8E9', lineHeight: 1.5, fontFamily: 'Consolas, monospace' }}>
+            python -m local_review --path 00temp\demo --out local-review-report.md
+          </Text>
+          <Text style={{ fontSize: 13, color: '#C9CCCE', lineHeight: 1.5, marginTop: 4, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            首次完整跑会建临时 venv 装依赖；反复审同包可加 --venv 复用。
+          </Text>
+        </Box>
+      </Box>
+
+      {/* 右：看结果 + 调试参数 */}
+      <Box style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
+        <Box style={{ background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px' }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>3 · 看结果</Text>
+          <Text style={{ fontSize: 14, color: '#C9CCCE', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            .md 给人看；.json 给程序看（含规则 ID 与全部指标）。
+          </Text>
+          <Box style={{ flexDirection: 'row', gap: 14, alignItems: 'center', marginTop: 6 }}>
+            {[['0', '正常'], ['1', '阻断 / 复核缺失'], ['2', '路径认不出']].map(([c, d], i) => (
+              <Box key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: c === '0' ? '#8FBCE4' : '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>{c}</Text>
+                <Text style={{ fontSize: 12, color: '#C9CCCE', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{d}</Text>
+              </Box>
+            ))}
+          </Box>
+          <Text style={{ fontSize: 13, color: '#8FBCE4', lineHeight: 1.5, marginTop: 5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            退出码非 0 时报告也已写好——成败看退出码，结论读 Markdown。
+          </Text>
+        </Box>
+
+        <Box style={{ background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px', flex: 1, flexDirection: 'column', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginBottom: 5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>不配 API 时（仅调试）</Text>
+          {[
+            '--dry-run：只跑静态检查，不跑 pytest、不复核',
+            '--skip-run：跳过 pytest，语义复核仍走 API',
+            '--allow-skip-llm：跳过语义复核，正式审核不要用',
+          ].map((t, i) => (
+            <Text key={i} style={{ fontSize: 13, color: '#C9CCCE', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>· {t}</Text>
+          ))}
+          <Text style={{ fontSize: 12.5, color: '#8FBCE4', lineHeight: 1.45, marginTop: 3, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+            不带这些参数又没配 API 时，退出码 1、报告缺语义部分。
+          </Text>
+        </Box>
+      </Box>
+    </Box>
+  </Box>
+</Slide>

@@ -1,0 +1,54 @@
+<Slide style={{ width: 1280, height: 720, padding: 60, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', bottom: -180, left: 260, width: 880, height: 480, borderRadius: 240, background: 'radial-gradient(circle, rgba(36,66,143,0.16) 0%, rgba(11,21,33,0) 70%)' }} />
+
+  <Box style={{ position: 'relative', zIndex: 1, flexDirection: 'column', height: 600 }}>
+    <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>两种使用方式：同一程序，区别在谁运行、谁复核</Text>
+    <Box style={{ width: '100%', height: 1, background: 'linear-gradient(90deg, #63A7D4 0%, rgba(99,167,212,0) 100%)', marginTop: 16, marginBottom: 22 }} />
+
+    {/* 对比表 */}
+    <Box style={{ flexDirection: 'row', gap: 12, marginBottom: 8 }}>
+      <Box style={{ width: 132 }} />
+      <Box style={{ flex: 1, padding: '8px 16px', background: 'rgba(99,167,212,0.14)', border: '1px solid #3A5878', borderRadius: 8 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>通过 Skill（推荐）</Text>
+      </Box>
+      <Box style={{ flex: 1, padding: '8px 16px', background: 'rgba(22,35,58,0.6)', border: '1px solid #2C405C', borderRadius: 8 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>终端直接运行（可选）</Text>
+      </Box>
+    </Box>
+
+    {[
+      ['谁运行', '智能体。你只需说明要审哪个包', '你自己在终端里运行命令'],
+      ['语义复核', '智能体阅读包内代码完成', '程序调用外部 LLM 接口完成'],
+      ['需要 API Key', '否', '完整流程需要'],
+      ['适用场景', '日常审核', '调试、脱离 Cursor、接入脚本'],
+    ].map(([k, a, b], i) => (
+      <Box key={i} style={{ flexDirection: 'row', gap: 12, alignItems: 'stretch', marginBottom: 8, flex: 1 }}>
+        <Box style={{ width: 132, justifyContent: 'center' }}>
+          <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#A9CFE7', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{k}</Text>
+        </Box>
+        <Box style={{ flex: 1, background: 'rgba(99,167,212,0.07)', border: '1px solid #2C405C', borderRadius: 8, padding: '8px 16px', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 15, color: '#E7E8E9', lineHeight: 1.4, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{a}</Text>
+        </Box>
+        <Box style={{ flex: 1, background: 'rgba(22,35,58,0.6)', border: '1px solid #2C405C', borderRadius: 8, padding: '8px 16px', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 15, color: '#C9CCCE', lineHeight: 1.4, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{b}</Text>
+        </Box>
+      </Box>
+    ))}
+
+    {/* 环境准备 */}
+    <Box style={{ flexDirection: 'row', gap: 14, background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '12px 18px', marginTop: 6 }}>
+      <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: 132 }}>
+        <FAIcon name='screwdriver-wrench' style={{ fill: '#63A7D4', width: 16, height: 16 }} />
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>环境准备</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 14, color: '#C9CCCE', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          两种方式都需要：Python 3.10+，在仓库根执行 pip install -r .cursor\skills\nimm-algo-review\local_review\requirements.txt
+        </Text>
+        <Text style={{ fontSize: 13, color: '#8FBCE4', lineHeight: 1.5, marginTop: 3, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          flake8 供静态检查（未装则该节跳过）· packaging 用于依赖冲突判定 · openai 只在 API 路径用。被审包的依赖不用手装，跑 pytest 时另建临时环境。
+        </Text>
+      </Box>
+    </Box>
+  </Box>
+</Slide>

@@ -1,0 +1,56 @@
+<Slide style={{ width: 1280, height: 720, padding: 60, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', bottom: -180, right: -100, width: 640, height: 640, borderRadius: 320, background: 'radial-gradient(circle, rgba(36,66,143,0.18) 0%, rgba(11,21,33,0) 70%)' }} />
+
+  <Box style={{ position: 'relative', zIndex: 1, flexDirection: 'row', gap: 28, height: 600 }}>
+    <Box style={{ width: 240, background: '#63A7D4', borderRadius: 8, padding: 28, flexDirection: 'column', justifyContent: 'space-between' }}>
+      <Box>
+        <Text style={{ fontSize: 16, color: '#0F1920', letterSpacing: 2, fontFamily: 'Barlow Condensed, sans-serif', marginBottom: 10 }}>WRITING RULES</Text>
+        <Text style={{ fontSize: 62, fontWeight: 'bold', color: '#0F1920', lineHeight: 1.05, fontFamily: 'Barlow Condensed, sans-serif' }}>8 条</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#0F1920', lineHeight: 1.4, marginTop: 12, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>写作规范</Text>
+      </Box>
+      <Text style={{ fontSize: 16, color: '#163A55', lineHeight: 1.6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+        写页前后逐项核对的<br />
+        规范要点。
+      </Text>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 12 }}>
+      {[
+        { g: '数据与示例', icon: 'database', items: [
+          ['真实样例优先', '有本机可读真场先用；无则自建且效果可辨，图题不写「合成」'],
+          ['示例即算法输入', '重网格 / 裁剪等预处理只在引导句说明，代码只有读数据 → 调用 → print'],
+          ['可移植导入', '正文禁本机绝对路径，禁 sys.path 绑盘符'],
+        ]},
+        { g: '绘图与对照', icon: 'chart-area', items: [
+          ['统一色标', '同要素订正前 / 后共用同一套 cmap / clevs，禁各图自动色标'],
+          ['禁错误差值', '只画「输入−结果」或方案对比；禁「有输入−默认」差值'],
+        ]},
+        { g: 'CLI 与签名', icon: 'terminal', items: [
+          ['对外签名 process', '页面只写 process(...)，不写装饰器字样；三种调用 python -m / nimm_cli / import；直接用返回场'],
+          ['检验按流程', '先调度再检验；CLI 汇总 + 逐日、插件页仅同一份汇总表并链 CLI'],
+        ]},
+        { g: '结构与细节', icon: 'sitemap', items: [
+          ['入口顺序固定', '签名 → 功能说明 → 构造参数 → process 参数 → 使用示例'],
+          ['页末互链 + 换图', '插件页 ↔ CLI 页互链；改图重出 PNG 并换正文 URL'],
+        ]},
+      ].map((grp, gi) => (
+        <Box key={gi} style={{ flex: 1, flexDirection: 'row', gap: 16, alignItems: 'stretch', background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '14px 20px' }}>
+          <Box style={{ width: 120, flexShrink: 0, justifyContent: 'center', borderRight: '1px solid #2C405C', paddingRight: 14 }}>
+            <FAIcon name={grp.icon} style={{ fill: '#63A7D4', width: 26, height: 26 }} />
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#A9CFE7', lineHeight: 1.3, marginTop: 8, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{grp.g}</Text>
+          </Box>
+          <Box style={{ flex: 1, flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+            {grp.items.map((it, ii) => (
+              <Box key={ii} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                <FAIcon name='check' style={{ fill: '#8FBCE4', width: 14, height: 14 }} />
+                <Text style={{ flex: 1, fontSize: 15, color: '#E7E8E9', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+                  <span style={{ fontWeight: 'bold', color: '#FFFFFF' }}>{it[0]}</span> · {it[1]}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  </Box>
+</Slide>

@@ -1,0 +1,53 @@
+<Slide style={{ width: 1280, height: 720, padding: 0, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  {/* 背景光晕与点阵网格 */}
+  <Box style={{ position: 'absolute', top: -180, right: -120, width: 820, height: 820, borderRadius: 410, background: 'radial-gradient(circle, rgba(99,167,212,0.28) 0%, rgba(77,163,255,0.10) 45%, rgba(11,21,33,0) 72%)' }} />
+  <Box style={{ position: 'absolute', bottom: -260, left: -160, width: 700, height: 700, borderRadius: 350, background: 'radial-gradient(circle, rgba(36,66,143,0.30) 0%, rgba(11,21,33,0) 70%)' }} />
+  <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 720, backgroundImage: 'radial-gradient(rgba(169,207,231,0.10) 1px, transparent 1px)', backgroundSize: '32px 32px', opacity: 0.5 }} />
+
+  {/* 主体 */}
+  <Box style={{ position: 'relative', zIndex: 1, height: 720, padding: '0 96px', flexDirection: 'column', justifyContent: 'center' }}>
+    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 22 }}>
+      <Box style={{ width: 40, height: 4, background: '#63A7D4' }} />
+      <Text style={{ fontSize: 17, color: '#A9CFE7', letterSpacing: 3, fontFamily: 'Barlow Condensed, sans-serif' }}>NIMM ALGORITHM · SHOWDOC SKILL</Text>
+    </Box>
+
+    <Text style={{ fontSize: 80, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.08, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+      nimm-algo-showdoc
+    </Text>
+
+    <Text style={{ fontSize: 30, fontWeight: 600, color: '#E7E8E9', lineHeight: 1.3, marginTop: 12, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+      按 NIMM 模板，把算法代码写成 ShowDoc 页
+    </Text>
+
+    <Text style={{ fontSize: 18, color: '#C9CCCE', lineHeight: 1.5, marginTop: 14, maxWidth: 900, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+      固化模板、版式与自检清单，用于生成或修改算法的插件页与 CLI 页。
+    </Text>
+
+    <Box style={{ flexDirection: 'row', gap: 12, marginTop: 22 }}>
+      <Box style={{ padding: '9px 18px', border: '1px solid #2C405C', borderRadius: 8, background: 'rgba(99,167,212,0.08)' }}>
+        <Text style={{ fontSize: 15, color: '#A9CFE7', fontFamily: 'Barlow Condensed, sans-serif' }}>插件页</Text>
+      </Box>
+      <Box style={{ padding: '9px 18px', border: '1px solid #2C405C', borderRadius: 8, background: 'rgba(99,167,212,0.08)' }}>
+        <Text style={{ fontSize: 15, color: '#A9CFE7', fontFamily: 'Barlow Condensed, sans-serif' }}>CLI 页</Text>
+      </Box>
+      <Box style={{ padding: '9px 18px', border: '1px solid #2C405C', borderRadius: 8, background: 'rgba(99,167,212,0.08)' }}>
+        <Text style={{ fontSize: 15, color: '#A9CFE7', fontFamily: 'Barlow Condensed, sans-serif' }}>使用示例 / 出图 / 检验</Text>
+      </Box>
+    </Box>
+
+    {/* 适用场景：由原第二页三栏合并而来 */}
+    <Box style={{ flexDirection: 'row', gap: 20, marginTop: 30 }}>
+      {[
+        { n: '01 / 新建页', t: '按模板新建', d: '为算法新建插件页与 CLI 页，含基础说明与使用示例。', c: '#63A7D4' },
+        { n: '02 / 修改页', t: '只收敛偏差', d: '对照模板骨架看缺/余，保留已正确的章节与附件。', c: '#8FBCE4' },
+        { n: '03 / 自检规范', t: '按清单核对', d: '图例、签名与页末互链逐项核对，写完同步汇总页。', c: '#8FBCE4' },
+      ].map((s, i) => (
+        <Box key={i} style={{ flex: 1, background: 'rgba(22,35,58,0.85)', border: '1px solid #2C405C', borderRadius: 8, padding: '18px 20px' }}>
+          <Text style={{ fontSize: 13, color: s.c, letterSpacing: 2, fontFamily: 'Barlow Condensed, sans-serif' }}>{s.n}</Text>
+          <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, marginTop: 8, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{s.t}</Text>
+          <Text style={{ fontSize: 15, color: '#C9CCCE', lineHeight: 1.5, marginTop: 8, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{s.d}</Text>
+        </Box>
+      ))}
+    </Box>
+  </Box>
+</Slide>

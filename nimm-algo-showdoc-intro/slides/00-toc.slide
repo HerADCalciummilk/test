@@ -1,0 +1,92 @@
+<Slide style={{ width: 1280, height: 720, padding: 0, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  {/* 背景光晕与点阵网格 */}
+  <Box style={{ position: 'absolute', top: -160, right: -140, width: 760, height: 760, borderRadius: 380, background: 'radial-gradient(circle, rgba(99,167,212,0.22) 0%, rgba(11,21,33,0) 70%)' }} />
+  <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 720, backgroundImage: 'radial-gradient(rgba(169,207,231,0.10) 1px, transparent 1px)', backgroundSize: '32px 32px', opacity: 0.45 }} />
+
+  <Box style={{ position: 'relative', zIndex: 1, height: 720, padding: '56px 80px', flexDirection: 'column' }}>
+    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+      <Box style={{ width: 40, height: 4, background: '#63A7D4' }} />
+      <Text style={{ fontSize: 16, color: '#A9CFE7', letterSpacing: 3, fontFamily: 'Barlow Condensed, sans-serif' }}>CONTENTS</Text>
+    </Box>
+    <Text style={{ fontSize: 52, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>目录</Text>
+    <Text style={{ fontSize: 17, color: '#C9CCCE', lineHeight: 1.5, marginTop: 8, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>三份 Skill 说明，共 12 个主题</Text>
+
+    <Box style={{ flexDirection: 'row', gap: 18, marginTop: 32, flex: 1 }}>
+      {/* 第一部分 */}
+      <Box style={{ flex: 1, flexDirection: 'column', background: 'rgba(22,35,58,0.72)', border: '1px solid #2C405C', borderRadius: 10, padding: 20 }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>01</Text>
+          <Box style={{ flexDirection: 'column' }}>
+            <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>nimm-algo-showdoc</Text>
+            <Text style={{ fontSize: 12, color: '#8FBCE4', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>算法文档页生成与修改</Text>
+          </Box>
+        </Box>
+        <Box style={{ height: 1, background: '#2C405C', marginTop: 12, marginBottom: 10 }} />
+        {[
+          ['技能封面与适用场景', 'P3'],
+          ['它能做什么', 'P4'],
+          ['快速上手与 MCP 配置', 'P5'],
+          ['标准工作流与汇总页同步', 'P6'],
+          ['写作规范', 'P7'],
+        ].map(([t, p], i) => (
+          <Box key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < 4 ? '1px solid rgba(44,64,92,0.6)' : 'none' }}>
+            <Text style={{ fontSize: 15, color: '#E7E8E9', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{t}</Text>
+            <Text style={{ fontSize: 13, color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>{p}</Text>
+          </Box>
+        ))}
+      </Box>
+
+      {/* 第二部分 */}
+      <Box style={{ flex: 1, flexDirection: 'column', background: 'rgba(22,35,58,0.72)', border: '1px solid #2C405C', borderRadius: 10, padding: 20 }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>02</Text>
+          <Box style={{ flexDirection: 'column' }}>
+            <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>算法改造规范</Text>
+            <Text style={{ fontSize: 12, color: '#8FBCE4', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>七级包结构与进程入口</Text>
+          </Box>
+        </Box>
+        <Box style={{ height: 1, background: '#2C405C', marginTop: 12, marginBottom: 10 }} />
+        {[
+          ['分册封面', 'P8'],
+          ['七级目录职责', 'P9'],
+          ['process 四步', 'P9'],
+          ['参数优先级', 'P9'],
+        ].map(([t, p], i) => (
+          <Box key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < 3 ? '1px solid rgba(44,64,92,0.6)' : 'none' }}>
+            <Text style={{ fontSize: 15, color: '#E7E8E9', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{t}</Text>
+            <Text style={{ fontSize: 13, color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>{p}</Text>
+          </Box>
+        ))}
+        <Text style={{ fontSize: 13, color: '#8FBCE4', lineHeight: 1.5, marginTop: 12, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          按 00temp 子模块组织，不改变算法核心原理与公式。
+        </Text>
+      </Box>
+
+      {/* 第三部分 */}
+      <Box style={{ flex: 1, flexDirection: 'column', background: 'rgba(22,35,58,0.72)', border: '1px solid #2C405C', borderRadius: 10, padding: 20 }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>03</Text>
+          <Box style={{ flexDirection: 'column' }}>
+            <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>nimm-algo-review</Text>
+            <Text style={{ fontSize: 12, color: '#8FBCE4', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>算法包本地审核</Text>
+          </Box>
+        </Box>
+        <Box style={{ height: 1, background: '#2C405C', marginTop: 12, marginBottom: 10 }} />
+        {[
+          ['分册封面', 'P10'],
+          ['两种使用方式', 'P11'],
+          ['在对话里让智能体审核', 'P12'],
+          ['手动运行与 API 复核', 'P13'],
+        ].map(([t, p], i) => (
+          <Box key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: i < 3 ? '1px solid rgba(44,64,92,0.6)' : 'none' }}>
+            <Text style={{ fontSize: 15, color: '#E7E8E9', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{t}</Text>
+            <Text style={{ fontSize: 13, color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>{p}</Text>
+          </Box>
+        ))}
+        <Text style={{ fontSize: 13, color: '#8FBCE4', lineHeight: 1.5, marginTop: 12, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          静态 + pytest + 智能体复核，产出 Markdown / JSON 报告。
+        </Text>
+      </Box>
+    </Box>
+  </Box>
+</Slide>

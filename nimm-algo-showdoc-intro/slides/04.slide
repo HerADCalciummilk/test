@@ -1,0 +1,52 @@
+<Slide style={{ width: 1280, height: 720, padding: 60, background: '#0B1521', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', top: 180, left: 330, width: 2, height: 380, background: 'linear-gradient(180deg, rgba(99,167,212,0.5) 0%, rgba(99,167,212,0.1) 100%)' }} />
+
+  <Box style={{ position: 'relative', zIndex: 1, flexDirection: 'column', height: 600 }}>
+    <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>标准工作流：十步收敛成六个动作</Text>
+    <Box style={{ width: '100%', height: 1, background: 'linear-gradient(90deg, #63A7D4 0%, rgba(99,167,212,0) 100%)', marginTop: 16, marginBottom: 28 }} />
+
+    <Box style={{ flexDirection: 'column', gap: 9, flex: 1 }}>
+      {[
+        { n: '01', t: '确认范围', d: '新建 / 修改、是否裁剪、是否要检验', out: '范围清单' },
+        { n: '02', t: '对清单', d: '按包名核对预报种类与算法类别', out: '种类 / 类别' },
+        { n: '03', t: '读代码', d: '插件入口 + CLI process 四级合参：显性 > 输入 ini > 默认 conf.ini > 签名预设', out: '入口事实' },
+        { n: '04', t: '套模板', d: '复制两份模板骨架，填占位、补签名与参数表', out: '两页骨架' },
+        { n: '05', t: '写示例出图', d: '真实样例优先 → 调用 → 结果 → 画图代码 → 贴图', out: '示例与图' },
+        { n: '06', t: '自检刷新', d: '逐条自检 → 同步算法清单与进展页状态 → 请用户刷新', out: '发布页' },
+      ].map((s, i) => (
+        <Box key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 20, flex: 1, background: i % 2 === 0 ? '#16233A' : 'rgba(22,35,58,0.55)', border: '1px solid #2C405C', borderRadius: 8, padding: '10px 22px' }}>
+          <Text style={{ width: 44, fontSize: 28, fontWeight: 'bold', color: '#63A7D4', fontFamily: 'Barlow Condensed, sans-serif' }}>{s.n}</Text>
+          <Text style={{ width: 150, fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{s.t}</Text>
+          <Text style={{ flex: 1, fontSize: 17, color: '#C9CCCE', lineHeight: 1.5, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{s.d}</Text>
+          <Box style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(99,167,212,0.12)' }}>
+            <Text style={{ fontSize: 15, color: '#A9CFE7', fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>{s.out}</Text>
+          </Box>
+        </Box>
+      ))}
+    </Box>
+
+    <Box style={{ flexDirection: 'row', gap: 14, marginTop: 12, height: 122 }}>
+      <Box style={{ flex: 1.25, background: '#16233A', border: '1px solid #2C405C', borderRadius: 8, padding: '10px 16px', flexDirection: 'column', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>写页后同步（收尾必做）</Text>
+        <Text style={{ fontSize: 13, color: '#C9CCCE', lineHeight: 1.45, marginTop: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          对外算法清单：不挂状态，新增 / 删除时同步行与序号。
+        </Text>
+        <Text style={{ fontSize: 13, color: '#C9CCCE', lineHeight: 1.45, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          内部进展页：承担状态四档 + 按示例来源标数据标签。
+        </Text>
+        <Text style={{ fontSize: 13, color: '#8FBCE4', lineHeight: 1.45, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          状态 = 完善 / 待完善 / 未建 / 未完成 · 进展页不得对外展示。
+        </Text>
+      </Box>
+      <Box style={{ flex: 1, background: 'rgba(36,66,143,0.22)', border: '1px solid #2C405C', borderRadius: 8, padding: '10px 16px', flexDirection: 'column', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.3, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>检验（按需，默认不加）</Text>
+        <Text style={{ fontSize: 13, color: '#C9CCCE', lineHeight: 1.45, marginTop: 6, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          插入在第 5 步之后：先由 CLI 批量调度出方法结果，再算订正前 / 后 RMSE。
+        </Text>
+        <Text style={{ fontSize: 13, color: '#C9CCCE', lineHeight: 1.45, fontFamily: 'Source Han Sans SC, Microsoft YaHei, sans-serif' }}>
+          CLI 写汇总 + 逐日表，插件页贴同一份汇总。
+        </Text>
+      </Box>
+    </Box>
+  </Box>
+</Slide>
