@@ -54,31 +54,31 @@
 ## 目录说明
 
 - `src/db_trans_plugin.py`：四种降水强度变换（类方法）。
-- `cli/db_trans_cli.py`：在本包目录执行 `python -m cli`；或在 `00temp` 下 `python -m db_trans`。
+- `cli/db_trans_cli.py`：对外入口 `process`；在 `00temp` 下执行 `python -m db_trans key=value`，或 `python -m utils.nimm_cli db_trans key=value`。
 - `resource/conf.ini` / `db_trans.ini`：命令行未显式传入的参数先读配置，再没有则用预设。
-- `utils/util_env.py`：读取 ini。
+- `utils/util_env.py`：旧的 ini 读取实现，仅测试引用，CLI 不使用。CLI 的参数合并（显性参数 > `config=` 输入 ini > `resource/conf.ini` > 签名默认值）由共享的 `utils.merge_params` 完成。
 - `test/`：变换数值和命令行缺省参数测试。
 - `nbs/`：命令行调用示例 notebook。
 - `docs/`：本说明。
 
 ## 运行示例
 
-在本包目录下执行。没写的参数先读 `resource/db_trans.ini`，配置里也没有再用代码预设。`summary` 只列出变换名称。
+在 `00temp` 下执行，不要先 `cd` 进子包；参数一律 `key=value`。没写的参数按优先级回落：显性参数 > `config=` 指向的输入配置文件（如 `config=resource/db_trans.ini`，相对路径按包根解析）> `resource/conf.ini` > 代码预设。`summary` 只列出变换名称。
 
 ```bash
-python -m cli.dB_trans_cli
+python -m db_trans
 ```
 
 ```bash
-python -m cli.dB_trans_cli --method db --values 0,0.05,0.1,1,10,100
+python -m db_trans method=db values=0,0.05,0.1,1,10,100
 ```
 
 ```bash
-python -m cli.dB_trans_cli --method box --values 0.1,1,10 --lambda 0
+python -m db_trans method=box values=0.1,1,10 lam=0
 ```
 
 ```bash
-python -m cli.dB_trans_cli --method sqrt --values 0,1,4,9
+python -m db_trans method=sqrt values=0,1,4,9
 ```
 
 `db` 在阈值 `0.1` 下，上面第一组数变成 `-15,-15,-10,0,10,20`。低于 `0.1` 记为 `-15`，`1` 变成 `0`，`10` 变成 `10`，`100` 变成 `20`。
