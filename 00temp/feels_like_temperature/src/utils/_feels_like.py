@@ -148,9 +148,12 @@ def _svp_from_lookup(temperature: np.ndarray) -> np.ndarray:
     返回
     -------
     np.ndarray
-        饱和水汽压，单位为 Pa。
+        饱和水汽压，单位为 Pa。气温缺测（NaN）的位置返回 NaN。
     """
-    t_clipped = np.clip(temperature, SVP_T_MIN, SVP_T_MAX - SVP_T_INCREMENT)  # 避免插值越界
+    # NaN 转整数会得到越界索引，不能直接参与查表：先用下限温度占位，结果再还原为 NaN
+    is_missing = np.isnan(temperature)
+    t_filled = np.where(is_missing, SVP_T_MIN, temperature)
+    t_clipped = np.clip(t_filled, SVP_T_MIN, SVP_T_MAX - SVP_T_INCREMENT)  # 避免插值越界
 
     # 将温度映射到查表索引，table_index 为下界，interpolation_factor 为区间内小数部分
     table_position = (t_clipped - SVP_T_MIN) / SVP_T_INCREMENT
@@ -158,9 +161,10 @@ def _svp_from_lookup(temperature: np.ndarray) -> np.ndarray:
     interpolation_factor = table_position - table_index
     svp_table_data = np.array(_svp_table(), dtype=np.float32)
     # 相邻两档线性插值（支持任意形状的 temperature 数组）
-    return (1.0 - interpolation_factor) * svp_table_data[
+    svp = (1.0 - interpolation_factor) * svp_table_data[
         table_index
     ] + interpolation_factor * svp_table_data[table_index + 1]
+    return np.where(is_missing, np.nan, svp).astype(svp.dtype, copy=False)
 
 
 def _calculate_svp_in_air(temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:

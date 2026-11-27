@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-import importlib, sys
+import importlib
+import sys
 from pathlib import Path
 _ROOT = Path(__file__).resolve().parent
 _TEMP = _ROOT.parent

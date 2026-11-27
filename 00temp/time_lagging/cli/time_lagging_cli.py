@@ -18,7 +18,6 @@ for _path in (str(_SRC), str(_ROOT), str(_TEMP)):
         sys.path.remove(_path)
 sys.path.insert(0, str(_TEMP))
 sys.path.insert(0, str(_ROOT))
-sys.path.insert(0, str(_SRC))
 
 from time_lagging.src.time_lagging_plugin import TimeLaggingPlugin
 from time_lagging.util.meteva_data import load_meteva, save_meteva

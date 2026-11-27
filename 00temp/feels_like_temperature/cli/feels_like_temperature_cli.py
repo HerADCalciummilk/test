@@ -2,7 +2,7 @@
 """体感温度调度。
 
 ``@merge_params`` 挂在 ``process`` 上。读四场 nc，调用 ``FeelsLikeTemperature``，按需写盘。
-由 ``python -m feels_like_temperature`` 或 ``python -m cli`` 启动。
+由 ``python -m feels_like_temperature``（在 00temp 下）或 ``python -m utils.nimm_cli feels_like_temperature`` 启动。
 """
 from __future__ import annotations
 
@@ -12,12 +12,10 @@ import sys
 import numpy as np
 
 _CLI_DIR = os.path.dirname(os.path.abspath(__file__))
-_ROOT_DIR = os.path.dirname(_CLI_DIR)
-_SRC_DIR = os.path.join(_ROOT_DIR, "src")
-_TEMP_DIR = os.path.dirname(_ROOT_DIR)
-for _p in (_TEMP_DIR, _ROOT_DIR, _SRC_DIR):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+# 00temp：算法包 feels_like_temperature 所在目录。python -m cli 在包根目录启动时，当前目录不是 00temp，需要靠这一行才能导入 feels_like_temperature 包。
+_PARENT = os.path.dirname(os.path.dirname(_CLI_DIR))
+if _PARENT not in sys.path:
+    sys.path.insert(0, _PARENT)
 
 import meteva_base as meb
 

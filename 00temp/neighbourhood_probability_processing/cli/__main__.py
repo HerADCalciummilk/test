@@ -4,10 +4,9 @@ import importlib
 import sys
 
 from .neighbourhood_probability_processing_cli import process as primary
-from utils.merge_params import parse_kv_argv
+from utils.merge_params import from_argv
 
 _COMMANDS = {
-    'ens_nbhood': 'neighbourhood_probability_processing_cli',
     'neighbourhood_probability_processing': 'neighbourhood_probability_processing_cli',
     'ens_nbhood_land_and_sea': 'ens_nbhood_land_and_sea_cli',
     'ens_nbhood_iterate_with_mask': 'ens_nbhood_iterate_with_mask_cli',
@@ -23,10 +22,8 @@ def _run():
             known = ", ".join(_COMMANDS)
             raise SystemExit("未知命令: %s。可选: %s" % (stem, known))
         module = importlib.import_module("." + module_name, __package__)
-        return module.process(**parse_kv_argv(argv[1:]))
-    if argv:
-        return primary(**parse_kv_argv(argv))
-    return primary()
+        return from_argv(module.process, argv=argv[1:])()
+    return from_argv(primary, argv=argv)()
 
 
 _run()

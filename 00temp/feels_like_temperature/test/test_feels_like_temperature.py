@@ -222,3 +222,70 @@ class TestFeelsLikeTemperature:
         np.testing.assert_allclose(np.asarray(out_k), np.asarray(out_kmh), atol=1e-3)
         np.testing.assert_allclose(np.asarray(out_k), np.asarray(out_pct), atol=1e-3)
         np.testing.assert_allclose(np.asarray(out_k), np.asarray(out_hpa), atol=1e-3)
+
+    def test_svp_lookup_missing_temperature_returns_nan(self) -> None:
+        """气温缺测（NaN）时饱和水汽压返回 NaN，且不影响同一数组里的有效格点。"""
+        temperature = np.array([np.nan, 293.15], dtype=np.float32)
+        pressure = np.array([101325.0, 101325.0], dtype=np.float32)
+        svp = _calculate_svp_in_air(temperature, pressure)
+        assert np.isnan(svp[0])
+        reference = _calculate_svp_in_air(temperature[1:], pressure[1:])
+        np.testing.assert_allclose(svp[1], reference[0])
+
+    def test_apparent_temperature_vapour_pressure_in_kpa(self) -> None:
+        """Steadman 回归式的水汽压以 kPa 计：25℃、相对湿度 50% 时显温应在 26–27℃ 附近。
+
+        若误按 hPa 计入（水汽压放大 10 倍），结果会高达 50℃ 以上，用来防止单位回退。
+        """
+        t = np.array([25.0], dtype=np.float32)
+        w = np.array([0.0], dtype=np.float32)
+        rh = np.array([0.5], dtype=np.float32)
+        p = np.array([101325.0], dtype=np.float32)
+        apparent = _calculate_apparent_temperature(t, w, rh, p)
+        assert 26.0 < apparent[0] < 27.0
+
+    def test_feels_like_blend_missing_temperature_stays_nan(self) -> None:
+        """气温缺测的格点融合后仍为 NaN，不能被写成 0℃。"""
+        temp = np.array([5.0, np.nan, 15.0, 25.0], dtype=np.float32)
+        apparent = np.array([6.0, 7.0, 18.0, 28.0], dtype=np.float32)
+        wind_chill = np.array([2.0, 3.0, 12.0, 22.0], dtype=np.float32)
+        out = _feels_like_temperature(temp, apparent, wind_chill)
+        assert np.isnan(out[1])
+        assert out[0] == wind_chill[0]
+        assert out[3] == apparent[3]
+
+    def test_calculate_feels_like_temperature_missing_values_numpy(self) -> None:
+        """numpy 输入中的缺测只影响对应格点：气温缺测、风速缺测都输出 NaN。"""
+        shape = (1, 1, 1, 1, 1, 3)
+        w = np.full(shape, 5.0, dtype=np.float32)
+        rh = np.full(shape, 0.5, dtype=np.float32)
+        p = np.full(shape, 101325.0, dtype=np.float32)
+        t_ok = np.array([15.0, 20.0, 25.0], dtype=np.float32).reshape(shape)
+        baseline = calculate_feels_like_temperature(t_ok, w, rh, p).ravel()
+
+        t_nan = t_ok.copy()
+        t_nan[..., 1] = np.nan
+        out_t = calculate_feels_like_temperature(t_nan, w, rh, p).ravel()
+        assert np.isnan(out_t[1])
+        np.testing.assert_allclose(out_t[[0, 2]], baseline[[0, 2]])
+
+        w_nan = w.copy()
+        w_nan[..., 1] = np.nan
+        out_w = calculate_feels_like_temperature(t_ok, w_nan, rh, p).ravel()
+        assert np.isnan(out_w[1])
+        np.testing.assert_allclose(out_w[[0, 2]], baseline[[0, 2]])
+
+    def test_calculate_feels_like_temperature_missing_values_xarray_meb6d(self) -> None:
+        """meb6d 网格中的缺测气温不应让计算崩溃，缺测位置输出 NaN。"""
+        if not HAS_METEVA_BASE:
+            pytest.skip("meteva_base 未安装，跳过 xarray meb6d 严格校验测试。")
+        t = create_meb6d_dataarray(15.0, "degC", name="air_temperature")
+        t[0, 0, 0, 0, 0, 1] = np.nan
+        w = create_meb6d_dataarray(5.0, "m s-1", name="wind_speed")
+        rh = create_meb6d_dataarray(0.5, "1", name="relative_humidity")
+        p = create_meb6d_dataarray(101325.0, "Pa", name="air_pressure_at_sea_level")
+        out = calculate_feels_like_temperature(t, w, rh, p)
+        assert isinstance(out, xr.DataArray)
+        values = np.asarray(out.values)
+        assert np.isnan(values[0, 0, 0, 0, 0, 1])
+        assert int(np.isnan(values).sum()) == 1

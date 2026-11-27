@@ -8,7 +8,7 @@ from pathlib import Path
 _SRC = Path(__file__).resolve().parent
 _ROOT = _SRC.parent
 _TEMP = _ROOT.parent
-for _path in (str(_TEMP), str(_ROOT), str(_SRC)):
+for _path in (str(_TEMP), str(_ROOT)):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 

@@ -5,7 +5,6 @@
 """Goff-Gratch 公式准确性验证测试。"""
 
 import numpy as np
-import pytest
 
 from feels_like_temperature.src.utils._feels_like import (
     _calculate_svp_in_air,
@@ -18,7 +17,7 @@ class TestGoffGratchValidation:
 
     def test_goff_gratch_formula_accuracy(self):
         """Test Goff-Gratch formula against reference values from WMO."""
-        REFERENCE_VALUES = [
+        reference_values = [
             (250.0, 76.35),
             (273.15, 611.21),
             (273.16, 611.657),
@@ -27,7 +26,7 @@ class TestGoffGratchValidation:
         ]
 
         total_error = 0.0
-        for temp_k, ref_svp in REFERENCE_VALUES:
+        for temp_k, ref_svp in reference_values:
             temp_array = np.array([temp_k], dtype=np.float32)
             base_svp_hpa = _svp_pure_water_goff_gratch(temp_array)
             base_svp_pa = base_svp_hpa * 100.0
@@ -38,7 +37,7 @@ class TestGoffGratchValidation:
                 f"Relative error {rel_error:.4f}% exceeds 0.6% tolerance at {temp_k}K"
             )
 
-        avg_error = total_error / len(REFERENCE_VALUES)
+        avg_error = total_error / len(reference_values)
         assert avg_error < 0.5, (
             f"Average relative error {avg_error:.4f}% exceeds 0.5% tolerance"
         )

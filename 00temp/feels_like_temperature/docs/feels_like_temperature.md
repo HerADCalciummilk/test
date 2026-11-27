@@ -12,7 +12,7 @@
 
 ## 2. 核心计算公式
 
-以下公式与 `feels_like_temperature/src/feels_like_temperature.py` 中的实现一致。符号说明：$T$ 为气温（℃），$T_{\mathrm{K}}$ 为气温开尔文（K，$T_{\mathrm{K}}=T+273.15$，用于饱和水汽压查表），$V$ 为 10 m 风速（m/s），$V_{\mathrm{kmh}}$ 为风速（km/h），$RH$ 为相对湿度（0–1），$p$ 为气压（Pa），$e_s$ 为饱和水汽压（Pa），$e$ 为实际水汽压（hPa），$T_{\mathrm{wc}}$ 为风寒温度（℃），$T_{\mathrm{a}}$ 为显温（℃），$T_{\mathrm{flt}}$ 为体感温度（℃）。
+以下公式与 `feels_like_temperature/src/feels_like_temperature.py` 中的实现一致。符号说明：$T$ 为气温（℃），$T_{\mathrm{K}}$ 为气温开尔文（K，$T_{\mathrm{K}}=T+273.15$，用于饱和水汽压查表），$V$ 为 10 m 风速（m/s），$V_{\mathrm{kmh}}$ 为风速（km/h），$RH$ 为相对湿度（0–1），$p$ 为气压（Pa），$e_s$ 为饱和水汽压（Pa），$e$ 为实际水汽压（kPa），$T_{\mathrm{wc}}$ 为风寒温度（℃），$T_{\mathrm{a}}$ 为显温（℃），$T_{\mathrm{flt}}$ 为体感温度（℃）。
 
 ### 2.1 风寒温度（Osczevski & Bluestein，2005）
 
@@ -28,7 +28,7 @@ $$
 
 ### 2.2 显温（Steadman，1984，遮阴情形）
 
-实际水汽压由空气中的饱和水汽压与相对湿度得到：
+实际水汽压由空气中的饱和水汽压与相对湿度得到。$e_s$ 以 Pa 计，乘 $10^{-3}$ 后 $e$ 的单位为 kPa，这也是下面 Steadman 回归式使用的单位：
 
 $$
 e = 10^{-3}\, e_s(T,\, p)\, RH
@@ -147,7 +147,7 @@ flowchart TD
 ```python
 import numpy as np
 import meteva_base as meb
-from temperature.src.feels_like_temperature import calculate_feels_like_temperature
+from feels_like_temperature.src.feels_like_temperature import calculate_feels_like_temperature
 
 # 构造一个简单网格
 grid = meb.grid([100, 102, 1], [30, 31, 1])
@@ -175,7 +175,7 @@ print("单位：", t.attrs.get("units"))
 
 ```python
 import numpy as np
-from temperature.src.feels_like_temperature import calculate_feels_like_temperature
+from feels_like_temperature.src.feels_like_temperature import calculate_feels_like_temperature
 
 # 生成示例数组（必须确保单位正确：degC, m/s, fraction, Pa）
 shape = (1, 1, 1, 1, 2, 3)
@@ -197,7 +197,7 @@ print(flt.dtype)  # 输出: float32
 ```python
 import numpy as np
 import meteva_base as meb
-from temperature.src.feels_like_temperature import CalculateWindChill
+from feels_like_temperature.src.feels_like_temperature import CalculateWindChill
 
 # 创建 CalculateWindChill 实例
 wind_chill_calculator = CalculateWindChill()
@@ -248,26 +248,26 @@ python feels_like_temperature/cli/preprocess_test_data.py
 
 ## 8. CLI 应用示例
 
-示例脚本：`feels_like_temperature/cli/der_feel_like_temp.py`
+入口脚本：`feels_like_temperature/cli/feels_like_temperature_cli.py`（`process` 已挂 `@merge_params`，参数一律写成 `key=value`）
 
 ### 8.1 运行方式
 
-包根目录：
-
-```bash
-python -m cli feel-like-temp
-```
-
-或：
+在 `00temp` 目录运行（不要先 `cd` 进子包），路径建议写绝对路径：
 
 ```powershell
-python -m feels_like_temperature.cli.der_feel_like_temp
+python -m feels_like_temperature temperature_path=<气温.nc> wind_speed_path=<风速.nc> relative_humidity_path=<相对湿度.nc> pressure_path=<气压.nc> output_path=<输出.nc>
+```
+
+等价的统一调度器写法：
+
+```powershell
+python -m utils.nimm_cli feels_like_temperature temperature_path=<气温.nc> wind_speed_path=<风速.nc> relative_humidity_path=<相对湿度.nc> pressure_path=<气压.nc> output_path=<输出.nc>
 ```
 
 在代码中调用：
 
 ```python
-from feels_like_temperature.cli.der_feel_like_temp import process
+from feels_like_temperature.cli.feels_like_temperature_cli import process
 
 result = process(
     temperature_path=".../temperature_at_screen_level.nc",
@@ -290,7 +290,7 @@ result = process(
 
 说明：
 
-1. 脚本底部已配置 `feels_like_temperature/test_data/feels_like_temp_data/cli_input/` 下的官方样例路径，CLI 结果写入 `cli_output/`，可直接改路径后运行。
+1. 包内 `resource/cli_input/` 提供了一组可直接运行的示例输入，`resource/cli_output/` 为示例输出位置；`output_path` 不填时只返回结果、不写盘。
 2. 若输入不是标准六维网格，请先运行预处理脚本再调用 `process()`。
 
 ## 9. 参考文献
@@ -318,4 +318,5 @@ result = process(
   - 相对湿度：分数 (0-1)
   - 气压：帕斯卡 (Pa)
 - 如果输入单位不在支持列表中，算法将按上述默认值处理
+- **缺测值**：输入中的 NaN 只影响对应格点，该格点体感温度输出 NaN，不会被写成 0℃，也不会中断计算。气温不低于 10℃ 的格点用到四个输入，低于 10℃ 的格点只用到气温和风速
 - **测试文件位置**：所有算法验证和单元测试文件位于 `feels_like_temperature/test/` 目录

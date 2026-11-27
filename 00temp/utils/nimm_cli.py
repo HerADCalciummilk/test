@@ -7,14 +7,14 @@
 同包多入口时用 ``cli=`` 指定：``cli=cartopy`` 会找
 ``{包名}_cartopy_cli.py`` / ``cartopy_cli.py`` 等。
 
-数字前缀包（如 ``00_forecast_time_split``）若 ``{包名}_cli.py`` 不可作
+数字前缀包（如 ``00_blend``）若 ``{包名}_cli.py`` 不可作
 Python 模块名，则用下表别名或去掉前缀数字后的 ``{stem}_cli.py``。
 
 在 ``00temp`` 目录::
 
     python -m frequency_matching_rain24
     python -m utils.nimm_cli frequency_matching_rain24 pro_count=1
-    python -m utils.nimm_cli 00_forecast_time_split module=timesplit
+    python -m utils.nimm_cli 00_blend
     python -m coordinate_projection_transform cli=cartopy mode=lonlat-to-equal source_cube=...
 """
 from __future__ import annotations
@@ -35,7 +35,6 @@ _UTILS_DIR = Path(__file__).resolve().parent
 
 # 包目录名 → cli 文件主干（不含 .py）；用于数字前缀等非法模块名
 _CLI_STEM_ALIASES = {
-    "00_forecast_time_split": "forecast_time_split_cli",
     "00_blend": "00_blend_cli",
 }
 

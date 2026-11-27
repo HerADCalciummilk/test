@@ -8,9 +8,8 @@ from pathlib import Path
 
 _CLI_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT_DIR = os.path.dirname(_CLI_DIR)
-_SRC_DIR = os.path.join(_ROOT_DIR, "src")
 _TEMP_DIR = os.path.dirname(_ROOT_DIR)
-for _p in (_TEMP_DIR, _ROOT_DIR, _SRC_DIR):
+for _p in (_TEMP_DIR, _ROOT_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

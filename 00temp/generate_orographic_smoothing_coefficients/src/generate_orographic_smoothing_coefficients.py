@@ -24,7 +24,7 @@ from numpy import ndarray
 from generate_orographic_smoothing_coefficients.src.util_plugin import (
     adjacent_gradients_projected,
 )
-from generate_orographic_smoothing_coefficients.utils.base_plugin import BasePlugin
+from utils.base_plugin import BasePlugin
 
 
 class OrographicSmoothingCoefficients(BasePlugin):

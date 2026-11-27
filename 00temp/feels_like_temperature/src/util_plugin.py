@@ -28,10 +28,10 @@ def apparent_temperature(
     relative_humidity: np.ndarray,
     pressure: np.ndarray,
 ) -> np.ndarray:
-    """显温。气温 ℃、风速 m/s、相对湿度 0–1、气压 Pa。"""
+    """显温。气温 ℃、风速 m/s、相对湿度 0–1、气压 Pa。任一输入缺测（NaN）时，对应格点结果为 NaN。"""
     t_kelvin = temperature + 273.15
     svp = _calculate_svp_in_air(t_kelvin, pressure)  # Pa
-    # Steadman 回归式中水汽压单位为 hPa
+    # Steadman 回归式中的水汽压 e 以 kPa 计；svp 单位为 Pa，故乘 1e-3
     avp = 0.001 * svp * relative_humidity
     return (-2.7 + 1.04 * temperature + 2.0 * avp - 0.65 * wind_speed).astype(np.float32)
 
@@ -41,8 +41,9 @@ def feels_like_blend(
     apparent_temperature_arr: np.ndarray,
     wind_chill: np.ndarray,
 ) -> np.ndarray:
-    """低温取风寒，高温取显温，10–20℃ 线性过渡。"""
-    feels_like_temperature = np.zeros(temperature.shape, dtype=np.float32)
+    """低温取风寒，高温取显温，10–20℃ 线性过渡。气温缺测（NaN）的格点输出 NaN。"""
+    # 初值取 NaN：气温缺测的格点不落入下面任何分支，保持缺测，不会被误写成 0℃
+    feels_like_temperature = np.full(temperature.shape, np.nan, dtype=np.float32)
 
     # 低温区：直接采用风寒温度
     feels_like_temperature[temperature < 10] = wind_chill[temperature < 10]
