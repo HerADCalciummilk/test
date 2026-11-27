@@ -30,10 +30,10 @@
 | 内部工具 | `src/utils/`                          | 网格处理、数值计算、饱和水汽压等内部函数             |
 | 辅助源码 | `utils/base_plugin.py`                | 插件基类与后处理插件基类                     |
 | 辅助源码 | `utils/utils.py`                      | `meteva_base` 网格数据校验、坐标检查与输出封装工具 |
-| CLI  | `cli/meta_orographic_enhancement_cli.py` | 风速风向入口的地形增强计算 |
-| CLI  | `cli/orographic_enhancement_cli.py` | 网格 `u/v` 入口的地形增强计算 |
-| CLI  | `cli/apply_orographic_enhancement_cli.py` | Apply 订正调度 |
-| CLI  | `cli/redistribute_cascade_cli.py` | 多尺度 Redistribute 级联调度（如 `20,5,1`） |
+| CLI  | `cli/meta_cli.py` | 风速风向入口的地形增强计算 |
+| CLI  | `cli/uv_cli.py` | 网格 `u/v` 入口的地形增强计算 |
+| CLI  | `cli/apply_cli.py` | Apply 订正调度 |
+| CLI  | `cli/orographic_precipitation_downscaling_cli.py` | 多尺度级联调度（如 `20,5,1`） |
 | 文档   | `docs/orographic_enhancement.md`      | 算法说明文档                         |
 | 测试   | `test/test_orographic_enhancement.py` | 合成样例与官方样例对照测试                    |
 | 测试   | `test/test_grid_spacing.py`           | 投影米制与真经纬格距推断                       |
@@ -90,7 +90,7 @@
 - `corrected`：订正后降水（含截断再平衡与订正后中心加权九点×2）。
 - `adjustment`：块内 demean 调整量（截断/再平衡与订正后平滑之前；`DataArray` 时名为 `precip_adjustment`）。
 
-多尺度业务调度见 `cli/redistribute_cascade_cli.py`（`DscRedistributeCascadeCli`），只写最终订正降水。
+多尺度业务调度见 `cli/orographic_precipitation_downscaling_cli.py`，只写最终订正降水。
 
 ## 当前整理状态
 
@@ -111,9 +111,9 @@
   - `src/utils/_grid.py` 同步经纬与投影格距判断（含 `_is_geographic_spatial`）。
   - 导入仍统一为 `orographic_precipitation_downscaling`；`test_data/` 未拷入中间目录。
 - **2026-11 增量**：
-  - 新增 `RedistributeOrographicEnhancement` 与级联 CLI `redistribute_cascade_cli.py`。
+  - 新增 `RedistributeOrographicEnhancement` 与级联入口 `cli/orographic_precipitation_downscaling_cli.py`。
   - 插件 `process` 返回 `(订正降水, 调整量)`；CLI 对外仍只落盘最终订正降水。
-  - 主 CLI 模块改为无 `dsc_` 前缀文件名（兼容旧 `dsc_*.py` 入口视仓库保留情况而定）。
+  - 旧长文件名兼容入口（`meta_orographic_enhancement_cli`、`orographic_enhancement_cli`、`apply_orographic_enhancement_cli`、`redistribute_cascade_cli`）已删除。
 
 待处理：
 

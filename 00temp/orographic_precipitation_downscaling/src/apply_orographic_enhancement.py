@@ -28,7 +28,7 @@ import meteva_base as meb
 
 from orographic_precipitation_downscaling.utils.base_plugin import BasePlugin
 from orographic_precipitation_downscaling.utils.utils import convert_units
-from orographic_precipitation_downscaling.src.util_plugin import (
+from orographic_precipitation_downscaling.src.utils._apply import (
     _extract_scalar_time_value,
     _nearest_time_index,
     _threshold_in_units,

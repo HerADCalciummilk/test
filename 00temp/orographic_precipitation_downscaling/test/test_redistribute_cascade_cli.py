@@ -14,7 +14,14 @@ if str(TEMP_ROOT) not in sys.path:
 if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
-from cli.dsc_redistribute_cascade import build_cascade_stages, process
+from orographic_precipitation_downscaling.cli.orographic_precipitation_downscaling_cli import (
+    process,
+)
+from orographic_precipitation_downscaling.src.cascade_orographic_downscaling import (
+    CascadeOrographicDownscaling,
+)
+
+build_cascade_stages = CascadeOrographicDownscaling.build_cascade_stages
 
 MEB_DIMS = ("member", "level", "time", "dtime", "lat", "lon")
 

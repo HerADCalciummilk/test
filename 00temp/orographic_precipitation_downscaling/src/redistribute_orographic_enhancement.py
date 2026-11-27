@@ -29,7 +29,7 @@ import numpy as np
 import xarray as xr
 from scipy.ndimage import convolve, uniform_filter
 
-from orographic_precipitation_downscaling.src.util_plugin import _threshold_in_units
+from orographic_precipitation_downscaling.src.utils._apply import _threshold_in_units
 from orographic_precipitation_downscaling.src.utils._grid import (
     _estimate_grid_spacing_meters,
     _get_spatial_coord_names,

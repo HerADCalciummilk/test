@@ -44,11 +44,11 @@ from orographic_precipitation_downscaling.src.utils._grid import (
     _regrid_scalar_field,
     _sort_spatial_dataarray,
 )
-from orographic_precipitation_downscaling.src.util_plugin import (
+from orographic_precipitation_downscaling.src.utils._numerics import (
     _regridded_adjacent_gradient,
     _square_neighbourhood_mean,
-    calculate_svp_in_air,
 )
+from orographic_precipitation_downscaling.src.utils._svp import calculate_svp_in_air
 
 R_WATER_VAPOUR = 461.6  # 水汽气体常数，单位 J K-1 kg-1
 

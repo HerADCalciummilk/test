@@ -293,7 +293,7 @@ flowchart TD
 4. 订正后再做中心加权九点平滑 2 次。
 5. 返回订正降水与调整量（调整量为截断/再平衡与订正后平滑之前）。
 
-说明：插件本身不重网格；降水与两套增强须已在同一目标网格。多尺度串联见 `cli/redistribute_cascade_cli.py`。
+说明：插件本身不重网格；降水与两套增强须已在同一目标网格。多尺度串联见 `cli/orographic_precipitation_downscaling_cli.py`。
 
 ---
 
@@ -464,14 +464,14 @@ corrected, adjustment = plugin.process(precip, oe_high, oe_model)
 
 ## 7. CLI 用法
 
-主入口（无 `dsc_` 前缀）：
+当前入口：
 
 | 脚本 | 作用 |
 | --- | --- |
-| `cli/meta_orographic_enhancement_cli.py` | 风速风向 → 地形增强 |
-| `cli/orographic_enhancement_cli.py` | 网格 `u/v` → 地形增强 |
-| `cli/apply_orographic_enhancement_cli.py` | Apply 订正 |
-| `cli/redistribute_cascade_cli.py` | 多尺度 Redistribute 级联（如 `20,5,1`） |
+| `cli/meta_cli.py` | 风速风向 → 地形增强 |
+| `cli/uv_cli.py` | 网格 `u/v` → 地形增强 |
+| `cli/apply_cli.py` | Apply 订正 |
+| `cli/orographic_precipitation_downscaling_cli.py` | 多尺度级联（如 `20,5,1`） |
 
 列出帮助：
 
@@ -482,11 +482,9 @@ python -m orographic_precipitation_downscaling.cli
 ### 7.1 Meta 增强（风速风向）
 
 ```python
-from orographic_precipitation_downscaling.cli.meta_orographic_enhancement_cli import (
-    DscOrographicEnhancementCli,
-)
+from orographic_precipitation_downscaling.cli.meta_cli import process
 
-code = DscOrographicEnhancementCli.call(
+result = process(
     temperature_path="temperature.nc",
     humidity_path="humidity.nc",
     pressure_path="pressure.nc",
@@ -506,11 +504,11 @@ code = DscOrographicEnhancementCli.call(
 ### 7.2 级联重分配
 
 ```python
-from orographic_precipitation_downscaling.cli.redistribute_cascade_cli import (
-    DscRedistributeCascadeCli,
+from orographic_precipitation_downscaling.cli.orographic_precipitation_downscaling_cli import (
+    process,
 )
 
-code = DscRedistributeCascadeCli.call(
+result = process(
     precip_path="precip.nc",
     temperature_path="tmp.nc",
     humidity_path="rh.nc",
