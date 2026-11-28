@@ -4,7 +4,7 @@
 
 - [算法审核规范](docs/算法审核规范.md)（静态检查 + LLM审核，同一条 PR 评论）
 - [算法代码更新管理](docs/算法更新管理.md)（需求 Issue + Milestone + 人触发 `vX.Y.Z`）
-- [本地一键检查](local_review/README.md)（独立于 GitHub L1/L2，解压包后本机审）
+- [本地一键检查](.cursor/skills/nimm-algo-review/README.md)（独立于 GitHub L1/L2，本机审；可通过 `nimm-algo-review` Skill 调用）
 - 审核 CI：`.github/workflows/algorithm-review.yml`（草稿 PR 也跑 L1/L2）
 - 需求进展 CI：`.github/workflows/issue-progress.yml`（正式 PR 将「改了啥」写到已关联 Issue）
 
@@ -42,14 +42,15 @@ cli|test|docs|nbs|resource/<kind>/<pkg>/   # 配套（与 NIMM 同级）
 .github/ISSUE_TEMPLATE/     # 算法需求模板（须选 Milestone）
 .github/pull_request_template.md
 .cursor/skills/algo-release/  # 发版 Skill（人触发 gh release create）
-local_review/               # 本地一键检查（独立目录）
+.cursor/skills/nimm-algo-review/   # 本地算法包审核 Skill（内含 local_review/ 程序）
 ```
 
 ## 本地命令
 
 ```bash
-# —— 独立本地一键（推荐用于解压包后检查；与 CI 脚本无关）——
-pip install -r local_review/requirements.txt
+# —— 独立本地一键（与 CI 脚本无关；在仓库根执行）——
+pip install -r .cursor\skills\nimm-algo-review\local_review\requirements.txt
+set PYTHONPATH=.cursor\skills\nimm-algo-review
 set OPENAI_API_KEY=sk-...
 python -m local_review --path 00temp/<pkg> --out local-review-report.md
 # 静态 → venv+pytest → LLM 合并总结写 MD。调试：--skip-run / --dry-run / --allow-skip-llm

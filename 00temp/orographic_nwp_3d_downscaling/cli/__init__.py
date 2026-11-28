@@ -1,2 +1,2 @@
-# -*- coding: utf-8 -*-
-"""快速精细化插值命令行。"""
+"""Command line entry points for orographic_nwp_3d_downscaling."""
+

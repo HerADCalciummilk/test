@@ -45,7 +45,7 @@ try:
 except ImportError:
   print(__name__+':no install rasterio')
 
-import Module_MyFunction      as MMyfun
+import module_my_function      as MMyfun
 
 
 class Class_Interp_dem(object):
@@ -228,71 +228,10 @@ class Class_Interp_dem(object):
                          alt
       lapse_rate_2d：垂直变化率, 2维矩阵, 与dyGrid分辨率相同 EC=(481, 561)=269841
     '''
-    #插值点对应四周格点号 dyGrid["ndy2d_x_lon"]是上-下=南-北数据
-    ndyidx_left_W_lon  = np.floor((dyIntpP['lon']-dyGrid["begin_lon"])/dyGrid["lon_res"]).astype(int) #西:向下取整 
-    ndyidx_right_E_lon = ndyidx_left_W_lon + 1 #东
-    ndyidx_right_E_lon[ndyidx_right_E_lon>=dyGrid["Nlon"]]=dyGrid["Nlon"]-1
-    #获得从0开始的插值点对应的左下角格点索引号
-    ndyidx_up_S_lat    = np.floor((dyIntpP['lat']-dyGrid["begin_lat"])/dyGrid["lat_res"]).astype(int) #南=数组对应上方(南边纬度)
-    ndyidx_down_N_lat  = ndyidx_up_S_lat + 1  #北=这里的up其实是实际中的南边,down是北边，因为矩阵是上-下=南-北数据
-    ndyidx_down_N_lat[ndyidx_down_N_lat>=dyGrid["Nlat"]]=dyGrid["Nlat"]-1
-    #左下右上经纬度  上-下=南-北数据
-    ndyglon_left_WN  = dyGrid["ndy2d_x_lon"][ndyidx_down_N_lat,ndyidx_left_W_lon]   #西北角经度, 输入数组=左-右=西-东
-    ndyglat_down_WN  = dyGrid["ndy2d_y_lat"][ndyidx_down_N_lat,ndyidx_left_W_lon]   #西北角纬度, x1 |----.  x2 y2 纬度小=南
-    ndyglon_right_ES = dyGrid["ndy2d_x_lon"][ndyidx_up_S_lat  ,ndyidx_right_E_lon]  #东南角经度     |    |
-    ndyglat_up_ES    = dyGrid["ndy2d_y_lat"][ndyidx_up_S_lat  ,ndyidx_right_E_lon]  #东南角纬度     .----|     y1 纬度大=北
-    #权重参数
-    x2_x=ndyglon_right_ES-dyIntpP['lon']  #右边(东) - 左点
-    x_x1=dyIntpP['lon']-ndyglon_left_WN   #右点     - 左边(西)
-    y_y1=dyIntpP['lat']-ndyglat_down_WN   #上点     - 下边(北)
-    y2_y=ndyglat_up_ES -dyIntpP['lat']    #下点     - 上边(南)
-    y2_y1_x2_x1 = -dyGrid["lat_res"]*dyGrid["lon_res"]
-    #计算权重
-    w1=y2_y*x2_x/y2_y1_x2_x1  #对应T11=左下
-    w2=y2_y*x_x1/y2_y1_x2_x1  #对应T21=右下
-    w3=y_y1*x2_x/y2_y1_x2_x1  #对应T12=左上
-    w4=y_y1*x_x1/y2_y1_x2_x1  #对应T22=右上
-    #4格点根据海拔高度进行物理量的偏差订正
-    #print(f"size:eta-{np.size(eta)},====dyGrid['alt']{dyGrid['alt'].shape}== lr-{lapse_rate_2d.shape} alt-{np.size(dyIntpP['alt'])}")
-    if np.size(eta)==1:
-      ndyQ11_Bias_left_down_WN =(dyIntpP['alt']-dyGrid['alt'][ndyidx_down_N_lat, ndyidx_left_W_lon]) *lapse_rate_2d[ndyidx_down_N_lat,ndyidx_left_W_lon]*eta
-      ndyQ21_Bias_right_down_EN=(dyIntpP['alt']-dyGrid['alt'][ndyidx_down_N_lat, ndyidx_right_E_lon])*lapse_rate_2d[ndyidx_down_N_lat,ndyidx_right_E_lon]*eta
-      ndyQ12_Bias_left_up_WS   =(dyIntpP['alt']-dyGrid['alt'][ndyidx_up_S_lat,   ndyidx_left_W_lon]) *lapse_rate_2d[ndyidx_up_S_lat,  ndyidx_left_W_lon]*eta
-      ndyQ22_Bias_right_up_ES  =(dyIntpP['alt']-dyGrid['alt'][ndyidx_up_S_lat,   ndyidx_right_E_lon])*lapse_rate_2d[ndyidx_up_S_lat,  ndyidx_right_E_lon]*eta
-    elif np.size(eta)==np.size(lapse_rate_2d):
-      #eta[ndyidx_down_N_lat,ndyidx_left_W_lon] #1d(1682601,)
-      ndyQ11_Bias_left_down_WN =(dyIntpP['alt']-dyGrid['alt'][ndyidx_down_N_lat, ndyidx_left_W_lon]) *lapse_rate_2d[ndyidx_down_N_lat,ndyidx_left_W_lon]*eta[ndyidx_down_N_lat,ndyidx_left_W_lon]
-      ndyQ21_Bias_right_down_EN=(dyIntpP['alt']-dyGrid['alt'][ndyidx_down_N_lat, ndyidx_right_E_lon])*lapse_rate_2d[ndyidx_down_N_lat,ndyidx_right_E_lon]*eta[ndyidx_down_N_lat,ndyidx_right_E_lon]
-      ndyQ12_Bias_left_up_WS   =(dyIntpP['alt']-dyGrid['alt'][ndyidx_up_S_lat,   ndyidx_left_W_lon]) *lapse_rate_2d[ndyidx_up_S_lat,  ndyidx_left_W_lon]*eta[ndyidx_up_S_lat,  ndyidx_left_W_lon]
-      ndyQ22_Bias_right_up_ES  =(dyIntpP['alt']-dyGrid['alt'][ndyidx_up_S_lat,   ndyidx_right_E_lon])*lapse_rate_2d[ndyidx_up_S_lat,  ndyidx_right_E_lon]*eta[ndyidx_up_S_lat,  ndyidx_right_E_lon]
-    elif np.size(eta)==np.size(dyIntpP['alt']): #输入eta参数分辨率与插值后的分辨率一致
-      if len(eta.shape)==2: eta=eta.flatten()
-      ndyQ11_Bias_left_down_WN =(dyIntpP['alt']-dyGrid['alt'][ndyidx_down_N_lat, ndyidx_left_W_lon]) *lapse_rate_2d[ndyidx_down_N_lat,ndyidx_left_W_lon]*eta
-      ndyQ21_Bias_right_down_EN=(dyIntpP['alt']-dyGrid['alt'][ndyidx_down_N_lat, ndyidx_right_E_lon])*lapse_rate_2d[ndyidx_down_N_lat,ndyidx_right_E_lon]*eta
-      ndyQ12_Bias_left_up_WS   =(dyIntpP['alt']-dyGrid['alt'][ndyidx_up_S_lat,   ndyidx_left_W_lon]) *lapse_rate_2d[ndyidx_up_S_lat,  ndyidx_left_W_lon]*eta
-      ndyQ22_Bias_right_up_ES  =(dyIntpP['alt']-dyGrid['alt'][ndyidx_up_S_lat,   ndyidx_right_E_lon])*lapse_rate_2d[ndyidx_up_S_lat,  ndyidx_right_E_lon]*eta
-    #(插值点海拔-4个格点海拔)*垂直变化率=增量(高于插值点降低,低于插值点升高)  dyGrid=上-下:南-北(小-大)
-    #4个格点的偏差订正值
-    ndyQ11_WN = dyGrid[skey][ndyidx_down_N_lat,ndyidx_left_W_lon]  + ndyQ11_Bias_left_down_WN
-    ndyQ21_EN = dyGrid[skey][ndyidx_down_N_lat,ndyidx_right_E_lon] + ndyQ21_Bias_right_down_EN
-    ndyQ12_WS = dyGrid[skey][ndyidx_up_S_lat,  ndyidx_left_W_lon]  + ndyQ12_Bias_left_up_WS
-    ndyQ22_ES = dyGrid[skey][ndyidx_up_S_lat,  ndyidx_right_E_lon] + ndyQ22_Bias_right_up_ES
-    #偏差订正值双线性插值到插值点上
-    ndyalt_interp_rlt = ndyQ11_WN*w1+ndyQ21_EN*w2+ndyQ12_WS*w3+ndyQ22_ES*w4
-    #风速插值后会存在小于0的
-    if skey in ["10ws","10fg3","10gust"]:
-      ndyalt_interp_rlt[ndyalt_interp_rlt<=0.] = 0.
-    elif skey in ["2rh"]:
-      ndyalt_interp_rlt[ndyalt_interp_rlt<=0.]   = 0.
-      ndyalt_interp_rlt[ndyalt_interp_rlt>=100.] = 100.
-    elif skey in ["sp"]: #珠穆朗玛峰山顶气压最低
-      ndyalt_interp_rlt[ndyalt_interp_rlt<=200] = 200
-    #输出数据
-    if sout=="less":
-      return ndyalt_interp_rlt
-    else:
-      return ndyalt_interp_rlt, [ndyidx_down_N_lat,ndyidx_up_S_lat,ndyidx_left_W_lon,ndyidx_right_E_lon]
-  
+    # 公式在 fast_refine_interp_util_plugin.dem_interp_scalar，这里只转发。
+    from fast_refine_interp_util_plugin import dem_interp_scalar
+    return dem_interp_scalar(dyIntpP, dyGrid, lapse_rate_2d, eta=eta, skey=skey, sout=sout)
+
   #多层数据合并
   def dMulti_Level_merge(self, dyMLmodel, arnd=None):
     '''
@@ -1486,6 +1425,8 @@ class Class_Interp_dem(object):
     #--------------------------------------------------------------------------------
     #准备写数据
     ltInterp_keys=list(ltPQSN_Intp_ready)
+    if "tcc" in dyIntp_rlt:
+      ltInterp_keys.append("tcc")
     if sModel_Region_upper in ["EC_12P5KM"]:
       if '2t_max' in self.ltPQSN_mxmn:
         ltInterp_keys = ltInterp_keys + ['mx2t3']
@@ -2326,9 +2267,12 @@ class Class_Interp_dem(object):
   #串行调用(n个物理量-n个预报时效)
   def dSerial_best_eta_NBT_nPQ(self, ltYMDH_mdl_begin, dyGObs_PhyQ, dymdl_Geog, dyIntp_info, dyPara_ini_info, dyCommon_Para):
     self.init_bp_process(dyGObs_PhyQ, dymdl_Geog, dyIntp_info, dyPara_ini_info, dyCommon_Para)
+    products = []
     for sYMDH_FH_mdl in ltYMDH_mdl_begin:
-      self.dbest_eta_1BT_nPQ(sYMDH_FH_mdl)
-    return
+      one = self.dbest_eta_1BT_nPQ(sYMDH_FH_mdl)
+      if one:
+        products.extend(one)
+    return products
   #并行调用(1个物理量-多个预报时效)
   def dPool_best_eta_NBT_nPQ(self, ltYMDH_mdl_begin, dyGObs_PhyQ, dymdl_Geog, dyIntp_info, dyPara_ini_info, dyCommon_Para):
     in_cpu_core = mp.cpu_count()
@@ -2345,7 +2289,11 @@ class Class_Interp_dem(object):
     else:
       pool.close()
       pool.join()
-    return
+    products = []
+    for one in res or []:
+      if one:
+        products.extend(one)
+    return products
   #初始化工作进程
   def init_bp_process(self, _dyGObs_PhyQ, _dymdl_Geog, _dyIntp_info, _dyPara_ini_info, _dyCommon_Para):
     # 全局变量
@@ -2363,6 +2311,7 @@ class Class_Interp_dem(object):
   def dbest_eta_1BT_nPQ(self, sYMDH_FH_mdl):
     in_cpu_core = mp.cpu_count()
     dyattr      = {"YMDH":sYMDH_FH_mdl}
+    products = []
     print(" ".join([sYMDH_FH_mdl[0:8]+"_"+sYMDH_FH_mdl[8:],"=", dyCommon_Para["sInterp_YMDH"]]))
     ltPQSN_Intp =[x for x in dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl].keys() if x in self.ltPQSN_Intp]
     #读取grib的地面和3D数据文件
@@ -2545,21 +2494,18 @@ class Class_Interp_dem(object):
         if dyCommon_Para["sReso"]=="Site":
           dybest_eta["site"] = dyCommon_Para["Site_Code"]
           ltInterp_keys.append("site")
-        #保存每日文件夹内最优参数----------------------------------------------------------------------------
-        print("out:"+dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"])
-        tmp_name = self.dWS3_Interp(dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"], dybest_eta, ltInterp_keys=ltInterp_keys, dyattr=dyattr)
-        #if tmp_name is None:
-        #  print('write error:', dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"])
-        #elif os.path.exists(tmp_name):
-        #  print('rename:%s %s' % (tmp_name, dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"]))
-        #  #os.rename(tmp_name, dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"])
-        #else:
-        #  print('file not exist:', tmp_name)
-
-        #保存恒定文件夹内最优参数(复制)
-        if dyPara_ini_info["InstantInfo"]["eta_cmn_out"]:
-          if self.iDebug>=1:print("out:"+dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out1"])
-          self.dCopy_rlt(dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"], dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out1"])
+        # 最优 eta 先收集，文件名和写出在 process。
+        out_path = dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"]
+        copy_path = dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out1"] if dyPara_ini_info["InstantInfo"]["eta_cmn_out"] else None
+        products.append({
+          "hour": sYMDH_FH_mdl.split("_", 1)[1],
+          "element": sPhyQ_shortname,
+          "daily_dir": os.path.dirname(out_path),
+          "common_dir": os.path.dirname(copy_path) if copy_path else None,
+          "data": dict(dybest_eta),
+          "keys": list(ltInterp_keys),
+          "attrs": dict(dyattr),
+        })
         print("-"*20)
       #矢量-最优参数
       elif sPhyQ_shortname in ["10ws"]:
@@ -2641,25 +2587,23 @@ class Class_Interp_dem(object):
                 print("-".join([sPhyQ_shortname,dyCommon_Para["sReso"],sYMDH_FH_mdl[8:],"best"]).ljust(12)+\
                                 f": {dylr_score['MAE_lr']:.3f} {dybi_score['MAE_bi']:.3f} "+\
                                 f"| {dylr_score['HIT_lr']:.3f} {dybi_score['HIT_bi']:.3f}")
-        #保存每日文件夹内最优参数----------------------------------------------------------------------------
+        # 最优 eta 先收集，文件名和写出在 process。
         if dyCommon_Para["sReso"]=="Site": #站点信息
           dybest_eta["site"] = dyCommon_Para["Site_Code"]
         ltInterp_keys=ltPQ_name+["site"]
-        print("out:"+dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"])
-        tmp_name = self.dWS3_Interp(dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"], dybest_eta, ltInterp_keys=ltInterp_keys, dyattr=dyattr)
-        #if tmp_name is None:
-        #  print('write error:', dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"])
-        #elif os.path.exists(tmp_name):
-        #  print('rename:%s %s' % (tmp_name, dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"]))
-        #  os.rename(tmp_name, dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"])
-        #else:
-        #  print('file not exist:', tmp_name)
-
-        #保存恒定文件夹内最优参数(复制)
-        if dyPara_ini_info["InstantInfo"]["eta_cmn_out"]:
-          if self.iDebug>=1:print("out:"+dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out1"])
-          self.dCopy_rlt(dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"], dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out1"])
-        return
+        out_path = dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out"]
+        copy_path = dyCommon_Para["dyBP_Path"][sYMDH_FH_mdl][sPhyQ_shortname]["out1"] if dyPara_ini_info["InstantInfo"]["eta_cmn_out"] else None
+        products.append({
+          "hour": sYMDH_FH_mdl.split("_", 1)[1],
+          "element": sPhyQ_shortname,
+          "daily_dir": os.path.dirname(out_path),
+          "common_dir": os.path.dirname(copy_path) if copy_path else None,
+          "data": dict(dybest_eta),
+          "keys": list(ltInterp_keys),
+          "attrs": dict(dyattr),
+        })
+        return products
+    return products
 
   #串行
   def dSerial_GPara_AE(self, ltcycle, dyIntp_info, dymdl_rdata, dyVR_srf_2d, dyGObs_PhyQ):

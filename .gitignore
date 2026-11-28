@@ -7,10 +7,9 @@ local-review-report.md
 local-review-report.json
 local-review-artifacts/
 .local_review_venv/
-# LLM 配置含密钥；默认放 local_review/ 下
-local_review/llm.toml
-local_review/.llm.toml
+# LLM 配置含密钥；默认放 nimm-algo-review/local_review/ 下
 **/llm.toml
+**/.llm.toml
 # 兼容旧文件名
 review.json
 review-comment.md
@@ -38,7 +37,13 @@ venv/
 .env.production.local/
 .venv/
 
+# 文档
+*.pdf
+*.doc
+*.txt
+
 # 数据 / 二进制场（勿提交；含大小写扩展名）
+**/test_data/
 **/*.nc
 **/*.NC
 **/*.csv
@@ -68,6 +73,17 @@ venv/
 **/resource/ec_*/
 **/*.json
 
-# cursor配置
+# cursor配置（仅放行指定 skill，其余如 mcp.json 仍忽略）
 .cursorrules
-.cursor/
+.cursor/**
+!.cursor/skills/
+.cursor/skills/*
+!.cursor/skills/algo-release/
+!.cursor/skills/nimm-algo-review/
+# 本机解释器路径（个人环境，不提交）
+.cursor/skills/nimm-algo-review/.python-path
+.workbuddy/
+
+# skill 内的依赖清单（上方 *.txt 规则会忽略它）
+!.cursor/skills/nimm-algo-review/**/*.txt
+NIMM算法附录.docx

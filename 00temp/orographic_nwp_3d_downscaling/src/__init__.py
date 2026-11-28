@@ -1,11 +1,11 @@
-"""Public plugin exports for nimm_g_interp."""
+"""Public plugin exports for orographic_nwp_3d_downscaling."""
 
-__all__ = ["FastRefineInterpPlugin"]
+__all__ = ["BestEtaPlugin", "MaxMinPlugin", "SpatialInterpPlugin", "TimeInterpPlugin"]
 
 
 def __getattr__(name):
-    if name == "FastRefineInterpPlugin":
-        from .fast_refine_interp_plugin import FastRefineInterpPlugin
+    if name in __all__:
+        from . import fast_refine_interp_plugin
 
-        return FastRefineInterpPlugin
+        return getattr(fast_refine_interp_plugin, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

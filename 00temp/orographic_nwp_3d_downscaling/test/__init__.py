@@ -1,2 +1,2 @@
-"""Tests for nimm_g_interp."""
+"""Tests for orographic_nwp_3d_downscaling."""
 

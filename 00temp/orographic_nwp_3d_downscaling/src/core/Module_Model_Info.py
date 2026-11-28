@@ -371,11 +371,11 @@ class ModelInfo:
       #检查开始/结束预报时效是否在范围内
       if(ltFrst_Hours[0]<0):
         print("begin forecast hour:",ltFrst_Hours[0])
-        print("Module_Model_Info:dPredictor_Forecast_Hours")
+        print("module_model_info:dPredictor_Forecast_Hours")
         sys.exit()
       if(ltFrst_Hours[1]>=fend_limit):
         print("end forecast hour:",ltFrst_Hours[1])
-        print("Module_Model_Info:dPredictor_Forecast_Hours")
+        print("module_model_info:dPredictor_Forecast_Hours")
         sys.exit()
       #开始/结束时效内的预报时间
       lthours = [x for x in self.ltforecast_hours if ltFrst_Hours[0]<=x and x<=ltFrst_Hours[1]]
