@@ -12,7 +12,7 @@ for _p in (_CLI, _ROOT):
         sys.path.insert(0, _p)
 
 from src.lk_plugin import LK
-from utils.cli_grid_io import load_precip_griddata_list
+from utils.cli_grid_io import load_precip_griddata_list, save_grid_result
 from utils.merge_params import merge_params
 from utils.util_env import resolve_args
 
@@ -32,4 +32,5 @@ def process(config=None, **kwargs):
         decl_scale=cfg["decl_scale"],
         verbose=cfg["verbose"],
     )
-    plugin.process(load_precip_griddata_list(cfg["precip"]))
+    result = plugin.process(load_precip_griddata_list(cfg["precip"]))
+    return save_grid_result(result, cfg.get("output"))

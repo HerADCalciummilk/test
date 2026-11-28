@@ -12,7 +12,7 @@ for _p in (_CLI, _ROOT):
         sys.path.insert(0, _p)
 
 from src.lsqr_optical_flow_plugin import LsqrOpticalFlow
-from utils.cli_grid_io import load_precip_griddata_list
+from utils.cli_grid_io import load_precip_griddata_list, save_grid_result
 from utils.merge_params import merge_params
 from utils.util_env import resolve_args
 
@@ -29,7 +29,8 @@ def process(config=None, **kwargs):
         lsqr_damp=cfg["lsqr_damp"],
         verbose=cfg["verbose"],
     )
-    plugin.process(
+    result = plugin.process(
         load_precip_griddata_list(cfg["precip_before"]),
         load_precip_griddata_list(cfg["precip_next"]),
     )
+    return save_grid_result(result, cfg.get("output"))

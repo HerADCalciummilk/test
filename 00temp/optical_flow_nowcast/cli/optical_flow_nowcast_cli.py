@@ -12,7 +12,7 @@ for _p in (_ROOT_DIR, _CLI_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from utils.cli_grid_io import load_precip_griddata_list, load_velocity_griddata
+from utils.cli_grid_io import load_precip_griddata_list, load_velocity_griddata, save_grid_result
 from utils.merge_params import merge_params
 from utils.util_env import MODULES, resolve_args
 
@@ -49,7 +49,7 @@ def _process(module, cfg):
     """按 module 跑一次算法。"""
     if module == "lk":
 
-        LK(
+        result = LK(
             transform_method=cfg["transform_method"],
             fd_method=cfg["fd_method"],
             interp_method=cfg["interp_method"],
@@ -60,10 +60,10 @@ def _process(module, cfg):
             decl_scale=cfg["decl_scale"],
             verbose=cfg["verbose"],
         ).process(load_precip_griddata_list(cfg["precip"]))
-        return
+        return save_grid_result(result, cfg.get("output"))
     if module == "lsqr_optical_flow":
 
-        LsqrOpticalFlow(
+        result = LsqrOpticalFlow(
             min_window=cfg["min_window"],
             rain_limit=cfg["rain_limit"],
             delta_rain_limit=cfg["delta_rain_limit"],
@@ -74,10 +74,10 @@ def _process(module, cfg):
             load_precip_griddata_list(cfg["precip_before"]),
             load_precip_griddata_list(cfg["precip_next"]),
         )
-        return
+        return save_grid_result(result, cfg.get("output"))
     if module == "extrapolation":
 
-        Extrapolation(
+        result = Extrapolation(
             extrap_method=cfg["extrap_method"],
             measure_time=cfg["measure_time"],
         ).process(
@@ -86,10 +86,10 @@ def _process(module, cfg):
             cfg["timesteps"],
             delta_t=timedelta(minutes=int(cfg["delta_min"])),
         )
-        return
+        return save_grid_result(result, cfg.get("output"))
     if module == "sprog":
 
-        Sprog(
+        result = Sprog(
             precip_thr=cfg["precip_thr"],
             n_cascade_levels=cfg["n_cascade_levels"],
             extrap_method=cfg["extrap_method"],
@@ -108,10 +108,10 @@ def _process(module, cfg):
             cfg["timesteps"],
             delta_t=timedelta(minutes=int(cfg["delta_min"])),
         )
-        return
+        return save_grid_result(result, cfg.get("output"))
     if module == "linda":
 
-        Linda(
+        result = Linda(
             add_perturbations=cfg["add_perturbations"],
             feature_method=cfg["feature_method"],
             max_num_features=cfg["max_num_features"],
@@ -137,9 +137,9 @@ def _process(module, cfg):
             cfg["timesteps"],
             delta_t=timedelta(minutes=int(cfg["delta_min"])),
         )
-        return
+        return save_grid_result(result, cfg.get("output"))
 
-    Steps(
+    result = Steps(
         n_ens_members=cfg["n_ens_members"],
         n_cascade_levels=cfg["n_cascade_levels"],
         precip_thr=cfg["precip_thr"],
@@ -167,6 +167,7 @@ def _process(module, cfg):
         cfg["timesteps"],
         delta_t=timedelta(minutes=int(cfg["delta_min"])),
     )
+    return save_grid_result(result, cfg.get("output"))
 
 
 @merge_params(section="cli")
@@ -175,4 +176,4 @@ def process(module: str = "steps", config=None, **kwargs):
     mod = _normalize_module(module)
     explicit = {key: value for key, value in kwargs.items() if value is not None}
     cfg = resolve_args(mod, config=config, **explicit)
-    _process(mod, cfg)
+    return _process(mod, cfg)

@@ -13,7 +13,7 @@ for _p in (_CLI, _ROOT):
         sys.path.insert(0, _p)
 
 from src.extrapolation_plugin import Extrapolation
-from utils.cli_grid_io import load_precip_griddata_list, load_velocity_griddata
+from utils.cli_grid_io import load_precip_griddata_list, load_velocity_griddata, save_grid_result
 from utils.merge_params import merge_params
 from utils.util_env import resolve_args
 
@@ -26,9 +26,10 @@ def process(config=None, **kwargs):
         extrap_method=cfg["extrap_method"],
         measure_time=cfg["measure_time"],
     )
-    plugin.process(
+    result = plugin.process(
         load_precip_griddata_list(cfg["precip"]),
         load_velocity_griddata(cfg["velocity"]),
         cfg["timesteps"],
         delta_t=timedelta(minutes=int(cfg["delta_min"])),
     )
+    return save_grid_result(result, cfg.get("output"))

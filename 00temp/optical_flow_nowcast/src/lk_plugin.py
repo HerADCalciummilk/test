@@ -190,7 +190,8 @@ def _detection(
 
     # convert to 8-bit
     input_image = np.ndarray.astype(input_image, "uint8")
-    mask = (-1 * mask + 1).astype("uint8")
+    # uint8 上 -1 会溢出，先转成有符号整数再取反，0/1 结果不变
+    mask = (-1 * mask.astype(np.int16) + 1).astype("uint8")
 
     params = dict(
         maxCorners=max_num_features if max_num_features is not None else max_corners,

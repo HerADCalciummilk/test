@@ -31,6 +31,7 @@ FIELDS: Dict[str, Sequence[_Field]] = {
         ("size_opening", "int", False, 3),
         ("decl_scale", "int", False, 20),
         ("verbose", "bool", False, False),
+        ("output", "optout", False, None),
     ),
     "lsqr_optical_flow": (
         ("precip_before", "path", True, None),
@@ -41,6 +42,7 @@ FIELDS: Dict[str, Sequence[_Field]] = {
         ("num_limit", "int", False, 100),
         ("lsqr_damp", "float", False, 0.01),
         ("verbose", "bool", False, False),
+        ("output", "optout", False, None),
     ),
     "extrapolation": (
         ("precip", "path", True, None),
@@ -49,6 +51,7 @@ FIELDS: Dict[str, Sequence[_Field]] = {
         ("delta_min", "int", False, 10),
         ("extrap_method", "str", False, "semilagrangian"),
         ("measure_time", "bool", False, False),
+        ("output", "optout", False, None),
     ),
     "sprog": (
         ("precip", "path", True, None),
@@ -67,6 +70,7 @@ FIELDS: Dict[str, Sequence[_Field]] = {
         ("fft_method", "str", False, "numpy"),
         ("domain", "str", False, "spatial"),
         ("measure_time", "bool", False, False),
+        ("output", "optout", False, None),
     ),
     "linda": (
         ("precip", "path", True, None),
@@ -92,6 +96,7 @@ FIELDS: Dict[str, Sequence[_Field]] = {
         ("use_multiprocessing", "bool", False, False),
         ("measure_time", "bool", False, False),
         ("return_output", "bool", False, True),
+        ("output", "optout", False, None),
     ),
     "steps": (
         ("precip", "path", True, None),
@@ -119,6 +124,7 @@ FIELDS: Dict[str, Sequence[_Field]] = {
         ("domain", "str", False, "spatial"),
         ("measure_time", "bool", False, False),
         ("return_output", "bool", False, True),
+        ("output", "optout", False, None),
     ),
 }
 
@@ -219,6 +225,9 @@ def _coerce(kind: str, value: Any, key: str) -> Any:
         if not text:
             raise ValueError(f"{key} 未设置：命令行和 ini 都为空")
         return text
+    if kind == "optout":
+        text = "" if value is None else str(value).strip()
+        return text or None
     if kind == "str":
         text = str(value).strip()
         if not text:
@@ -288,6 +297,12 @@ def _resolve_args(module: str, **explicit: Any) -> Dict[str, Any]:
             continue
         if kind == "path":
             resolved[key] = _expand_paths(raw, key)
+            continue
+        if kind == "optout":
+            path = Path(raw)
+            if not path.is_absolute():
+                path = (_PKG_ROOT / path).resolve()
+            resolved[key] = str(path)
             continue
         resolved[key] = _coerce(kind, raw, key)
     return resolved
