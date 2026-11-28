@@ -4,8 +4,8 @@
 
 包内两类能力：
 
-- **等距经纬插值（InterpGg\*）**：`InterpGgLinear` / `Nearest` / `Cubic` / `Conservative`；越界用 `outer_value`。
-- **海陆感知重网格（LandSea）**：`InterpGgLandSea` 等；scipy / `*-2` 路径；可选海陆掩码。
+- **等距经纬插值（InterpGg\*）**：统一入口 `InterpGg(method=...)`，分派 `InterpGgLinear` / `Nearest` / `Cubic` / `Conservative`；越界用 `outer_value`。
+- **海陆感知重网格（LandSea）**：`InterpGgLandSea` 等；scipy / `*-2` 路径；可选海陆掩码（独立 `regrid_mode`，不经 `InterpGg`）。
 
 ---
 
@@ -13,6 +13,7 @@
 
 | 插件 | 功能简介 |
 | --- | --- |
+| `InterpGg` | 等距经纬插值**统一入口**：`method=linear|nearest|cubic|conservative` |
 | `InterpGgLinear` | 格点→格点双线性；四邻点距离加权 |
 | `InterpGgNearest` | 格点→格点最近邻；索引四舍五入 |
 | `InterpGgCubic` | 格点→格点双三次；三次卷积核加权 |
@@ -31,12 +32,12 @@
 | --- | --- |
 | `src/` | 插件 |
 | `src/utils/` | 内核（LandSea、`area_weighted` 等；经包级 `utils` 暴露） |
-| `cli/` | Gg：`python -m cli`；LandSea：`python -m cli.tran_regrid` |
+| `cli/` | `interpolation_grid_grid_cli.py`（`@merge_params` `process`）、`tran_regrid_cli.py`；支持 `python -m interpolation_grid_grid` / `python -m cli` |
 | `resource/conf.ini` | InterpGg CLI 缺省 |
 | `test/` | 单元与示例 |
 | `docs/` | 本文档 |
 | `nbs/` | 说明与对比 Notebook |
-| `utils/` | `util_env`、包内 `base_plugin`；并入共享 utils |
+| `utils/` | 包内 `base_plugin`；合参由共享 `00temp/utils/merge_params.py` 提供 |
 
 ---
 
@@ -50,7 +51,33 @@
 - 非循环场经纬越界：先插重叠区，再 `expand_to_contain_another_grid` 填外区；越界且未给 `outer_value` 时返回 `None`。
 - `member` / `level` / `time` / `dtime` 继承源场；水平网格取自目标 `grid`；`attrs` 深拷贝自源场。
 
-### 3.2 `InterpGgLinear`
+### 3.2 `InterpGg`（统一入口）
+
+对外推荐经本入口调用；按 `method` 分派到 Linear / Nearest / Cubic / Conservative。未用于当前 `method` 的参数忽略。CLI 的 `method=` 亦经本入口。
+
+| 参数 | 位置 | 必填 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| `method` | 构造 | 是 | `linear` | `linear` / `nearest` / `cubic` / `conservative` |
+| `outer_value` | 构造 | 条件 | `None` | 透传子插件；目标超出源域时的填充值 |
+| `mdtol` | 构造 | 否 | `1` | 仅 `conservative`：缺测/覆盖容差 `[0,1]` |
+| `spherical` | 构造 | 否 | `True` | 仅 `conservative`：是否按球面面积因子 |
+| `grd` | `process` | 是 | — | 源格点场 |
+| `grid` | `process` | 是 | — | 目标网格 |
+
+```python
+from interp_gg_plugin import InterpGg
+import meteva_base as meb
+
+grd = meb.read_griddata_from_nc("source.nc")
+grid = meb.basicdata.grid([70, 140, 0.25], [15, 55, 0.25])
+result = InterpGg(method="linear", outer_value=0.0).process(grd, grid)
+# conservative：
+# InterpGg(method="conservative", outer_value=0.0, mdtol=1.0, spherical=True)
+```
+
+各算法插件仍可单独使用（见下）。
+
+### 3.3 `InterpGgLinear`
 
 将目标点映射到源索引分数，取四邻点双线性加权。
 
@@ -67,27 +94,30 @@ import meteva_base as meb
 grd = meb.read_griddata_from_nc("source.nc")
 grid = meb.basicdata.grid([70, 140, 0.1], [15, 55, 0.1])
 result = InterpGgLinear(outer_value=0.0).process(grd, grid)
+# 等价：InterpGg(method="linear", outer_value=0.0).process(grd, grid)
 ```
 
-### 3.3 `InterpGgNearest`
+### 3.4 `InterpGgNearest`
 
 对索引 `np.around` 取最近源格点赋值。循环场经度取模；非循环场索引钳制在有效范围。参数表与 Linear 相同（`outer_value` / `grd` / `grid`）。
 
 ```python
 from interp_gg_nearest_plugin import InterpGgNearest
 result = InterpGgNearest(outer_value=0.0).process(grd, grid)
+# 等价：InterpGg(method="nearest", outer_value=0.0).process(grd, grid)
 ```
 
-### 3.4 `InterpGgCubic`
+### 3.5 `InterpGgCubic`
 
 对邻域 `p,q ∈ {-1,0,1,2}` 用三次核加权累加；邻点下标按源网格边界钳制。参数表与 Linear 相同。
 
 ```python
 from interp_gg_cubic_plugin import InterpGgCubic
 result = InterpGgCubic(outer_value=0.0).process(grd, grid)
+# 等价：InterpGg(method="cubic", outer_value=0.0).process(grd, grid)
 ```
 
-### 3.5 `InterpGgConservative`
+### 3.6 `InterpGgConservative`
 
 正交规则经纬网上的一阶面积加权（AreaWeighted），算法对齐 Iris `iris.analysis.AreaWeighted`。适合**高分辨率→低分辨率**、需近似守恒的通量类场；点插值（Linear / Nearest / Cubic）不保证面积平均意义下的守恒。
 
@@ -116,10 +146,11 @@ import meteva_base as meb
 grd = meb.read_griddata_from_nc("source.nc")
 # 高→低：目标步长大于源步长
 grid = meb.basicdata.grid([70, 140, 0.5], [15, 55, 0.5])
-result = InterpGgConservative(outer_value=0.0, mdtol=1.0).process(grd, grid)
+result = InterpGgConservative(outer_value=0.0, mdtol=1.0, spherical=True).process(grd, grid)
+# 等价：InterpGg(method="conservative", outer_value=0.0, mdtol=1.0, spherical=True)
 ```
 
-CLI：`--module conservative`，可选 `--mdtol`（ini `[conservative]`）。
+CLI：`method=conservative`，可选 `mdtol=...`、`spherical=true|false`（ini `[params]`）。
 
 ---
 
@@ -260,47 +291,62 @@ InterpGgLandSea2(
 
 均在**本包目录**执行。
 
-### 5.1 InterpGg：`python -m cli`
+### 5.1 InterpGg：`python -m interpolation_grid_grid` / `python -m cli`
 
-`--module` 选 `linear` / `nearest` / `cubic` / `conservative`。目标网格须给 `--glon`+`--glat`，或 `--domain`，或 `--grid-template`。未写参数先读 `resource/conf.ini`，再无则用预设；`grid` 为空报错。
+`process` 挂 `@merge_params()`，参数优先级：显式 `key=value` / `process(...)` > `config=` 指定的输入 ini > `resource/conf.ini` 非空项 > 签名预设。`resource/conf.ini` 键名与 `process` 形参一一对应。
 
-源场 / 模板格式：`--grid-type` / `--grid-template-type`（或 ini `[input]` 对应项）显式指定 `nc`/`m4`；未指定则按扩展名（`.nc`→nc，否则 m4）。输出仍写 Micaps4。`conservative` 额外支持 `--mdtol`（ini `[conservative] mdtol`）。
+`method` 选 `linear` / `nearest` / `cubic` / `conservative`（不用 `module`，避免与 `nimm_cli` 占用键冲突）。目标网格须给 `glon`+`glat`，或 `domain`，或 `grid_template`。`grid` 必填；包内相对路径按包根解析。
 
-```bash
-python -m cli --module linear --grid a.nc --domain 20,50,70,140,0.1,0.1 --outer-value 0
-python -m cli --module nearest --grid a.nc --domain 20,50,70,140,0.1,0.1 --outer-value 0
-python -m cli --module cubic --grid a.m4 --glon 70,140,0.1 --glat 15,55,0.1 --output out.m4
-python -m cli --module conservative --grid a.nc --domain 20,50,70,140,0.25,0.25 --outer-value 0 --mdtol 1
-python -m cli --module linear --grid data/no_ext --grid-type nc --domain 20,50,70,140,0.1,0.1
-```
+源场 / 模板格式：`grid_type` / `grid_template_type`（或 ini `[input]` 对应项）显式指定 `nc`/`m4`；未指定则按扩展名（`.nc`→nc，否则 m4）。输出写 Micaps4（`output=`）。`conservative` 额外支持 `mdtol`、`spherical`（ini `[params]`）。
 
-### 5.2 LandSea：`python -m cli.tran_regrid`
+示例与 notebook 一致，使用统一目标网格（`domain=20.5,37.5,101.5,122.5,0.05,0.05`，即 101.5–122.5°E、20.5–37.5°N、步长 0.05°）。
 
 ```bash
-python -m cli.tran_regrid --input-path in.nc --target-grid-path grid.nc --output-path out.nc
-python -m cli.tran_regrid --input-path in.nc --target-grid-path tgt_mask.nc \
-  --land-sea-mask-path src_mask.nc --regrid-mode nearest-with-mask --output-path out.nc
+# 在 00temp 目录执行（包根入口）
+python -m interpolation_grid_grid method=linear grid=resource/data/2026100900.024.nc domain=20.5,37.5,101.5,122.5,0.05,0.05 outer_value=0
+python -m interpolation_grid_grid method=nearest grid=resource/data/2026100900.024.nc domain=20.5,37.5,101.5,122.5,0.05,0.05 outer_value=0
+python -m interpolation_grid_grid method=cubic grid=a.m4 glon=70,140,0.1 glat=15,55,0.1 output=out.m4
+python -m interpolation_grid_grid method=conservative grid=resource/data/2026100900.024.nc domain=20.5,37.5,101.5,122.5,0.05,0.05 outer_value=0 mdtol=1 spherical=true
+python -m interpolation_grid_grid method=linear grid=data/no_ext grid_type=nc domain=20,50,70,140,0.1,0.1
+
+# 在本包目录也可用 python -m cli key=value ...
+python -m cli method=conservative grid=resource/data/2026100900.024.nc grid_template=resource/data/target_grid.nc output=out.m4 mdtol=1 spherical=true
 ```
 
-| 参数 | 说明 |
-| --- | --- |
-| `--input-path` | 源场 nc |
-| `--target-grid-path` | 目标网格 nc；掩码模式为目标海陆掩码场 |
-| `--land-sea-mask-path` | 源侧掩码；`*-with-mask*` 必需 |
-| `--output-path` | 输出 nc；省略则只返回不写文件 |
-| `--regrid-mode` | 默认 `bilinear` |
-| `--extrapolation-mode` | 默认 `nan` |
-| `--land-sea-mask-vicinity` | 默认 `25000`（米） |
-| `--regridded-title` | 输出 title |
+### 5.2 LandSea：`python -m cli tran_regrid`
+
+入口为 `cli/tran_regrid_cli.py` 的 `process`（同样挂 `@merge_params()`，参数写成 `key=value`）。仅在**本包目录**用 `python -m cli tran_regrid ...`；`00temp` 根入口 `python -m interpolation_grid_grid` 只对应 5.1 的 InterpGg。LandSea 没有独立 ini 节，省略的项用函数预设。
+
+```bash
+# 无掩码
+python -m cli tran_regrid input_path=resource/data/2026100900.024.nc target_grid_path=resource/data/target_grid.nc output_path=out.nc
+
+# 带掩码：target_grid_path 为目标海陆掩码场，land_sea_mask_path 为源侧掩码
+python -m cli tran_regrid input_path=in.nc target_grid_path=tgt_mask.nc land_sea_mask_path=src_mask.nc regrid_mode=nearest-with-mask output_path=out.nc
+```
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `input_path` | — | 源场 nc（必填） |
+| `target_grid_path` | — | 目标网格 nc（必填）；掩码模式为目标海陆掩码场 |
+| `land_sea_mask_path` | `None` | 源侧掩码；`*-with-mask*` 模式必需 |
+| `output_path` | `None` | 输出 nc；省略则只返回不写文件 |
+| `regrid_mode` | `bilinear` | 见 4.1 节 `regrid_mode` 一览 |
+| `extrapolation_mode` | `nan` | 仅 scipy 路径 |
+| `land_sea_mask_vicinity` | `25000.0` | 同类型搜索半径（米） |
+| `regridded_title` | `None` | 输出 title |
+| `config` | — | 占位：本命令不另读 ini |
+
+给了 `land_sea_mask_path` 时，`regrid_mode` 必须是 `nearest-with-mask` / `nearest-with-mask-2` / `bilinear-with-mask-2`，否则报错。
 
 代码调用：
 
 ```python
-from cli.tran_regrid import process
+from cli.tran_regrid_cli import process as tran_regrid
 
-result = process(
-    "in.nc",
-    "grid.nc",
+result = tran_regrid(
+    input_path="in.nc",
+    target_grid_path="grid.nc",
     output_path="out.nc",
     regrid_mode="bilinear",
     extrapolation_mode="nan",
@@ -311,10 +357,10 @@ result = process(
 
 ## 6. 选型与注意
 
-1. **融合 / 背景对齐（meb 等距经纬）**：优先 `InterpGgLinear` / `Nearest` / `Cubic`。
-2. **高→低分辨率、近似守恒**：`InterpGgConservative`（AreaWeighted）；通量类场优于点插值。
+1. **融合 / 背景对齐（meb 等距经纬）**：优先 `InterpGg(method="linear"|"nearest"|"cubic")`，越界用 `outer_value`。
+2. **高→低分辨率、近似守恒**：`InterpGg(method="conservative")`（AreaWeighted）；通量类场优于点插值；可调 `mdtol` / `spherical`。
 3. **IMPROVER 式海陆重网格**：`InterpGgLandSea`；掩码模式需源、目标两份掩码。
-4. 等距经纬、域内：`InterpGgLinear` 与 LandSea `bilinear` 通常接近；最近邻在格心附近可能有格点级差。
+4. 等距经纬、域内：`method="linear"` 与 LandSea `bilinear` 通常接近；最近邻在格心附近可能有格点级差。
 5. 输入宜已规范化为六维 meb 场；`*-2` 源场仅支持经纬规则网；Conservative 仅正交规则经纬网。
 6. 依赖：`meteva_base`、`numpy`、`scipy`（LandSea / Conservative）、包内 / 共享 `utils.base_plugin`。
 

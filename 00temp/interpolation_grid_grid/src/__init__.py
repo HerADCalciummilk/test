@@ -6,9 +6,11 @@ from .interp_gg_landsea2_plugin import InterpGgLandSea2
 from .interp_gg_landsea_plugin import AdjustLandSeaPoints, InterpGgLandSea
 from .interp_gg_linear_plugin import InterpGgLinear
 from .interp_gg_nearest_plugin import InterpGgNearest
+from .interp_gg_plugin import InterpGg
 from .utils.grid import grid_contains_cutout
 
 __all__ = [
+    "InterpGg",
     "InterpGgConservative",
     "InterpGgCubic",
     "InterpGgLinear",

@@ -2,7 +2,7 @@
 """把包根与 ``src`` 加入 path，便于测试直接导入插件模块。
 
 包根必须先于 ``src``，否则 ``import utils`` 会命中 ``src/utils``，
-从而找不到 ``utils.base_plugin`` / ``utils.cli_base`` / ``utils.util_env``。
+从而找不到 ``utils.base_plugin`` / ``utils.merge_params``。
 """
 from __future__ import annotations
 

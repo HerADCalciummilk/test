@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""格点→站点插件烟雾 / 对照 ``utils.interpolating``。"""
+"""格点→站点插件烟雾 / 对照 ``meteva_base.interp_gs_*``。"""
 from __future__ import annotations
 
 import sys
@@ -55,15 +55,14 @@ def test_nearest_linear_cubic_smoke():
     assert abs(float(row[member]) - expect) < 1e-5
 
 
-def test_match_interpolating_xy():
-    from utils import interpolating as ref
-
+def test_match_meb_xy():
+    """水平 ``xy`` 与 ``meteva_base.interp_gs_*`` 对照（原共享 ``utils.interpolating`` 同源）。"""
     grd, sta = _make_field()
     member = list(grd["member"].values)[0]
     for Plugin, fn in (
-        (InterpGsNearest, ref.interp_gs_nearest),
-        (InterpGsLinear, ref.interp_gs_linear),
-        (InterpGsCubic, ref.interp_gs_cubic),
+        (InterpGsNearest, meb.interp_gs_nearest),
+        (InterpGsLinear, meb.interp_gs_linear),
+        (InterpGsCubic, meb.interp_gs_cubic),
     ):
         a = Plugin().process(grd.copy(deep=True), sta.copy())
         b = fn(grd.copy(deep=True), sta.copy())
@@ -79,10 +78,7 @@ def test_match_interpolating_xy():
 
 
 def _make_xydt_field():
-    """矩形水平网（nlat!=nlon）+ 多时效线性场 f=lon+0.1*lat+0.01*dtime。
-
-    原 interpolating xydt 在 nlat!=nlon 时会因 coords 维错误直接失败。
-    """
+    """矩形水平网（nlat!=nlon）+ 多时效线性场 f=lon+0.1*lat+0.01*dtime。"""
     grid = meb.grid(
         [100, 104, 1.0],
         [20, 22, 1.0],
@@ -133,7 +129,7 @@ def test_xydt_rejects_single_dtime():
 
 if __name__ == "__main__":
     test_nearest_linear_cubic_smoke()
-    test_match_interpolating_xy()
+    test_match_meb_xy()
     test_xydt_linear_analytic()
     test_xydt_rejects_single_dtime()
     print("ok")
