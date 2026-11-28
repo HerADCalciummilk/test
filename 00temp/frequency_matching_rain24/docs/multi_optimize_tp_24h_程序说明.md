@@ -51,7 +51,7 @@
 
 | 主程序 | 调用 | 光流 / 半拉格朗日 | Cressman | 双线性 |
 |--------|------|-------------------|----------|--------|
-| `src/correct_tp_24h.py` | `from correct_tp_24h import process`，或 `python -m cli` | `src/cal_optical_flow.py` | `src/interpolation.py` 的 `GressManInterpolation` | `src/interpolation.py` 的 `mesh_val` / `bilinear_interp` |
+| `src/correct_tp_24h.py` | `from correct_tp_24h import process`，或 `python -m cli` | `src/cal_optical_flow.py` | `interpolation_station_grid.InterpSg(method="cressman", reprocess=True, degree_blend=1.0)`（度制逻辑已收进统一插件） | `src/interpolation.py` 的 `mesh_val` / `bilinear_interp` |
 
 光流只在 **dtime ≤ 60** 时启用。
 
@@ -90,12 +90,12 @@ mainProcess(parafile)                         # src/correct_tp_24h.py
 
 | 文件 | 功能 |
 |------|------|
-| `src/correct_tp_24h.py` | **主程序**：`cal_optical_flow` + `interpolation.GressManInterpolation`；`python -m cli` |
+| `src/correct_tp_24h.py` | **主程序**：`cal_optical_flow` + `InterpSg(method="cressman", reprocess=True, degree_blend=1.0)`；`python -m cli` |
 | `src/cal_similarity.py` | **核心算法**：历史—当前模式相似度 |
 | `src/cal_slice_tp.py` | **核心算法**：切片光流 + 频率匹配订正 |
 | `src/cal_optical_flow.py` | 光流 / 半拉格朗日平流 |
 | `src/cal_frequency_match.py` | **核心算法**：频率匹配（站点/格点） |
-| `src/interpolation.py` | Cressman 与双线性 |
+| `src/interpolation.py` | 格点重采样 `mesh_val` 与格点→站点双线性 `bilinear_interp` |
 | `src/utils/data_proc.py` | **工具**：格点/站点预处理、平滑、掩膜（`from utils.data_proc`） |
 | `src/utils/data_save.py` | **工具**：MICAPS3/4/NC 写出 |
 | `src/utils/config.py` | **工具**：算法内部常量参数 |

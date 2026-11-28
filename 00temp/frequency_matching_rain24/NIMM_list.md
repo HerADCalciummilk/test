@@ -21,13 +21,13 @@
 
 | 类别 | 路径 | 作用 |
 |------|------|------|
-| **主程序（原算法）** | `src/correct_tp_24h.py` | `process(...)`：`cal_optical_flow` + `interpolation.GressManInterpolation`；`python -m cli` |
+| **主程序（原算法）** | `src/correct_tp_24h.py` | `process(...)`：`cal_optical_flow` + `InterpSg(method="cressman", reprocess=True, degree_blend=1.0)`（度制 Cressman，已收进统一插件）；`python -m cli` |
 | CLI | `cli/__main__.py` | argparse → `correct_tp_24h.process`（原算法） |
 | 相似评分 | `src/cal_similarity.py` | 历史—当前模式相似度 |
 | 切片订正 | `src/cal_slice_tp.py` | 切片内光流 + 频率匹配 |
 | 光流（原主程序） | `src/cal_optical_flow.py` | 局地最小二乘光流 / 拉格朗日平流；`correct_tp_24h` 使用 |
 | 频率匹配 | `src/cal_frequency_match.py` | 分位数频率匹配 |
-| 插值（原 Cressman 与原双线性） | `src/interpolation.py` | `correct_tp_24h`：`GressManInterpolation` / `mesh_val` / `bilinear_interp` |
+| 插值（格点重采样与双线性） | `src/interpolation.py` | `correct_tp_24h`：`mesh_val` / `bilinear_interp`（站点→格点 Cressman 不在此，走 `interpolation_station_grid.InterpSg`） |
 | 本包工具 | `src/utils/config.py`、`data_proc.py`、`data_save.py`、`util_env.py`、`logger.py`、`verify.py` | 参数、预处理、写出、ini、日志、检验（`from utils.xxx`） |
 | 共享插件 | `00temp/utils/multipro_plugin.py`、`data_prepare_plugin.py` | 经根 `utils/__init__` 合并；包内无副本 |
 | 配置资源 | `resource/optimize_tp_24.ini`、`resource/*.json`、`sta.m3`、`mask010.nc` | 运行参数、模式路径、站网、掩膜 |
@@ -38,7 +38,7 @@
 | **中间数据** | `00temp/multi_optimize_tp_24h/` | 整理过程临时样本（当前占位） |
 | 仓库索引 | 仓库根 `00log/multi_optimize_tp_24h.md` | 全库摘要日志 |
 
-> **入口约定**：`python -m cli` 或 `from correct_tp_24h import process`（`cal_optical_flow` + `interpolation.py` 的 Cressman 与双线性）。预报时效仍由 ini `start_dtime`/`end_dtime`/`inter_dtime*` 决定。
+> **入口约定**：`python -m cli` 或 `from correct_tp_24h import process`（`cal_optical_flow` + `InterpSg(reprocess=True, degree_blend=1.0)` 的 Cressman、`interpolation.py` 的双线性）。预报时效仍由 ini `start_dtime`/`end_dtime`/`inter_dtime*` 决定。
 
 ---
 

@@ -24,11 +24,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAIN_SRC = os.path.normpath(os.path.join(HERE, "..", "src"))
 TEMP = os.path.normpath(os.path.join(HERE, "..", ".."))
-PROJ_ROOT = os.path.join(TEMP, "interp_sg_cressman")
+PROJ_ROOT = os.path.join(TEMP, "interpolation_station_grid")
 PROJ_SRC = os.path.join(PROJ_ROOT, "src")
 
 sys.path[:0] = [PROJ_ROOT, PROJ_SRC]
-from interp_sg_cressman import interp_sg_cressman
+from interp_sg_plugin import InterpSg
 
 for k in list(sys.modules):
     if k == "utils" or k.startswith("utils."):
@@ -40,8 +40,7 @@ for p in (PROJ_ROOT, PROJ_SRC,
         sys.path.remove(p)
 sys.path.insert(0, RAIN_SRC)
 sys.modules["utils"] = types.ModuleType("utils")
-sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
-from interpolation import GressManInterpolation
+sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils"), os.path.join(TEMP, "utils")]
 from utils.data_proc import creat_M3_grd
 
 import meteva.base as meb
@@ -75,7 +74,7 @@ def main():
     r_km_raw = [r * KM_PER_DEG for r in r_deg]
     # 再乘 cos(lat)：东西向宽度贴近原版度制圆（目视对齐）
     r_km = [r * KM_PER_DEG * math.cos(math.radians(lat0)) for r in r_deg]
-    r_default = [60000, 40000, 20000]
+    r_default = [60, 40, 20]  # 千米（统一包 reprocess=False 默认）
 
     half, dlon = 1.2, 0.05
     grid = meb.grid([lon0 - half, lon0 + half, dlon],
@@ -87,11 +86,19 @@ def main():
     sta = creat_M3_grd([lon0], [lat0], [sta_val], rpt="2024010108", dtime=0)
     gi = meb.basicdata.get_grid_of_data(bg)
 
-    out1 = GressManInterpolation(sta, bg.copy(), r_deg)
-    out2 = interp_sg_cressman(sta, gi, r_list=r_default, background=bg, nearNum=8)
-    out3 = interp_sg_cressman(sta, gi, r_list=r_km, background=bg, nearNum=8)
+    out1 = InterpSg(
+        method="cressman", r_list=r_deg, reprocess=True, degree_blend=1.0
+    ).process(sta, background=bg.copy())
+    out2 = InterpSg(
+        method="cressman", r_list=r_default, reprocess=False, nearNum=8
+    ).process(sta, grid=gi, background=bg)
+    out3 = InterpSg(
+        method="cressman", r_list=r_km, reprocess=False, nearNum=8
+    ).process(sta, grid=gi, background=bg)
     # 对照：旧对齐（不乘 cos）——只打印足迹，不占主图
-    out3_old = interp_sg_cressman(sta, gi, r_list=r_km_raw, background=bg, nearNum=8)
+    out3_old = InterpSg(
+        method="cressman", r_list=r_km_raw, reprocess=False, nearNum=8
+    ).process(sta, grid=gi, background=bg)
 
     results = [
         ("① 原版", out1, f"R={r_deg} 度"),

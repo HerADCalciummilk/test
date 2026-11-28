@@ -1,6 +1,6 @@
-# 命令行（在本包目录执行，省略的数值参数读 resource/conf.ini）：
-# python -m cli --module gaussian --sta ... --grid ... --half-r 20
-# 有背景：再加 --background ...
+# 命令行（在 00temp 目录执行，省略的参数读 resource/conf.ini）：
+# python -m interpolation_station_grid method=gaussian sta=... grid=... gaussian_half_r=20
+# 有背景：再加 background=...
 
 if __name__ == "__main__":
     import meteva_base as meb

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 扩大测试：域内 / 边界 / 切变 — Extrapolation(n_iter=0)+P1 vs Lagrangian。
-通过则确认可使用 ``utils.project_align.extrapolate_like_lagrangian``。
+通过则确认可使用 ``utils.cressman_extrap_reprocess.extrapolate_like_lagrangian``。
 
 运行::
     python demo_advection_niter0_p1.py
@@ -21,7 +21,7 @@ sys.path.insert(0, RAIN_SRC)
 sys.modules["utils"] = types.ModuleType("utils")
 sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
 from frequency_matching_rain24_plugin import Lagrangian  # noqa: E402
-from utils.project_align import extrapolate_like_lagrangian  # noqa: E402
+from utils.cressman_extrap_reprocess import extrapolate_like_lagrangian  # noqa: E402
 
 import meteva.base as meb  # noqa: E402
 
@@ -187,7 +187,7 @@ def main():
     cases = build_cases()
     print("=" * 76)
     print("扩大测试 → extrapolate_like_lagrangian (= n_iter=0 + P1)")
-    print(f"模块: {os.path.join(RAIN_SRC, 'utils', 'project_align.py')}")
+    print(f"模块: {os.path.join(RAIN_SRC, 'utils', 'cressman_extrap_reprocess.py')}")
     print(f"{'用例':<24} {'meanAbs':>12} {'maxAbs':>12} {'一致':>6}")
     print("-" * 76)
 

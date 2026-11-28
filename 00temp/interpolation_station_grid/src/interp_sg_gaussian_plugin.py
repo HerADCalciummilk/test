@@ -48,7 +48,7 @@ class InterpSgGaussian(PostProcessingPlugin):
     Parameters
     ----------
     halfR :
-        高斯半径；超过该距离硬截断。距离为米量级。
+        高斯半径（千米）；超过该距离硬截断。距离为千米。
     outer_value :
         背景场对齐越界填充，传给 ``InterpGgLinear``。
     reprocess :
@@ -57,13 +57,14 @@ class InterpSgGaussian(PostProcessingPlugin):
 
     def __init__(
         self,
-        halfR: Optional[int] = 20,
+        halfR: Optional[float] = 20,
         outer_value: Optional[float] = None,
         reprocess: Any = False,
     ):
-        if halfR is not None and int(halfR) <= 0:
+        if halfR is not None and float(halfR) <= 0:
             raise ValueError("halfR 必须大于 0")
-        self.halfR = 20 if halfR is None else int(halfR)
+        # 千米半径允许小数；不要取整，否则 12.5 会被截断成 12
+        self.halfR = 20 if halfR is None else float(halfR)
         self.outer_value = outer_value
         self.reprocess = self._as_bool(reprocess, False)
 

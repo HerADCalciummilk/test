@@ -16,7 +16,7 @@
 |------|------|------|
 | 相似检索 / 频率匹配 | 相同 | 相同 |
 | 光流估 UV | 原版 `OpticalFlow` | 相同 |
-| 站点→格点插值 | 度制 `GressManInterpolation` | 项目 `interp_sg_cressman` + `cressman_project_innov` 再处理 |
+| 站点→格点插值 | `InterpSg(method="cressman", reprocess=True, degree_blend=1.0)`（度制，对应原 `GressManInterpolation`） | `cressman_project_innov`（`InterpSg(method="cressman", reprocess=True, degree_blend=0.85)` 的旧签名封装） |
 | 降水场外推 | 度制 `Lagrangian.simple_semi_lagrangian_in_angle` | `LagrangianAligned` → 项目 `Extrapolation.forecast`（`n_iter=0`） |
 | CLI | 同一入口 `cli/frequency_matching_rain24_cli.py`，`match_mode=original` | 同左，`match_mode=aligned`（默认） |
 | 配套配置 | `resource/conf.ini`（plugin→`ecmwf.json`） | `resource/conf_aligned.ini`（plugin→`ecmwf_aligned.json`） |
@@ -46,7 +46,7 @@
 |--|------------------|----------------------|
 | 距离 | 度制圆 √(Δlon²+Δlat²)≤R° | 项目核为 km，再处理用度制圆裁剪/融合 |
 | 权重 | 幂权重创新（观测−背景）累加回背景 | 项目公式 (R²−d²)/(R²+d²) 为主扫，再残差抛光、`degree_blend` 融合 |
-| 目的 | 业务原版形态 | 不改 `interp_sg_cressman` 源码，封装使结果接近 GressMan |
+| 目的 | 业务原版形态 | 统一插件 `InterpSg(reprocess=True)` 内置度制再处理，用 `degree_blend` 控制接近 GressMan 的程度 |
 
 差异在影响半径几何与权重、创新路径。强降水梯度区对半径与权重更敏感。
 
@@ -71,7 +71,7 @@
 
 **优点**
 
-- 插值与外推接到项目子模块（`interp_sg_cressman`、`Extrapolation`），便于工程化维护；
+- 插值接统一插件 `InterpSg`，外推接 `Extrapolation`，便于工程化维护；
 - 不改项目核源码即可做再处理标定（如 `degree_blend`、`r_km_scale`）；
 
 **适用**

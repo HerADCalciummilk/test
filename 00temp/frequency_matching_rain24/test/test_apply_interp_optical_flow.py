@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
-for _p in (str(_ROOT), str(_ROOT / "src")):
+_SG_SRC = str(_ROOT.parent / "interpolation_station_grid" / "src")
+for _p in (str(_ROOT), str(_ROOT / "src"), _SG_SRC):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -20,7 +21,7 @@ from cal_optical_flow import OpticalFlow as FlowOld
 from cal_optical_flow_nowcast import Lagrangian as LagNew
 from cal_optical_flow_nowcast import OpticalFlow as FlowNew
 from correct_tp_24h_nowcast import clip_slice_neighborhood
-from interpolation import GressManInterpolation as cressman_old
+from interp_sg_plugin import InterpSg
 from interpolation import bilinear_interp as bilinear_old
 from interpolation import mesh_val as mesh_old
 from interpolation_gg_linear import bilinear_interp as bilinear_new
@@ -85,7 +86,18 @@ def test_cressman():
     radii = [1.0, 0.8, 0.6, 0.4]
     extend = [100.0, 104.0, 30.0, 34.0]
 
-    old = np.asarray(mesh_old(cressman_old(sta, grd, radii, rain_limit=0.01), extend + [1.0]).values).squeeze()
+    old = np.asarray(
+        mesh_old(
+            InterpSg(
+                method="cressman",
+                r_list=radii,
+                reprocess=True,
+                rain_limit=0.01,
+                degree_blend=1.0,
+            ).process(sta, background=grd),
+            extend + [1.0],
+        ).values
+    ).squeeze()
     sta_clip, grd_clip = clip_slice_neighborhood(sta, grd, extend, max(radii), mesh_new)
     new = np.asarray(mesh_new(cressman_new(sta_clip, grd_clip, radii, rain_limit=0.01), extend + [1.0]).values).squeeze()
 

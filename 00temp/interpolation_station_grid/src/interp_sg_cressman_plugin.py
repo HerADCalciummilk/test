@@ -39,12 +39,12 @@ _ensure_interpolation_grid_grid_on_path()
 
 from interp_gg_linear_plugin import InterpGgLinear  # noqa: E402
 
-# 度→米近似（创新量扫里把度制半径换成 _absolute_km 用的米半径）
+# 度→千米近似（创新量扫里把度制半径换成 _absolute_km 使用的千米半径）
 _KM_PER_DEG = float(getattr(meb.basicdata.const, "ER", 6371.229)) * math.pi / 180.0
 # 创新量路径统一背景/站点时间维，避免与站点真时间轴纠缠
 _SAFE_TIME = pd.Timestamp("2000-01-01 00:00:00")
 
-DEFAULT_R_LIST_KM = (60000.0, 40000.0, 20000.0)  # reprocess=False
+DEFAULT_R_LIST_KM = (60.0, 40.0, 20.0)  # reprocess=False，单位千米
 DEFAULT_R_LIST_DEG = (1.0, 0.8, 0.6, 0.4)  # reprocess=True
 
 
@@ -57,7 +57,9 @@ class InterpSgCressman(PostProcessingPlugin):
     Parameters
     ----------
     r_list :
-        影响半径。``None`` 时按路径选用 ``DEFAULT_R_LIST_KM`` / ``DEFAULT_R_LIST_DEG``。
+        影响半径列表。``None`` 时按 ``reprocess`` 选用默认：
+        ``reprocess=False`` 为 ``(60.0, 40.0, 20.0)``（千米，``DEFAULT_R_LIST_KM``），
+        ``reprocess=True`` 为 ``(1.0, 0.8, 0.6, 0.4)``（度，``DEFAULT_R_LIST_DEG``）。
     nearNum :
         近邻站点数上限。
     outer_value :
@@ -353,7 +355,7 @@ class InterpSgCressman(PostProcessingPlugin):
             # 内部表末列约定为 data0；写入创新量后再交给 _absolute_km（读末列）
             innov_sta = sta_work.copy()
             innov_sta["data0"] = sta_val - bg_sta
-            # 度制半径 → 米，复用 km 绝对值核铺 Δ（无背景初场）
+            # 度制半径 → 千米，复用 km 绝对值核铺 Δ（无背景初场）
             grd_inc = self._absolute_km(
                 innov_sta,
                 grid,
@@ -464,25 +466,33 @@ class InterpSgCressman(PostProcessingPlugin):
         n_polish = max(int(residual_polish_rounds), 1) if residual_degree_polish else 0
         blend = float(np.clip(degree_blend, 0.0, 1.0))
 
-        sweep_args = (lon, lat, sta_lon, sta_lat, sta_val, sta_work, grid, dlon, k_near, scale, gain)
-        cur = self._innov_one_sweep(distance_limits, cur, *sweep_args)
-        for _ in range(n_extra):
-            small = list(distance_limits[-2:]) if len(distance_limits) >= 2 else list(distance_limits)
-            cur = self._innov_one_sweep(small, cur, *sweep_args)
-
-        for _ in range(n_polish):
+        if blend >= 1.0:
+            # 纯度制 GressMan 路径：跳过前面的 km 核扫与 polish，避免无用计算
+            cur = bg0.copy()
             for r in distance_limits:
                 cur = self._gressman_one_step(
                     cur, lon, lat, sta_lon, sta_lat, sta_val, r, dlon
                 )
+        else:
+            sweep_args = (lon, lat, sta_lon, sta_lat, sta_val, sta_work, grid, dlon, k_near, scale, gain)
+            cur = self._innov_one_sweep(distance_limits, cur, *sweep_args)
+            for _ in range(n_extra):
+                small = list(distance_limits[-2:]) if len(distance_limits) >= 2 else list(distance_limits)
+                cur = self._innov_one_sweep(small, cur, *sweep_args)
 
-        if blend > 0.0:
-            deg = bg0.copy()
-            for r in distance_limits:
-                deg = self._gressman_one_step(
-                    deg, lon, lat, sta_lon, sta_lat, sta_val, r, dlon
-                )
-            cur = (1.0 - blend) * cur + blend * deg
+            for _ in range(n_polish):
+                for r in distance_limits:
+                    cur = self._gressman_one_step(
+                        cur, lon, lat, sta_lon, sta_lat, sta_val, r, dlon
+                    )
+
+            if blend > 0.0:
+                deg = bg0.copy()
+                for r in distance_limits:
+                    deg = self._gressman_one_step(
+                        deg, lon, lat, sta_lon, sta_lat, sta_val, r, dlon
+                    )
+                cur = (1.0 - blend) * cur + blend * deg
 
         # 可选：站点锚定（向观测值局部拉近）
         if float(station_anchor_strength) > 0.0 and len(sta_lon) > 0:

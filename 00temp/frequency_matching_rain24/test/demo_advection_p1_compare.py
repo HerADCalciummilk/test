@@ -2,7 +2,7 @@
 """
 扩大测试：Extrapolation + P1 再处理 vs Lagrangian。
 
-统一模块 ``src/utils/project_align.py``
+统一模块 ``src/utils/cressman_extrap_reprocess.py``
 
 运行::
     python demo_advection_p1_compare.py
@@ -21,7 +21,7 @@ sys.path.insert(0, RAIN_SRC)
 sys.modules["utils"] = types.ModuleType("utils")
 sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
 from frequency_matching_rain24_plugin import Lagrangian  # noqa: E402
-from utils.project_align import extrapolate_like_lagrangian  # noqa: E402
+from utils.cressman_extrap_reprocess import extrapolate_like_lagrangian  # noqa: E402
 
 import meteva.base as meb  # noqa: E402
 
@@ -144,8 +144,8 @@ def main():
     cases.append(("边界 角落+切变", rain, lon, lat, u, v, uu, vv))
 
     print("=" * 70)
-    print("扩大测试：project_align.extrapolate_like_lagrangian vs Lagrangian")
-    print(f"模块: {os.path.join(RAIN_SRC, 'utils', 'project_align.py')}")
+    print("扩大测试：cressman_extrap_reprocess.extrapolate_like_lagrangian vs Lagrangian")
+    print(f"模块: {os.path.join(RAIN_SRC, 'utils', 'cressman_extrap_reprocess.py')}")
     print(f"{'用例':<22} {'nan':>5} {'meanAbs':>12} {'maxAbs':>12} {'一致':>6}")
     print("-" * 70)
 
@@ -197,7 +197,7 @@ def main():
             fig.colorbar(im, ax=ax, fraction=0.046)
 
     fig.suptitle(
-        f"project_align 测试  一致 {n_ok}/{len(results)}",
+        f"cressman_extrap_reprocess 测试  一致 {n_ok}/{len(results)}",
         fontsize=12,
     )
     png = os.path.join(HERE, "demo_advection_p1_compare.png")

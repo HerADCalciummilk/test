@@ -8,9 +8,9 @@
 各算法插件可继续单独使用；本类仅作对外门面。构造参数已全部显式列出，
 未用于当前 ``method`` 的项忽略。
 
-``idw``：绝对值路径默认纯 IDW；``reprocess=True`` 时默认 IDW×高斯
-（可用 ``gaussian=False`` 关闭）。``idw_delta``：固定 ``gaussian=True`` +
-``reprocess=True``（历史 CLI 模块名）。
+``reprocess`` 与 ``gaussian`` 相互独立：``reprocess`` 只决定绝对值 / 偏差路径，
+``gaussian`` 只决定 IDW 权重是否乘高斯核。
+
 """
 from __future__ import annotations
 
@@ -23,13 +23,7 @@ from interp_sg_gaussian_plugin import InterpSgGaussian
 from interp_sg_idw_plugin import InterpSgIdw
 from interp_sg_kriging import InterpSgKriging
 
-_METHOD_ALIASES = {
-    "total": "idw",
-    "delta": "idw_delta",
-    "idw-delta": "idw_delta",
-}
-
-_METHODS = ("idw", "idw_delta", "gaussian", "kriging", "cressman")
+_METHODS = ("idw", "gaussian", "kriging", "cressman")
 
 
 def _as_bool(value: Any, default: bool = False) -> bool:
@@ -51,28 +45,28 @@ class InterpSg(PostProcessingPlugin):
     Parameters
     ----------
     method :
-        ``idw`` / ``idw_delta`` / ``gaussian`` / ``kriging`` / ``cressman``。
-        ``total``→``idw``；``delta`` / ``idw-delta``→``idw_delta``。
+        ``idw`` / ``gaussian`` / ``kriging`` / ``cressman``。
     reprocess :
-        是否走偏差/创新量路径。``idw_delta`` 固定 ``True``。
+        是否走偏差/创新量路径（与 ``gaussian`` 相互独立）。
     outer_value :
         背景对齐越界填充，透传给子插件。
     effectR :
-        IDW / ``idw_delta``：纯 IDW 硬截断半径；高斯权重时为高斯尺度（米量级）。
+        IDW：纯 IDW 硬截断半径；``gaussian=True`` 时为高斯尺度（千米）。
     nearNum :
         IDW / Kriging / Cressman 近邻站点数。``None`` 时用各子插件默认
         （IDW 8、Kriging 20、Cressman 100）。
     decrease :
-        IDW / ``idw_delta``：距离衰减指数。
+        IDW：距离衰减指数。
     gaussian :
-        仅 ``method="idw"``：是否乘高斯核。``None`` 时：``reprocess=True`` 默认
-        ``True``，否则 ``False``。``idw_delta`` 固定 ``True``。
+        仅 ``method="idw"``：是否乘高斯核，默认 ``False``；与 ``reprocess`` 无关。
     halfR :
-        仅 ``method="gaussian"``：高斯半径（米），须 ``> 0``。
+        仅 ``method="gaussian"``：高斯半径（千米），须 ``> 0``。
     model, sill, range_, nugget :
         仅 ``method="kriging"``：变异函数模型 / 基台 / 变程 / 块金。
     r_list :
-        仅 ``method="cressman"``：影响半径列表；``None`` 时按路径选用子插件默认。
+        仅 ``method="cressman"``：影响半径列表。``None`` 时按 ``reprocess`` 选用子插件默认：
+        ``reprocess=False`` 为 ``(60.0, 40.0, 20.0)``（千米），
+        ``reprocess=True`` 为 ``(1.0, 0.8, 0.6, 0.4)``（度）。
     rain_limit, num_limit, smooth, power_param, r_km_scale, innov_gain,
     residual_passes, residual_degree_polish, residual_polish_rounds,
     degree_blend, station_anchor_radius, station_anchor_strength :
@@ -87,13 +81,13 @@ class InterpSg(PostProcessingPlugin):
         *,
         reprocess: Any = False,
         outer_value: Optional[float] = None,
-        # IDW / idw_delta
-        effectR: Optional[int] = 1000,
+        # IDW
+        effectR: Optional[float] = 1000,
         nearNum: Optional[int] = None,
         decrease: Optional[int] = 2,
         gaussian: Optional[bool] = None,
         # Gaussian
-        halfR: Optional[int] = 20,
+        halfR: Optional[float] = 20,
         # Kriging
         model: str = "spherical",
         sill: Optional[float] = None,
@@ -118,30 +112,12 @@ class InterpSg(PostProcessingPlugin):
         do_reprocess = _as_bool(reprocess, False)
 
         if name == "idw":
-            # reprocess=True 默认 IDW×高斯；显式 gaussian=False 可关
-            use_gauss = (
-                _as_bool(gaussian, False)
-                if gaussian is not None
-                else do_reprocess
-            )
             kw: dict[str, Any] = {
                 "effectR": effectR,
                 "decrease": decrease,
-                "gaussian": use_gauss,
+                "gaussian": _as_bool(gaussian, False),
                 "outer_value": outer_value,
                 "reprocess": do_reprocess,
-            }
-            if nearNum is not None:
-                kw["nearNum"] = nearNum
-            self._impl = InterpSgIdw(**kw)
-        elif name == "idw_delta":
-            # 历史模块：偏差订正 + IDW×高斯
-            kw = {
-                "effectR": effectR,
-                "decrease": decrease,
-                "gaussian": True,
-                "outer_value": outer_value,
-                "reprocess": True,
             }
             if nearNum is not None:
                 kw["nearNum"] = nearNum
@@ -198,7 +174,7 @@ class InterpSg(PostProcessingPlugin):
             raise ValueError(
                 "method 未指定。可选: " + "、".join(cls.METHODS)
             )
-        name = _METHOD_ALIASES.get(str(method).strip(), str(method).strip())
+        name = str(method).strip().lower()
         if name not in _METHODS:
             raise ValueError(
                 f"未知 method: {method!r}。可选: " + "、".join(cls.METHODS)

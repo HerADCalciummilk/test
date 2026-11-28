@@ -3,69 +3,75 @@
 - **插件页**: [interpolation_station_grid](https://www.showdoc.com.cn/2598854776811541/11559060627552458)
 - **调度脚本**: `cli/interpolation_station_grid_cli.py`
 
-本页是 CLI 使用说明；算法参数见插件页。样例为包内阵风站点 + `bg_fcst_idw` 背景（约 0.1°）。本包以单次 `--module` 调用为主，无批量调度节。
+本页是 CLI 使用说明；算法参数见插件页。样例为包内阵风站点 + `bg_fcst_idw` 背景（约 0.1°）。本包以单次 `method=...` 调用为主，无批量调度节。
 
-**参数优先级**（由高到低）：**显式传入**（命令行 flag / `InterpolationStationGridCli.call(...)`）**>** **配置文件参数**（ini 非空项）**>** 代码预设默认值。空 ini 项不覆盖上层已给出的值。
+**参数优先级**（由高到低）：**显式传入**（命令行 `key=value` / `process(key=...)`）**>** **输入配置文件**（`config=` 指定的 ini 非空项）**>** **默认配置** `resource/conf.ini` 非空项 **>** 签名预设。空 ini 项不覆盖上层已给出的值。
 
 **怎么跑**
 
 （发版环境：本包已可导入。）
 
 ```bash
-python -m cli --help
+# 在 00temp 目录执行（包根入口，解析 key=value）
+# key 与 process 形参名相同；无 [] 的为必填，[] 内为可选
+# grid 与 background 至少其一；reprocess=true 时须 background
+python -m interpolation_station_grid method={idw|gaussian|kriging|cressman} sta=PATH [grid=PATH] [background=PATH] \
+  [reprocess=true|false] [idw_gaussian=true|false] [output=PATH] \
+  [idw_effect_r=N] [idw_near_num=N] [idw_decrease=N] \
+  [gaussian_half_r=N] \
+  [kriging_model=spherical|exponential|gaussian] [kriging_near_num=N] \
+  [kriging_sill=N] [kriging_range=N] [kriging_nugget=N] \
+  [cressman_r_list=R1,R2,...] [cressman_near_num=N] \
+  [cressman_rain_limit=X] [cressman_degree_blend=0~1] [cressman_num_limit=N] [cressman_smooth=X] [cressman_power_param=X] \
+  [cressman_r_km_scale=X] [cressman_innov_gain=X] [cressman_residual_passes=N] \
+  [cressman_residual_degree_polish=true|false] [cressman_residual_polish_rounds=N] \
+  [cressman_station_anchor_radius=X] [cressman_station_anchor_strength=X] \
+  [sta_type=csv|m3] [grid_type=nc|m4] [background_type=nc|m4] [output_type=nc|m4] [config=PATH]
 
-# 无 [] = 必填；[] 内 = 可选
-# --grid 与 --background 至少其一；--reprocess true / idw_delta 时须 --background
-python -m cli \
-  --module {idw|idw_delta|gaussian|kriging|cressman} \
-  --sta PATH [--grid PATH] [--background PATH] \
-  [--reprocess true|false] [--gaussian|--no-gaussian] [--output PATH] \
-  [--effect-r N] [--near-num N] [--decrease N] \
-  [--half-r N] [--r-list R1,R2,...] \
-  [--kriging-model spherical|exponential|gaussian] \
-  [--kriging-sill N] [--kriging-range N] [--kriging-nugget N] \
-  [--sta-type csv|m3] [--grid-type nc|m4] [--config PATH]
-
-# 等价：直接跑脚本
-python cli/interpolation_station_grid_cli.py --module idw --sta PATH --background PATH --reprocess true --output out.nc
+# 示例
+python -m interpolation_station_grid method=idw sta=resource/obs_gust_d24.csv background=resource/bg_fcst_idw.nc reprocess=true output=resource/out.nc
 ```
 
-`--module` 省略则读 ini，预设 `idw`（`total` 为 `idw` 旧别名）。`--sta` 必填；`--grid` / `--background` 至少其一。有 `--output`（或 ini `path`）则写格点 nc/m4；否则只 `print` 结果。Python 对外为 `InterpolationStationGridCli.call`（返回退出码）。
+`method` 省略则读 ini，预设 `idw`（仅支持 `idw` / `gaussian` / `kriging` / `cressman`）。`sta` 必填；`grid` / `background` 至少其一。有 `output` 则写格点 nc/m4；否则只 `print` 结果。包内相对路径按包根解析。`process` 返回插值结果格点场 `xarray.DataArray`。
+
+在本包目录也可用 `python -m cli key=value ...`（无参数时读 `conf.ini` 与签名预设）。
 
 | 子命令 | 脚本 | 说明 |
 | --- | --- | --- |
-| 无（flag `--module`） | `cli/interpolation_station_grid_cli.py` | `idw` / `idw_delta` / `gaussian` / `kriging` / `cressman`；`python -m cli` |
+| 包根 `python -m interpolation_station_grid` | `cli/interpolation_station_grid_cli.py` | `method=idw` / `gaussian` / `kriging` / `cressman` |
 
 # interpolation_station_grid_cli
 
-**调用插件**: `InterpSg`（由 `--module` 选择 `idw` / `idw_delta` / `gaussian` / `kriging` / `cressman`）
+**调用插件**: `InterpSg`（由 `method=` 选择 `idw` / `gaussian` / `kriging` / `cressman`）
 
-对外 Python 入口为 `InterpolationStationGridCli.call`（关键字与 flag 同名）。未传入的可选项为 `None`，按参数优先级回落。
+Python 入口为 `process`（关键字与命令行 `key` 同名）。未传入的可选项为 `None`，按参数优先级回落。
 
-<div style="margin:8px 0;padding:10px 14px;background:#e8f3ff;border-left:4px solid #1677ff;border-radius:4px;overflow-x:auto;"><div style="margin:0;padding:0;background:transparent;border:none;color:#1677ff;font-weight:600;font-size:16px;line-height:1.55;font-family:Consolas,Menlo,Monaco,monospace;white-space:pre;">InterpolationStationGridCli.call(<br>&nbsp;&nbsp;&nbsp;&nbsp;module=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;sta=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;grid=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;background=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;reprocess=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;gaussian=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;sta_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;grid_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;background_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;output=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;output_type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;effect_r=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;near_num=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;decrease=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;half_r=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;r_list=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_model=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_sill=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_range=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging_nugget=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;config=None,<br>)</div></div>
+<div style="margin:8px 0;padding:10px 14px;background:#e8f3ff;border-left:4px solid #1677ff;border-radius:4px;overflow-x:auto;"><div style="margin:0;padding:0;background:transparent;border:none;color:#1677ff;font-weight:600;font-size:16px;line-height:1.55;font-family:Consolas,Menlo,Monaco,monospace;white-space:pre;">process(<br>&nbsp;&nbsp;&nbsp;&nbsp;method="idw",<br>&nbsp;&nbsp;&nbsp;&nbsp;reprocess=False,<br>&nbsp;&nbsp;&nbsp;&nbsp;outer&#95;value=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;sta=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;grid=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;background=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;sta&#95;type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;grid&#95;type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;background&#95;type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;output=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;output&#95;type=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;idw&#95;effect&#95;r=1000,<br>&nbsp;&nbsp;&nbsp;&nbsp;idw&#95;near&#95;num=8,<br>&nbsp;&nbsp;&nbsp;&nbsp;idw&#95;decrease=2,<br>&nbsp;&nbsp;&nbsp;&nbsp;idw&#95;gaussian=False,<br>&nbsp;&nbsp;&nbsp;&nbsp;gaussian&#95;half&#95;r=20,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging&#95;model="spherical",<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging&#95;near&#95;num=20,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging&#95;sill=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging&#95;range=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;kriging&#95;nugget=0.0,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;r&#95;list=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;near&#95;num=100,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;rain&#95;limit=None,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;num&#95;limit=1.0,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;smooth=0.001,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;power&#95;param=2.0,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;r&#95;km&#95;scale=1.35,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;innov&#95;gain=1.0,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;residual&#95;passes=0,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;residual&#95;degree&#95;polish=True,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;residual&#95;polish&#95;rounds=1,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;degree&#95;blend=0.85,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;station&#95;anchor&#95;radius=0.35,<br>&nbsp;&nbsp;&nbsp;&nbsp;cressman&#95;station&#95;anchor&#95;strength=0.0,<br>&nbsp;&nbsp;&nbsp;&nbsp;config=None,<br>)</div></div>
 
 | 参数 | 说明 |
 | --- | --- |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">module</span> | 选择插值算法：`idw` / `idw_delta` / `gaussian` / `kriging` / `cressman`；`total` 为 `idw` 旧别名。省略读 ini，预设 `idw` |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">sta</span> | 输入**站点场**路径（csv/m3，`--sta`）。读入后交给插件作观测源；必填（或由 ini 提供） |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">grid</span> | 输入格点文件路径（nc/m4，`--grid`）。CLI **只取网格信息**传给插件，场值不参与插值。可与 `background` 二选一以提供网格；两者都缺则报错 |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">background</span> | 输入**背景格点场**路径（nc/m4）。`reprocess=true` / `idw_delta` 时必需。`false` 时：IDW/Gaussian/Cressman 作远点填充或初场，Kriging 仅在缺 `grid` 时取网格。无 `grid` 时也可单独提供网格 |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">reprocess</span> | `false`：绝对值插值（背景可作远点填充）；`true`：偏差再插值。`idw` 在 `true` 且未指定 `--gaussian/--no-gaussian` 时默认 IDW×高斯；`idw_delta` 强制 `true` |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">gaussian</span> | 仅 `idw`：是否乘高斯核。省略时随 `reprocess`；`idw_delta` 固定高斯 |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">output</span> | 可选输出格点路径；给出则写 nc/m4。`call` 只返回退出码，需要场对象时再读该文件；省略则仅 `print` |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">effect_r</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">near_num</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">decrease</span> | IDW / 克里金近邻等 |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">half_r</span> | 仅 `gaussian` |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">r_list</span> | 仅 `cressman`，逗号分隔（米；`reprocess=true` 时为度） |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">kriging_&#42;</span> | 仅 `kriging`：变异函数 / 基台 / 变程 / 块金 |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">method</span> | 选择插值算法，仅支持 `idw` / `gaussian` / `kriging` / `cressman`。省略读 ini，预设 `idw` |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">sta</span> | 输入**站点场**路径（csv/m3）。读入后交给插件作观测源；必填（或由 ini 提供） |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">grid</span> | 输入格点文件路径（nc/m4）。CLI **只取网格信息**传给插件，场值不参与插值。可与 `background` 二选一以提供网格；两者都缺则报错 |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">background</span> | 输入**背景格点场**路径（nc/m4）。`reprocess=true` 时必需。`false` 时：IDW/Gaussian/Cressman 作远点填充或初场，Kriging 仅在缺 `grid` 时取网格。无 `grid` 时也可单独提供网格 |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">reprocess</span> | `false`：绝对值插值（背景可作远点填充）；`true`：偏差再插值。与 `gaussian` 相互独立 |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">idw_gaussian</span> | 仅 `idw`：是否乘高斯核，默认 `false`；不随 `reprocess` 自动开启 |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">outer_value</span> | 背景对齐越界填充值，默认 `None`（ini 留空） |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">output</span> | 可选输出格点路径；给出则写 nc/m4；省略则仅 `print` |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">idw_effect_r</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">idw_near_num</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">idw_decrease</span> | 仅 `idw`：影响半径（千米）、近邻数、距离衰减指数 |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">gaussian_half_r</span> | 仅 `gaussian`：高斯半径（千米） |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">cressman_r_list</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">cressman_near_num</span> | 仅 `cressman`：影响半径列表（逗号分隔；默认留空，由插件按 `reprocess` 选默认：`false` 为 `60,40,20` 千米，`true` 为 `1.0,0.8,0.6,0.4` 度）；近邻数 |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">cressman_rain_limit</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">cressman_degree_blend</span> 等 | 仅 `cressman` 且 `reprocess=true`：降水回退阈值（留空不回退）、创新量扫与纯度制结果的融合权重 `[0,1]`（`1.0` 为纯度制）；另有 `cressman_num_limit`、`cressman_smooth`、`cressman_power_param`、`cressman_r_km_scale`、`cressman_innov_gain`、`cressman_residual_passes`、`cressman_residual_degree_polish`、`cressman_residual_polish_rounds`、`cressman_station_anchor_radius`、`cressman_station_anchor_strength`，预设与 `InterpSgCressman` 一致；rain24 original 形态用 `cressman_degree_blend=1.0 cressman_rain_limit=0.01` |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">kriging_model</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">kriging_near_num</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">kriging_sill</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">kriging_range</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">kriging_nugget</span> | 仅 `kriging`：变异函数、近邻数、基台、变程、块金 |
 | <span style="color:#1677ff;font-weight:600;font-size:16px">sta_type</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">grid_type</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">background_type</span> / <span style="color:#1677ff;font-weight:600;font-size:16px">output_type</span> | 格式；省略按扩展名 |
-| <span style="color:#1677ff;font-weight:600;font-size:16px">config</span> | 运行配置 ini |
-| <span style="color:#1677ff;font-weight:400;font-size:16px">return</span> | `int` 退出码（`0` 成功）。场写入 `output`（若给定）；需要 `DataArray` 时再读该 nc |
+| <span style="color:#1677ff;font-weight:600;font-size:16px">config</span> | 输入配置 ini（优先级高于默认 `conf.ini`，低于显式参数） |
+| <span style="color:#1677ff;font-weight:400;font-size:16px">return</span> | 插值结果格点场 `xarray.DataArray`（若给定 `output` 同时写盘） |
 
-说明：`idw_delta` = 高斯 IDW × 偏差订正（须 `--background`）。普通 `idw` 是否偏差订正由 `--reprocess` 控制；`reprocess=true` 时默认乘高斯核，可用 `--no-gaussian` 关掉。**不会**仅因有背景就自动改成偏差路径。
+说明：`idw` 是否偏差订正由 `reprocess` 控制，是否乘高斯核由 `idw_gaussian` 控制，二者独立。
 
 **使用示例**
 
-包内真实样例：站点 `resource/obs_gust_d24.csv`、目标网格 `resource/target_grid.nc`、背景 `resource/bg_fcst_idw.nc`。`call` 写盘后再读场；展示输入站点与 **订正前/订正后** 对照（共用 `wind_speed` 色标）。
+包内真实样例：站点 `resource/obs_gust_d24.csv`、目标网格 `resource/target_grid.nc`、背景 `resource/bg_fcst_idw.nc`。`process` 直接返回插值结果格点场并写盘；展示输入站点与 **订正前/订正后** 对照（共用 `wind_speed` 色标）。
 
 ```python
 from pathlib import Path
@@ -73,43 +79,39 @@ import matplotlib.pyplot as plt
 import meteva_base as meb
 import numpy as np
 from meteva_base.tool.color_tools import get_cmap_and_clevs_by_element_name
-from cli.interpolation_station_grid_cli import InterpolationStationGridCli
+from cli.interpolation_station_grid_cli import process
 
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
-PKG = Path("interpolation_station_grid/resource")
+# 在 00temp 目录运行；resolve() 为绝对路径，避免被 CLI 按包根再解析一次
+PKG = Path("interpolation_station_grid/resource").resolve()
 DEMO = PKG / "showdoc_demo"
 sta_path = str(PKG / "obs_gust_d24.csv")
 grid_path = str(PKG / "target_grid.nc")
 bg_path = str(PKG / "bg_fcst_idw.nc")
 out_path = str(DEMO / "cli_idw_bg_out.nc")
 
-# 调度写盘：IDW 偏差订正
-rc = InterpolationStationGridCli.call(
-    module="idw",
+# 写盘并返回结果格点场：IDW 偏差订正
+grd = process(
+    method="idw",
     sta=sta_path,
     grid=grid_path,
     background=bg_path,
     reprocess="true",
     output=out_path,
-    effect_r=150000,
-    near_num=8,
-    decrease=2,
+    idw_effect_r=150,
+    idw_near_num=8,
+    idw_decrease=2,
     sta_type="csv",
     grid_type="nc",
     background_type="nc",
     output_type="nc",
 )
-
-# 读出场结果
-grd = meb.read_griddata_from_nc(out_path)
-print(f"exit {rc}")
 print(grd)
 ```
 
 ```
-exit 0
 <xarray.DataArray 'data0' (member: 1, level: 1, time: 1, dtime: 1, lat: 71,
                            lon: 210)> Size: 60kB
 array([[[[[[14.653, 13.959, 13.871, ..., 12.191, 12.223, 12.262],

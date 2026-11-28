@@ -9,36 +9,37 @@
 
 由主程序 ``correct_tp_24h_nowcast.py`` 调用。函数名与 ``interpolation.py`` 一致：
 
-- ``mesh_val``：格点→格点，转发子模块 ``interp_gg_linear.src.interp_gg_linear``
-- ``bilinear_interp``：格点→站点。仓库没有单独的格点→站点算法包，
-  转发 ``meteva.base.interp_gs_linear(..., reset_lon_range=False)``（其它项目算法已在用），
-  越界站点填 ``dbUndef``，结果仍写在 ``data0``
-
-``correct_tp_24h.py`` 的双线性仍在 ``interpolation.py``。
+- ``mesh_val``：格点→格点，转发同级子模块 ``interpolation_grid_grid.InterpGgLinear``
+- ``bilinear_interp``：格点→站点，转发同级子模块 ``interpolation_grid_station.InterpGsLinear``，
+  越界/NaN 站点填 ``dbUndef``，结果仍写在 ``data0``
 """
 from __future__ import annotations
 
 import os
 import sys
 
+import meteva_base as meb
 import numpy as np
-import meteva.base as meb
 
 
-def _ensure_interp_gg_linear_on_path() -> None:
-    """将 ``00temp/interp_gg_linear`` 的根与 ``src`` 追加到 sys.path（不抢占本包 utils）。"""
+def _ensure_interp_packages_on_path() -> None:
+    """将 ``interpolation_grid_grid`` / ``interpolation_grid_station`` 的 ``src`` 追加到 sys.path。"""
     here = os.path.dirname(os.path.abspath(__file__))
     temp_root = os.path.normpath(os.path.join(here, "..", ".."))
-    gg_root = os.path.join(temp_root, "interp_gg_linear")
-    gg_src = os.path.join(gg_root, "src")
-    for p in (gg_root, gg_src):
+    paths = [
+        temp_root,
+        os.path.join(temp_root, "interpolation_grid_grid", "src"),
+        os.path.join(temp_root, "interpolation_grid_station", "src"),
+    ]
+    for p in paths:
         if os.path.isdir(p) and p not in sys.path:
             sys.path.append(p)
 
 
-_ensure_interp_gg_linear_on_path()
+_ensure_interp_packages_on_path()
 
-from interp_gg_linear import interp_gg_linear  # noqa: E402
+from interp_gg_linear_plugin import InterpGgLinear  # noqa: E402
+from interp_gs_linear_plugin import InterpGsLinear  # noqa: E402
 
 
 def _target_grid(inter_extend):
@@ -55,21 +56,23 @@ def _target_grid(inter_extend):
     slat_g = float(inter_lat[0])
     elon_g = slon_g + res * (len(inter_lon) - 1)
     elat_g = slat_g + res * (len(inter_lat) - 1)
-    return meb.grid([slon_g, elon_g, res], [slat_g, elat_g, res])
+    return meb.basicdata.grid([slon_g, elon_g, res], [slat_g, elat_g, res])
 
 
 def mesh_val(grd, inter_extend):
     """格点场重采样到 ``inter_extend`` 网格。越界填 0，与原 ``mesh_val`` 一致。"""
     grid = _target_grid(inter_extend)
-    out = interp_gg_linear(grd, grid, outer_value=0.0)
+    out = InterpGgLinear(outer_value=0.0).process(grd, grid)
     if out is None:
-        raise ValueError("interp_gg_linear 未得到目标网格")
+        raise ValueError("InterpGgLinear 未得到目标网格")
+    if "member" in grd.coords and "member" in out.coords:
+        out["member"] = grd.member
     return out
 
 
 def bilinear_interp(grd, sta, dbUndef=0.0):
     """格点场插到站点。返回与 ``sta`` 同行的表，数值在 ``data0``。"""
-    sampled = meb.interp_gs_linear(grd, sta, reset_lon_range=False)
+    sampled = InterpGsLinear(used_coords="xy").process(grd, sta)
     out = sta.copy()
     vals = np.full(len(out), float(dbUndef), dtype=float)
     if sampled is not None and len(sampled) > 0:

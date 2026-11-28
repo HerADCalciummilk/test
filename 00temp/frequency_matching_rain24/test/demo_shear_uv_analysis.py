@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""切变 UV 一例：对照 Lagrangian 与 project_align.extrapolate_like_lagrangian。"""
+"""切变 UV 一例：对照 Lagrangian 与 cressman_extrap_reprocess.extrapolate_like_lagrangian。"""
 from __future__ import annotations
 
 import os
@@ -15,7 +15,7 @@ sys.modules["utils"] = types.ModuleType("utils")
 sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
 
 from frequency_matching_rain24_plugin import Lagrangian  # noqa: E402
-from utils.project_align import extrapolate_like_lagrangian  # noqa: E402
+from utils.cressman_extrap_reprocess import extrapolate_like_lagrangian  # noqa: E402
 import meteva.base as meb  # noqa: E402
 
 DLON = DLAT = 0.1

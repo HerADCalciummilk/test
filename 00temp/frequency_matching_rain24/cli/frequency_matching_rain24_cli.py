@@ -9,8 +9,8 @@
 
 ``match_mode`` 只换 Cressman / 外推实现（估 UV 始终 OpticalFlow）::
 
-    aligned（默认）: 再处理 Cressman + LagrangianAligned
-    original:        GressManInterpolation + Lagrangian
+    aligned（默认）: cressman_project_innov（InterpSg degree_blend=0.85 的旧签名封装）+ LagrangianAligned
+    original:        InterpSg(method="cressman", reprocess=True, degree_blend=1.0) + Lagrangian
 
 示例::
 
@@ -78,13 +78,17 @@ def _process(plugin, report_time, dtime, match_mode="aligned", **correct_para):
         # 2. 核心插件（只调 process）
         #    光流路径：分块 OpticalFlow + 外推 + 块内 Cressman
         correct_sta = OpticalFlowSliceCorrectPlugin(
-            dataset, cressman_fn=cressman_slice, lagrangian_cls=lagrangian_cls
+            dataset,
+            cressman_fn=cressman_slice,
+            lagrangian_cls=lagrangian_cls,
         ).process()
         if correct_sta is None:
             raise RuntimeError("切片订正结果为空")
         #    插值路径：整域 Cressman + FrequencyMatch（无光流）
         correct_grd = CressmanFreqMatchGridPlugin(
-            dataset, correct_sta, cressman_fn=cressman_grid
+            dataset,
+            correct_sta,
+            cressman_fn=cressman_grid,
         ).process()
 
         # 3. 写出站点 m3 与格点 m4/nc。

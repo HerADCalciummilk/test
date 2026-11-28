@@ -27,11 +27,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAIN_SRC = os.path.normpath(os.path.join(HERE, "..", "src"))
 TEMP = os.path.normpath(os.path.join(HERE, "..", ".."))
-PROJ_ROOT = os.path.join(TEMP, "interp_sg_cressman")
+PROJ_ROOT = os.path.join(TEMP, "interpolation_station_grid")
 PROJ_SRC = os.path.join(PROJ_ROOT, "src")
 
 sys.path[:0] = [PROJ_ROOT, PROJ_SRC]
-from interp_sg_cressman import interp_sg_cressman
+from interp_sg_plugin import InterpSg
 
 for k in list(sys.modules):
     if k == "utils" or k.startswith("utils."):
@@ -43,15 +43,14 @@ for p in (PROJ_ROOT, PROJ_SRC,
         sys.path.remove(p)
 sys.path.insert(0, RAIN_SRC)
 sys.modules["utils"] = types.ModuleType("utils")
-sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
-from interpolation import GressManInterpolation
+sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils"), os.path.join(TEMP, "utils")]
 from utils.data_proc import creat_M3_grd
 
 import meteva.base as meb
 import meteva_base
 
 # 项目默认半径 —— 本脚本故意不改它
-R_DEFAULT = [60000.0, 40000.0, 20000.0]
+R_DEFAULT = [60.0, 40.0, 20.0]  # 千米
 
 
 def arr(g):
@@ -122,12 +121,15 @@ def main():
     gi = meb.basicdata.get_grid_of_data(bg)
 
     # ① 原版
-    out1 = GressManInterpolation(sta, bg.copy(), r_deg)
+    out1 = InterpSg(
+        method="cressman", r_list=r_deg, reprocess=True, degree_blend=1.0
+    ).process(sta, background=bg.copy())
     a1 = arr(out1)
 
     # ② 项目：默认参数，不调 r_list
-    out2 = interp_sg_cressman(
-        sta, gi, r_list=R_DEFAULT, background=bg, nearNum=8)
+    out2 = InterpSg(
+        method="cressman", r_list=R_DEFAULT, reprocess=False, nearNum=8
+    ).process(sta, grid=gi, background=bg)
     a2 = arr(out2)
 
     # ③ 对②再加工

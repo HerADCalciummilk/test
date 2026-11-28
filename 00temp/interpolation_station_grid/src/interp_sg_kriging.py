@@ -69,7 +69,7 @@ class InterpSgKriging(PostProcessingPlugin):
     sill :
         基台值。``None`` 时用当前切片站点值的方差。
     range_ :
-        变程，单位与球面笛卡尔距离一致（米量级）。``None`` 时用近邻距离中位数粗估。
+        变程，单位与球面笛卡尔距离一致（千米）。``None`` 时用近邻距离中位数粗估。
     nugget :
         块金值，``γ(0)=nugget``，须 ``>=0`` 且小于基台。
     nearNum :

@@ -55,7 +55,7 @@ class InterpSgIdw(PostProcessingPlugin):
     Parameters
     ----------
     effectR :
-        纯 IDW 时为硬截断半径；高斯模式下为高斯衰减尺度（米量级）。
+        纯 IDW 时为硬截断半径；高斯模式下为高斯衰减尺度（千米）。
     nearNum :
         每个格点参与加权的近邻站点数。
     decrease :
@@ -70,7 +70,7 @@ class InterpSgIdw(PostProcessingPlugin):
 
     def __init__(
         self,
-        effectR: Optional[int] = 1000,
+        effectR: Optional[float] = 1000,
         nearNum: Optional[int] = 8,
         decrease: Optional[int] = 2,
         gaussian: bool = False,

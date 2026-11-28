@@ -28,33 +28,31 @@ process(sta, grid=None, background=None)
 
 ### 1.1 `InterpSg`（统一入口）
 
-构造参数全部显式列出；按 `method` 选用子集，其余忽略。CLI `--module` 与 `method` 同值域，内部已走本入口。
+构造参数全部显式列出；按 `method` 选用子集，其余忽略。CLI 的 `method=` 与之同值域，内部已走本入口。
 
 | `method` | 子插件 | 说明 |
 | --- | --- | --- |
-| `idw` | `InterpSgIdw` | 绝对值默认纯 IDW；`reprocess=True` 默认 IDW×高斯 |
-| `idw_delta` | `InterpSgIdw(gaussian=True, reprocess=True)` | 历史模块名；须背景 |
+| `idw` | `InterpSgIdw` | 纯 IDW；`reprocess` 与 `gaussian` 相互独立 |
 | `gaussian` | `InterpSgGaussian` | |
 | `kriging` | `InterpSgKriging` | |
 | `cressman` | `InterpSgCressman` | |
-| `total` | → `idw` | 旧别名 |
 
 | 参数 | 默认 | 适用 `method` | 说明 |
 | --- | --- | --- | --- |
 | `method` | `idw` | 全部 | 见上表 |
-| `reprocess` | `False` | 除 `idw_delta` | `idw_delta` 固定 `True` |
+| `reprocess` | `False` | 全部 | 绝对值 / 偏差路径，与 `gaussian` 独立 |
 | `outer_value` | `None` | 全部 | 背景对齐越界填充 |
-| `effectR` | `1000` | `idw` / `idw_delta` | 硬截断或高斯尺度（米） |
-| `nearNum` | `None` | `idw` / `idw_delta` / `kriging` / `cressman` | `None`→子插件默认 8/20/100 |
-| `decrease` | `2` | `idw` / `idw_delta` | 距离衰减指数 |
-| `gaussian` | `None` | `idw` | `None`：随 `reprocess`（True→高斯）；`idw_delta` 固定 True |
-| `halfR` | `20` | `gaussian` | 高斯半径（米） |
+| `effectR` | `1000` | `idw` | 硬截断或高斯尺度（千米） |
+| `nearNum` | `None` | `idw` / `kriging` / `cressman` | `None`→子插件默认 8/20/100 |
+| `decrease` | `2` | `idw` | 距离衰减指数 |
+| `gaussian` | `False` | `idw` | 是否乘高斯核；不随 `reprocess` 自动开启 |
+| `halfR` | `20` | `gaussian` | 高斯半径（千米） |
 | `model` | `spherical` | `kriging` | 变异函数：`spherical` / `exponential` / `gaussian` |
 | `sill` | `None` | `kriging` | 基台；`None` 时用站点方差 |
-| `range_` | `None` | `kriging` | 变程（米量级） |
+| `range_` | `None` | `kriging` | 变程（千米） |
 | `nugget` | `0.0` | `kriging` | 块金 |
-| `r_list` | `None` | `cressman` | 影响半径；`None` 时按路径用子插件默认 |
-| `rain_limit` | `None` | `cressman`（`reprocess=True`） | 创新量路径降水阈值等 |
+| `r_list` | `None` | `cressman` | 影响半径列表；`None` 时：`reprocess=False` 默认 `(60.0, 40.0, 20.0)`（千米），`reprocess=True` 默认 `(1.0, 0.8, 0.6, 0.4)`（度） |
+| `rain_limit` | `None` | `cressman`（仅 `reprocess=True`） | 降水回退阈值：格点值 ≤ 阈值时回退（步内回退到该步之前的场值，结束时回退到背景场）；`None` 不回退；`reprocess=False` 忽略此参数 |
 | `num_limit` | `1.0` | 同上 | |
 | `smooth` | `0.001` | 同上 | |
 | `power_param` | `2.0` | 同上 | |
@@ -75,21 +73,21 @@ result = InterpSg(
     method="idw", effectR=1000, nearNum=8, decrease=2, reprocess=False
 ).process(sta, grid, background=bg)
 
-# reprocess=True 时默认已是 IDW×高斯（也可显式 gaussian=True）
+# 偏差订正（纯 IDW 权重）
 result = InterpSg(method="idw", reprocess=True, effectR=1000, nearNum=8).process(
     sta, background=bg
 )
-# 历史别名，与上一行等价
-result = InterpSg(method="idw_delta", effectR=1000, nearNum=8).process(
-    sta, background=bg
-)
+# 偏差订正 + 高斯权重（原 idw_delta 的写法，需显式 gaussian=True）
+result = InterpSg(
+    method="idw", reprocess=True, gaussian=True, effectR=1000, nearNum=8
+).process(sta, background=bg)
 
 result = InterpSg(method="gaussian", halfR=20).process(sta, grid)
 result = InterpSg(
     method="kriging", model="spherical", nearNum=20, reprocess=True
 ).process(sta, background=bg)
 result = InterpSg(
-    method="cressman", r_list=[60000, 40000, 20000], nearNum=100
+    method="cressman", r_list=[60, 40, 20], nearNum=100
 ).process(sta, grid)
 ```
 
@@ -100,19 +98,19 @@ result = InterpSg(
 | 路径 | 内容 |
 | --- | --- |
 | `src/` | 插件（`InterpSg*`） |
-| `cli/` | `python -m cli` |
+| `cli/` | `*_cli.py` 中的 `process`（`@merge_params`）；`python -m interpolation_station_grid` 为命令行入口 |
 | `resource/conf.ini` | CLI 缺省参数 |
 | `test/` | 配置与算法测试 |
 | `nbs/` | Notebook |
 | `docs/` | 本文档 |
-| `utils/util_env.py` | 读取运行配置；并入 `00temp/utils` |
+| `utils/` | 无业务代码；合参由 `00temp/utils/merge_params.py` 提供 |
 
 ---
 
 ## 3. 共同约定
 
 1. 按 `member` / `level` / `time` / `dtime` 切片分别插值后拼接。  
-2. 站点经纬度转到球面笛卡尔坐标后用 KDTree 找近邻（距离为米量级）。  
+2. 站点经纬度转到球面笛卡尔坐标后用 KDTree 找近邻（距离为千米，与 `lon_lat_to_cartesian` 的 `R=ER` 输出一致）。  
 3. 有 `background` 时：用 `InterpGgLinear` 对齐到目标网格（Cressman `reprocess=True` 直接在背景场上运算）。IDW / Gaussian / Cressman / Kriging 均支持 `reprocess`；Kriging 无远点硬截断，`False`/`True` 均可从背景取网格，但 `False` 不用背景场值。  
 4. 依赖：`meteva_base`、`numpy`、`scipy`、`interpolation_grid_grid.InterpGgLinear`、`utils.base_plugin`。
 
@@ -124,17 +122,18 @@ result = InterpSg(
 
 - `reprocess=False`（默认）：插站点**绝对值**；`d > effectR` 用背景填（无背景填 0）。`grid` 与 `background` 至少其一。  
 - `reprocess=True`：须 `background`；插 `obs−bg` 再叠回。`grid` 可省略（从背景取网格）。  
-- `gaussian=False`：`w = 1 / d^decrease`，`effectR` 硬截断。  
+- `gaussian=False`：`w = 1 / d^decrease`，`effectR` 硬截断。
 - `gaussian=True`：`w = (1 / d^decrease) * exp(-(d / effectR)^2)`，`effectR` 为高斯半径。
+- `reprocess` 与 `gaussian` 独立：前者只决定绝对值 / 偏差路径，后者只决定权重形状。
 
 ### 参数
 
 | 参数 | 默认 | 说明 |
 | --- | --- | --- |
-| `effectR` | `1000` | 纯 IDW：硬截断半径；高斯模式：高斯尺度（米量级） |
+| `effectR` | `1000` | 纯 IDW：硬截断半径；高斯模式：高斯尺度（千米） |
 | `nearNum` | `8` | 每格点近邻站点数 |
 | `decrease` | `2` | 距离衰减指数 |
-| `gaussian` | `False` | 是否乘高斯核 |
+| `gaussian` | `False` | 是否乘高斯核（与 `reprocess` 独立） |
 | `outer_value` | `None` | 背景对齐越界填充，传给 `InterpGgLinear` |
 | `reprocess` | `False` | `False` 绝对值+远点回退背景；`True` 偏差订正 |
 | `sta` / `grid` / `background` | — | 见上文接口；均可只传 `background`（True 时 `background` 必需） |
@@ -179,7 +178,7 @@ result = InterpSgIdw(
 
 | 参数 | 默认 | 说明 |
 | --- | --- | --- |
-| `halfR` | `20` | 高斯半径（米量级），须 `> 0` |
+| `halfR` | `20` | 高斯半径（千米），须 `> 0` |
 | `outer_value` | `None` | 背景对齐越界填充 |
 | `reprocess` | `False` | `False` 绝对值+远点回退背景；`True` 偏差订正 |
 | `sta` / `grid` / `background` | — | 见上文接口；均可只传 `background` |
@@ -224,7 +223,7 @@ result = InterpSgGaussian(halfR=20, outer_value=0.0, reprocess=True).process(
 | --- | --- | --- |
 | `model` | `"spherical"` | 变异函数：`spherical` / `exponential` / `gaussian` |
 | `sill` | `None` | 基台；空则用站点方差 |
-| `range_` | `None` | 变程（米量级）；空则近邻距离中位数粗估 |
+| `range_` | `None` | 变程（千米）；空则近邻距离中位数粗估 |
 | `nugget` | `0.0` | 块金，`>= 0` 且应小于基台 |
 | `nearNum` | `20` | 每格点近邻站点数 |
 | `outer_value` | `None` | 背景对齐越界填充 |
@@ -265,7 +264,7 @@ w = (R² − d²) / (R² + d²)   （d ≥ R 时 w = 0）
 
 | 参数 | 默认 | 说明 |
 | --- | --- | --- |
-| `r_list` | False：`(60000,40000,20000)`；True：`(1.0,0.8,0.6,0.4)` | False 为米，True 为度 |
+| `r_list` | False：`(60,40,20)`；True：`(1.0,0.8,0.6,0.4)` | False 为千米，True 为度 |
 | `nearNum` | `100` | 近邻站点数上限，`>= 1` |
 | `outer_value` | `None` | False 路径背景对齐越界填充 |
 | `reprocess` | `False` | 是否走差值累加 |
@@ -277,11 +276,11 @@ w = (R² − d²) / (R² + d²)   （d ≥ R 时 w = 0）
 from interp_sg_cressman_plugin import InterpSgCressman
 
 result = InterpSgCressman(
-    r_list=[60000, 40000, 20000], nearNum=100
+    r_list=[60, 40, 20], nearNum=100
 ).process(sta, grid)
 
 result = InterpSgCressman(
-    r_list=[60000, 40000, 20000], nearNum=100, outer_value=0.0
+    r_list=[60, 40, 20], nearNum=100, outer_value=0.0
 ).process(sta, grid, background=bg)
 
 result = InterpSgCressman(
@@ -293,38 +292,71 @@ result = InterpSgCressman(
 
 ## 8. CLI
 
-在本包目录执行 `python -m cli`。未写参数先读 `resource/conf.ini`，再无则用预设。`sta` 必填；`--grid` 与 `--background` 至少其一。
+CLI 结构遵循 `CLI组织说明.md`：`process` 定义在 `cli/interpolation_station_grid_cli.py` 并挂 `@merge_params()`；`key` 与 `process` 形参名相同，`resource/conf.ini` 的键与之一一对应。
 
-| `--module` | `InterpSg(method=...)` |
+参数优先级：命令行 / Python 显式传入 > `config=` 指定的输入 ini > `resource/conf.ini` 非空项 > 签名预设。`sta` 必填；`grid` 与 `background` 至少其一；`reprocess=true` 须 `background`。
+
+调用方式（工作目录为 `00temp`）：
+
+```bash
+python -m interpolation_station_grid method=idw sta=resource/obs_gust_d24.csv grid=resource/target_grid.nc
+```
+
+- 包根 `__main__.py` 经 `utils/nimm_cli.py` 调用 `process`；`method` 为算法选择键（不用 `module`，因为 `nimm_cli` 占用了 `module`）。
+- 包内相对路径一律按包根（`interpolation_station_grid/`）解析。
+- Python 调用：`from cli.interpolation_station_grid_cli import process` 后 `process(method="idw", ...)`。
+- `cli/__main__.py` 也支持在本包目录执行 `python -m cli key=value ...`（无参数时读 `conf.ini` 与签名预设）。
+
+| `method` | `InterpSg(method=...)` |
 | --- | --- |
-| `idw` | `method="idw"`；`--reprocess true` 默认高斯权重，可用 `--no-gaussian` 关闭 |
-| `idw_delta` | 固定高斯 IDW × 偏差订正；须 `--background` |
-| `gaussian` | `method="gaussian"` |
+| `idw` | `method="idw"`；`idw_gaussian` 默认 false，需显式开启高斯权重；`reprocess` 与之独立 |
+| `gaussian` | `method="gaussian"`（`gaussian_half_r`） |
 | `kriging` | `method="kriging"` |
 | `cressman` | `method="cressman"` |
-| `total` | `idw` 旧别名 |
 
 | 数据 / 开关 | 支持格式 | 参数 |
 | --- | --- | --- |
-| 站点 | `csv` / `m3` | `--sta` / `--sta-type` |
-| 格点 / 背景 | `nc` / `m4` | `--grid` / `--grid-type`，`--background` / `--background-type` |
-| 路径开关 | — | `--reprocess true\|false`（默认 false；true 须 background） |
-| 输出格点 | `nc` / `m4` | `--output` / `--output-type`（可选；留空仅打印） |
+| 站点 | `csv` / `m3` | `sta` / `sta_type` |
+| 格点 / 背景 | `nc` / `m4` | `grid` / `grid_type`，`background` / `background_type` |
+| 路径开关 | — | `reprocess=true\|false`（默认 false；true 须 background） |
+| 输出格点 | `nc` / `m4` | `output` / `output_type`（可选；留空仅打印） |
 
 ```bash
-python -m cli --module idw --sta sta.csv --grid grid.nc
-python -m cli --module idw --sta sta.csv --background bg.nc
-python -m cli --module idw --sta sta.csv --background bg.nc --reprocess true
-python -m cli --module idw --sta sta.csv --background bg.nc --reprocess true --no-gaussian
-python -m cli --module idw --sta sta.m3 --grid grid.m4 --output out.nc
-python -m cli --module idw_delta --sta sta.csv --background bg.nc
-python -m cli --module gaussian --sta sta.csv --grid grid.nc --half-r 20
-python -m cli --module kriging --sta sta.csv --background bg.nc --reprocess true
-python -m cli --module cressman --sta sta.csv --grid grid.nc --r-list 60000,40000,20000
-python -m cli --module cressman --sta sta.csv --background bg.nc --reprocess true --r-list 1.0,0.8,0.6,0.4
+# 在 00temp 目录执行
+python -m interpolation_station_grid method=idw sta=resource/obs_gust_d24.csv grid=resource/target_grid.nc output=resource/out_idw.nc
+python -m interpolation_station_grid method=idw sta=resource/obs_gust_d24.csv background=resource/bg_fcst_idw.nc
+python -m interpolation_station_grid method=idw sta=resource/obs_gust_d24.csv background=resource/bg_fcst_idw.nc reprocess=true
+python -m interpolation_station_grid method=idw sta=resource/obs_gust_d24.csv background=resource/bg_fcst_idw.nc reprocess=true idw_gaussian=true
+python -m interpolation_station_grid method=idw sta=sta.m3 grid=grid.m4 output=out.m4
+python -m interpolation_station_grid method=gaussian sta=sta.csv grid=grid.nc gaussian_half_r=20
+python -m interpolation_station_grid method=kriging sta=sta.csv background=bg.nc reprocess=true
+python -m interpolation_station_grid method=cressman sta=sta.csv grid=grid.nc cressman_r_list=60,40,20
+python -m interpolation_station_grid method=cressman sta=sta.csv background=bg.nc reprocess=true cressman_r_list=1.0,0.8,0.6,0.4
 ```
 
-常用参数：`--reprocess`、`--gaussian`（仅 idw）、`--effect-r` / `--near-num` / `--decrease`（IDW）、`--half-r`（Gaussian）、`--kriging-model` / `--kriging-sill` / `--kriging-range` / `--kriging-nugget`（Kriging）、`--r-list` / `--near-num`（Cressman）、`--output`、`--config`。
+常用参数（键名即 `process` 形参名，与 `conf.ini` 对应）：`reprocess`、`outer_value`（默认留空）、`idw_gaussian`（仅 idw，默认 false）、`idw_effect_r` / `idw_near_num` / `idw_decrease`（IDW）、`gaussian_half_r`（Gaussian）、`kriging_model` / `kriging_near_num` / `kriging_sill` / `kriging_range` / `kriging_nugget`（Kriging）、`cressman_r_list`（默认留空：`reprocess=false` 为 `60,40,20` 千米，`true` 为 `1.0,0.8,0.6,0.4` 度） / `cressman_near_num`（Cressman）、`output`、`config`。
+
+`idw_effect_r`、`gaussian_half_r` 的单位是千米，可写小数（如 `gaussian_half_r=12.5`）。
+
+Cressman 度制路径（`method=cressman` 且 `reprocess=true`）的高级参数，键名为 `cressman_` 加插件形参名，预设值与 `InterpSgCressman` 一致，只在该路径生效，其它情况被忽略：
+
+| CLI 键 | 预设 | 含义 |
+|--------|------|------|
+| `cressman_rain_limit` | 留空 | 降水回退阈值，结果 ≤ 阈值的格点回退；留空不回退 |
+| `cressman_num_limit` | `1.0` | 格点影响圈内至少几个站才更新 |
+| `cressman_smooth` / `cressman_power_param` | `0.001` / `2.0` | 度制幂权重 `1/(d+smooth)^power_param` |
+| `cressman_r_km_scale` | `1.35` | 度制半径换千米半径的缩放（仅千米核创新量扫） |
+| `cressman_innov_gain` | `1.0` | 创新量增益（仅千米核创新量扫） |
+| `cressman_residual_passes` | `0` | 追加创新量再扫次数 |
+| `cressman_residual_degree_polish` / `cressman_residual_polish_rounds` | `true` / `1` | 创新量扫之后的度制抛光及其轮数 |
+| `cressman_degree_blend` | `0.85` | 创新量扫结果与纯度制结果的融合权重 `[0,1]`；`1.0` 为纯度制，此时千米核相关参数不起作用 |
+| `cressman_station_anchor_radius` / `cressman_station_anchor_strength` | `0.35` / `0.0` | 站点锚定半径（度）与强度 `[0,1]`，强度 0 即不锚定 |
+
+复现 rain24 两种形态：original 用 `cressman_degree_blend=1.0 cressman_rain_limit=0.01`，aligned 用默认 `cressman_degree_blend=0.85`。
+
+```bash
+python -m interpolation_station_grid method=cressman sta=sta.csv background=bg.nc reprocess=true cressman_r_list=1.0,0.8,0.6,0.4 cressman_degree_blend=1.0 cressman_rain_limit=0.01
+```
 
 ---
 
@@ -335,6 +367,6 @@ python -m cli --module cressman --sta sta.csv --background bg.nc --reprocess tru
 | 场景 | 建议 |
 | --- | --- |
 | 通用站点插值 | `method="idw"`（或直接 `InterpSgIdw`） |
-| 偏差订正且需平滑衰减 | `method="idw", reprocess=True`（默认高斯）/ `idw_delta`，或 `method="gaussian"` |
+| 偏差订正且需平滑衰减 | `method="idw", reprocess=True, gaussian=True`，或 `method="gaussian"` |
 | 需显式变异函数 / 局部 OK | `method="kriging"` |
 | 多半径 Cressman（km 绝对值 / 可选差值累加） | `method="cressman"` |

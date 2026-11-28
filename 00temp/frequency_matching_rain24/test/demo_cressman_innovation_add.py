@@ -23,11 +23,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAIN_SRC = os.path.normpath(os.path.join(HERE, "..", "src"))
 TEMP = os.path.normpath(os.path.join(HERE, "..", ".."))
-PROJ_ROOT = os.path.join(TEMP, "interp_sg_cressman")
+PROJ_ROOT = os.path.join(TEMP, "interpolation_station_grid")
 PROJ_SRC = os.path.join(PROJ_ROOT, "src")
 
 sys.path[:0] = [PROJ_ROOT, PROJ_SRC]
-from interp_sg_cressman import interp_sg_cressman
+from interp_sg_plugin import InterpSg
 
 for k in list(sys.modules):
     if k == "utils" or k.startswith("utils."):
@@ -39,8 +39,7 @@ for p in (PROJ_ROOT, PROJ_SRC,
         sys.path.remove(p)
 sys.path.insert(0, RAIN_SRC)
 sys.modules["utils"] = types.ModuleType("utils")
-sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
-from interpolation import GressManInterpolation
+sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils"), os.path.join(TEMP, "utils")]
 from utils.data_proc import creat_M3_grd
 
 import meteva.base as meb
@@ -102,16 +101,20 @@ def main():
 
     # ===== 三个结果 =====
     # ① 原版
-    out_原版 = GressManInterpolation(sta, bg.copy(), r_deg)
+    out_原版 = InterpSg(
+        method="cressman", r_list=r_deg, reprocess=True, degree_blend=1.0
+    ).process(sta, background=bg.copy())
 
     # ② 项目直接插（绝对值）
-    out_项目直接 = interp_sg_cressman(
-        sta, gi, r_list=r_km, background=bg, nearNum=8)
+    out_项目直接 = InterpSg(
+        method="cressman", r_list=r_km, reprocess=False, nearNum=8
+    ).process(sta, grid=gi, background=bg)
 
     # ③ 项目：差值场摊开 + 加回背景
     #    背景传 None → 初值 0，摊的是「站−背景」；再与背景相加
-    out_差值场 = interp_sg_cressman(
-        sta_innov, gi, r_list=r_km, background=None, nearNum=8)
+    out_差值场 = InterpSg(
+        method="cressman", r_list=r_km, reprocess=False, nearNum=8
+    ).process(sta_innov, grid=gi, background=None)
     out_项目累加 = bg.copy()
     out_项目累加.data = [[[[arr(bg) + arr(out_差值场)]]]]
 

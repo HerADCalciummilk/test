@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """新增算法：窗域 LSQR 估速 + 度制幂次 Cressman 铺 UV（rain24 原版 ``OpticalFlow``）。
 
-与既有 ``LK`` / ``Extrapolation`` 并列独立，不改动旧实现。稀疏 UV 经同级新增的
-``interp_sg_cressman.gressman_plugin.GressManInterpolation`` 铺密，再 ``mesh_val``。
+与既有 ``LK`` / ``Extrapolation`` 并列独立，不改动旧实现。稀疏 UV 经同级
+``interpolation_station_grid.InterpSg(method="cressman", reprocess=True, degree_blend=1.0)``
+铺密，再经 ``interpolation_grid_grid.InterpGgLinear`` 重采样。
 类名 ``LsqrOpticalFlow``；兼容别名 ``OpticalFlow`` / ``WindowLsqr``。
 """
 from __future__ import annotations
@@ -21,18 +22,44 @@ from scipy.sparse.linalg import lsqr
 from .base_plugin import PostProcessingPlugin
 
 
-def _ensure_gressman_on_path() -> None:
+def _ensure_interp_packages_on_path() -> None:
     here = os.path.dirname(os.path.abspath(__file__))
     temp_root = os.path.normpath(os.path.join(here, "..", ".."))
-    cress_root = os.path.join(temp_root, "interp_sg_cressman")
-    cress_src = os.path.join(cress_root, "src")
-    for p in (cress_src, cress_root):
+    paths = [
+        temp_root,
+        os.path.join(temp_root, "interpolation_station_grid", "src"),
+        os.path.join(temp_root, "interpolation_grid_grid", "src"),
+    ]
+    for p in paths:
         if os.path.isdir(p) and p not in sys.path:
             sys.path.append(p)
 
 
-_ensure_gressman_on_path()
-from gressman_plugin import GressManInterpolation, mesh_val  # noqa: E402
+_ensure_interp_packages_on_path()
+from interp_gg_linear_plugin import InterpGgLinear  # noqa: E402
+from interp_sg_plugin import InterpSg  # noqa: E402
+
+
+def mesh_val(grd, inter_extend):
+    slon, elon, slat, elat, res = inter_extend
+    res = float(res)
+    inter_lon = np.round(np.arange(slon, elon + 1e-5, res), 4)
+    inter_lat = np.round(np.arange(slat, elat + 1e-5, res), 4)
+    if len(inter_lon) == 1:
+        inter_lon = np.append(inter_lon, float(inter_lon[0]) + res)
+    if len(inter_lat) == 1:
+        inter_lat = np.append(inter_lat, float(inter_lat[0]) + res)
+    slon_g = float(inter_lon[0])
+    slat_g = float(inter_lat[0])
+    elon_g = slon_g + res * (len(inter_lon) - 1)
+    elat_g = slat_g + res * (len(inter_lat) - 1)
+    grid = meb.basicdata.grid([slon_g, elon_g, res], [slat_g, elat_g, res])
+    out = InterpGgLinear(outer_value=0.0).process(grd, grid)
+    if out is None:
+        raise ValueError("InterpGgLinear 未得到目标网格")
+    if "member" in grd.coords and "member" in out.coords:
+        out["member"] = grd.member
+    return out
 
 GridLike = Union[xr.DataArray, Sequence[xr.DataArray]]
 
@@ -191,8 +218,14 @@ def _estimate_one_window(
         gd_output[0], [start_lon, end_lon, start_lat, end_lat, min_window[1]]
     )
     distance_limits = [4.0 * min_window[0], 2.0 * min_window[0], 1.0 * min_window[0]]
-    grid_data2 = GressManInterpolation(sd_input_data1, gd_background2, distance_limits)
-    grid_data3 = GressManInterpolation(sd_input_data2, gd_background1, distance_limits)
+    cressman = InterpSg(
+        method="cressman",
+        r_list=distance_limits,
+        reprocess=True,
+        degree_blend=1.0,
+    )
+    grid_data2 = cressman.process(sd_input_data1, background=gd_background2)
+    grid_data3 = cressman.process(sd_input_data2, background=gd_background1)
     gd_output[0] = mesh_val(grid_data2, [start_lon, end_lon, start_lat, end_lat, delt_lon])
     gd_output[1] = mesh_val(grid_data3, [start_lon, end_lon, start_lat, end_lat, delt_lon])
 

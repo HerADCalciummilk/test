@@ -16,13 +16,13 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAIN_SRC = os.path.normpath(os.path.join(HERE, "..", "src"))
-sys.path.insert(0, RAIN_SRC)
+TEMP = os.path.normpath(os.path.join(HERE, "..", ".."))
+sys.path[:0] = [RAIN_SRC, os.path.join(TEMP, "interpolation_station_grid", "src"), TEMP]
 sys.modules["utils"] = types.ModuleType("utils")
-sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
+sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils"), os.path.join(TEMP, "utils")]
 
-from interpolation import GressManInterpolation
+from interp_sg_plugin import InterpSg
 from utils.data_proc import creat_M3_grd
-from utils.project_align import cressman_project_innov
 import meteva.base as meb
 
 
@@ -59,8 +59,16 @@ def metrics(pred, ref):
 def eval_params(cases, **kw):
     scores = []
     for sta, bg, rs in cases:
-        ref = arr(GressManInterpolation(sta, bg.copy(), rs, rain_limit=0.01))
-        pred = arr(cressman_project_innov(sta, bg.copy(), rs, rain_limit=0.01, **kw))
+        ref = arr(
+            InterpSg(
+                method="cressman", r_list=rs, reprocess=True, rain_limit=0.01, degree_blend=1.0
+            ).process(sta, background=bg.copy())
+        )
+        pred = arr(
+            InterpSg(
+                method="cressman", r_list=rs, reprocess=True, rain_limit=0.01, **kw
+            ).process(sta, background=bg.copy())
+        )
         scores.append(metrics(pred, ref))
     return {k: float(np.mean([s[k] for s in scores])) for k in scores[0]}
 

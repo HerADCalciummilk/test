@@ -25,11 +25,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAIN_SRC = os.path.normpath(os.path.join(HERE, "..", "src"))
 TEMP = os.path.normpath(os.path.join(HERE, "..", ".."))
-PROJ_ROOT = os.path.join(TEMP, "interp_sg_cressman")
+PROJ_ROOT = os.path.join(TEMP, "interpolation_station_grid")
 PROJ_SRC = os.path.join(PROJ_ROOT, "src")
 
 sys.path[:0] = [PROJ_ROOT, PROJ_SRC]
-from interp_sg_cressman import interp_sg_cressman
+from interp_sg_plugin import InterpSg
 
 for k in list(sys.modules):
     if k == "utils" or k.startswith("utils."):
@@ -41,23 +41,17 @@ for p in (PROJ_ROOT, PROJ_SRC,
         sys.path.remove(p)
 sys.path.insert(0, RAIN_SRC)
 sys.modules["utils"] = types.ModuleType("utils")
-sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
-from interpolation import GressManInterpolation
+sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils"), os.path.join(TEMP, "utils")]
 from utils.data_proc import creat_M3_grd
-from utils.project_align import cressman_innov_wrap  # 统一模块
 
 import meteva.base as meb
 import meteva_base
 
-R_DEFAULT = [60000.0, 40000.0, 20000.0]
+R_DEFAULT = [60.0, 40.0, 20.0]  # 千米
 
 
 def arr(g):
     return np.asarray(g.values if hasattr(g, "values") else g.data, dtype=float).squeeze()
-
-
-def project_innov_wrap(sta_lon, sta_lat, sta_val, bg, r_degs):
-    return cressman_innov_wrap(sta_lon, sta_lat, sta_val, bg, r_degs, nearNum=8)
 
 
 def score(tag, pred, ref):
@@ -93,10 +87,15 @@ def main():
     lon, lat = np.asarray(bg.lon), np.asarray(bg.lat)
     bg2 = arr(bg)
 
-    out_a = GressManInterpolation(sta, bg.copy(), r_degs)
-    out_b = interp_sg_cressman(
-        sta, gi, r_list=R_DEFAULT, background=bg, nearNum=8)
-    out_c = project_innov_wrap(lon0, lat0, sta_val, bg, r_degs)
+    out_a = InterpSg(
+        method="cressman", r_list=r_degs, reprocess=True, degree_blend=1.0
+    ).process(sta, background=bg.copy())
+    out_b = InterpSg(
+        method="cressman", r_list=R_DEFAULT, reprocess=False, nearNum=8
+    ).process(sta, grid=gi, background=bg)
+    out_c = InterpSg(
+        method="cressman", r_list=r_degs, reprocess=True, nearNum=8
+    ).process(sta, background=bg.copy())
     a, b, c = arr(out_a), arr(out_b), arr(out_c)
 
     print(a)

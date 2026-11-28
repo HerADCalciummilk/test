@@ -4,9 +4,6 @@
 提供 ``cli_base``、``nimm_cli``、``base_plugin``、``multipro_plugin``、
 ``data_prepare_plugin``、``data_distribute_pulgin``、``merge_params`` 等跨算法通用模块。
 
-格点双线性、站点 Cressman 已独立为子模块 ``interp_gg_linear``、``interp_sg_cressman``，
-不再放在本目录。
-
 各算法项目通过本地 ``utils/__init__.py`` 将本目录并入 ``utils`` 包后，
 统一使用 ``from utils.xxx import ...``。
 

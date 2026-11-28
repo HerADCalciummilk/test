@@ -9,9 +9,9 @@
 
 由主程序 ``correct_tp_24h_nowcast.py`` 调用。
 转发到 ``interpolation_station_grid`` 的 ``InterpSgCressman(reprocess=False)``
-（影响半径由度换算为米）；背景对齐用 ``interpolation_grid_grid.InterpGgLinear``。
+（影响半径由度换算为千米）；背景对齐用 ``interpolation_grid_grid.InterpGgLinear``。
 
-``correct_tp_24h.py`` 的 Cressman 在 ``interpolation.py`` 的 ``GressManInterpolation``。
+``correct_tp_24h.py`` 的 Cressman 直接调用 ``interpolation_station_grid.InterpSg``。
 ``correct_tp_24h_nowcast.py`` 的双线性在 ``interpolation_gg_linear.py``。
 """
 from __future__ import annotations
@@ -43,13 +43,13 @@ _ensure_interp_submodules_on_path()
 from interp_gg_linear_plugin import InterpGgLinear  # noqa: E402
 from interp_sg_cressman_plugin import InterpSgCressman  # noqa: E402
 
-# 经纬度度数 → 米（与 InterpSgCressman km 路径 r_list 单位一致）
-_DEG_TO_M = 111000.0
+# 经纬度 1 度对应的千米数（与 InterpSgCressman km 路径的距离单位一致：lon_lat_to_cartesian 输出千米）
+_DEG_TO_KM = float(getattr(meb.basicdata.const, "ER", 6371.229)) * np.pi / 180.0
 
 
 def _distance_limits_to_r_list(distance_limits):
-    """旧接口影响半径（度）→ ``InterpSgCressman`` 的 ``r_list``（米）。"""
-    return [float(d) * _DEG_TO_M for d in distance_limits]
+    """旧接口影响半径（度）→ ``InterpSgCressman`` 的 ``r_list``（千米）。"""
+    return [float(d) * _DEG_TO_KM for d in distance_limits]
 
 
 def _ensure_sta_dims(sta, grd):
@@ -80,7 +80,7 @@ def GressManInterpolation(sta, grd, distance_limits, num_limit=1.0, smooth=0.001
     sta : 站点数据
     grd : 背景/目标格点场（取水平网格，并作为 background）
     distance_limits : sequence of float
-        影响半径列表，单位为度（与历史调用一致）；内部换算为米后调用
+        影响半径列表，单位为度（与历史调用一致）；内部换算为千米后调用
         ``InterpSgCressman(reprocess=False)``。
     num_limit / smooth / power_param :
         保留参数以兼容旧调用；km 绝对值路径不使用，忽略。

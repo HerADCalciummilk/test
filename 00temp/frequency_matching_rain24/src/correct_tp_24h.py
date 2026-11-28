@@ -14,7 +14,7 @@
 本文件固定使用：
 
 - 光流 / 半拉格朗日：``cal_optical_flow.OpticalFlow`` / ``Lagrangian``
-- Cressman：``interpolation.GressManInterpolation``
+- Cressman：``interpolation_station_grid.InterpSg(method="cressman", reprocess=True, degree_blend=1.0)``
 - 双线性：``interpolation.py`` 的 ``mesh_val`` / ``bilinear_interp``
 
 项目光流、项目 Cressman 与项目双线性另见主程序 ``correct_tp_24h_nowcast.py``。
@@ -51,6 +51,11 @@ from cal_optical_flow import Lagrangian, OpticalFlow
 from cal_similarity import similarity
 from cal_slice_tp import correct_by_opticalFlow
 from cal_frequency_match import FrequencyMatch
+
+_SG_SRC = os.path.normpath(os.path.join(_ROOT_DIR, "..", "interpolation_station_grid", "src"))
+if os.path.isdir(_SG_SRC) and _SG_SRC not in sys.path:
+    sys.path.append(_SG_SRC)
+from interp_sg_plugin import InterpSg  # noqa: E402
 
 def _load_runtime_globals():
     """按当前 ini 刷新调度和订正用的模块全局量。"""
@@ -229,15 +234,20 @@ class correct_24H_TP(gain_dataset):
 
     optical_flow_cls = OpticalFlow
     lagrangian_cls = Lagrangian
-    cressman_fn = staticmethod(GressManInterpolation)
+    cressman_fn = None
     mesh_val_fn = staticmethod(mesh_val)
     bilinear_fn = staticmethod(bilinear_interp)
 
     def __init__(self, parafile, report_time, dtime):
+        cressman_desc = (
+            f'{self.cressman_fn.__module__}.{self.cressman_fn.__name__}'
+            if self.cressman_fn is not None
+            else 'interp_sg_plugin.InterpSg(method="cressman", reprocess=True, degree_blend=1.0)'
+        )
         logger.info(
             f'开始降水订正：起报时间-{report_time:%Y%m%d%H}, 预报时效-{dtime:03d}, '
             f'光流 {self.optical_flow_cls.__module__}.{self.optical_flow_cls.__name__}，'
-            f'Cressman {self.cressman_fn.__module__}.{self.cressman_fn.__name__}，'
+            f'Cressman {cressman_desc}，'
             f'双线性 {self.mesh_val_fn.__module__}.mesh_val / {self.bilinear_fn.__module__}.bilinear_interp'
         )
         super().__init__(parafile, report_time, dtime)
@@ -361,9 +371,18 @@ class correct_24H_TP(gain_dataset):
             current_model_sta = select_by_extend(current_model_sta, [slon, elon, slat, elat])
             current_model_sta_add = pd.concat([correct_current_model_sta, current_model_sta], ignore_index=True)
 
-            current_model_grd_add = self.cressman_fn(
-                current_model_sta_add, grd_current_model, [0.8, 0.6, 0.4, 0.2], rain_limit=0.01
-            )
+            if self.cressman_fn is not None:
+                current_model_grd_add = self.cressman_fn(
+                    current_model_sta_add, grd_current_model, [0.8, 0.6, 0.4, 0.2], rain_limit=0.01
+                )
+            else:
+                current_model_grd_add = InterpSg(
+                    method="cressman",
+                    r_list=[0.8, 0.6, 0.4, 0.2],
+                    reprocess=True,
+                    rain_limit=0.01,
+                    degree_blend=1.0,
+                ).process(current_model_sta_add, background=grd_current_model)
             current_model_grd_add = smooth9(current_model_grd_add, 10)
             sta_roi = clear_to_num_greater_than(correct_current_model_sta, 0, 0)
             current_model_sta_inter = self.bilinear_fn(current_model_grd_add, sta_roi)

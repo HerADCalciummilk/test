@@ -17,13 +17,13 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAIN_SRC = os.path.normpath(os.path.join(HERE, "..", "src"))
-sys.path.insert(0, RAIN_SRC)
+TEMP = os.path.normpath(os.path.join(HERE, "..", ".."))
+sys.path[:0] = [RAIN_SRC, os.path.join(TEMP, "interpolation_station_grid", "src"), TEMP]
 sys.modules["utils"] = types.ModuleType("utils")
-sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils")]
+sys.modules["utils"].__path__ = [os.path.join(RAIN_SRC, "utils"), os.path.join(TEMP, "utils")]
 
-from interpolation import GressManInterpolation
+from interp_sg_plugin import InterpSg
 from utils.data_proc import creat_M3_grd
-from utils.project_align import cressman_innov_gressman_like, cressman_project_innov
 import meteva.base as meb
 
 
@@ -62,9 +62,21 @@ def main():
     print("=" * 72)
     for nsta in (1, 20, 100):
         sta, bg, rs = make_case(nsta=nsta, seed=nsta)
-        a = arr(GressManInterpolation(sta, bg.copy(), rs, rain_limit=0.01))
-        b = arr(cressman_innov_gressman_like(sta, bg.copy(), rs, rain_limit=0.01))
-        c = arr(cressman_project_innov(sta, bg.copy(), rs, rain_limit=0.01))
+        a = arr(
+            InterpSg(
+                method="cressman", r_list=rs, reprocess=True, rain_limit=0.01, degree_blend=1.0
+            ).process(sta, background=bg.copy())
+        )
+        b = arr(
+            InterpSg(
+                method="cressman", r_list=rs, reprocess=True, rain_limit=0.01, degree_blend=1.0
+            ).process(sta, background=bg.copy())
+        )
+        c = arr(
+            InterpSg(
+                method="cressman", r_list=rs, reprocess=True, rain_limit=0.01, degree_blend=0.85
+            ).process(sta, background=bg.copy())
+        )
         print(f"\n--- nsta={nsta} ---")
         print(" ", score("封装复刻 vs 原版", b, a))
         print(" ", score("项目innov vs 原版", c, a))

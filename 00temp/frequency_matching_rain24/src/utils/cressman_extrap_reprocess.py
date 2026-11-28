@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Cressman / Extrapolation 再处理封装。
+Extrapolation / Lagrangian 再处理封装。
 
-不改项目核源码，调整调用与后处理，使项目 ``interp_sg_cressman``、
-``Extrapolation.forecast`` 接近原版 ``GressManInterpolation`` / ``Lagrangian``。
-
-Cressman 再处理已迁至 ``interp_sg_cressman.src.cressman_plugin``；
-本文件再导出 ``cressman_project_innov`` 等，并保留 Extrapolation / Lagrangian 对齐。
+不改项目核源码，调整调用与后处理，使项目 ``Extrapolation.forecast`` 接近原版 ``Lagrangian``。
+站点→格点 Cressman 统一由 ``interpolation_station_grid.InterpSg(method="cressman", ...)`` 提供；
+``cressman_project_innov`` 是其旧签名薄封装（aligned 模式由 CLI 注入）。
 
 aligned 估 UV 用原版 OpticalFlow；``OpticalFlowProject`` 仅可选对照。
 """
@@ -17,38 +15,106 @@ import sys
 
 import numpy as np
 import pandas as pd
-import meteva.base as meb
-import meteva_base
-
-from src.extrapolation_plugin import forecast as extrap_fn
-from src.lsqr_optical_flow_plugin import LsqrOpticalFlow as window_lsqr_cls
+import meteva_base as meb
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _TEMP = os.path.normpath(os.path.join(_HERE, "..", "..", ".."))
-_CRESS_ROOT = os.path.join(_TEMP, "interp_sg_cressman")
-_CRESS_SRC = os.path.join(_CRESS_ROOT, "src")
 _OF_ROOT = os.path.join(_TEMP, "optical_flow_nowcast")
+_SG_SRC = os.path.join(_TEMP, "interpolation_station_grid", "src")
+if os.path.isdir(_SG_SRC) and _SG_SRC not in sys.path:
+    sys.path.append(_SG_SRC)
+from interp_sg_plugin import InterpSg  # noqa: E402
 
 
-def _ensure_cressman_on_path():
-    for p in (_CRESS_SRC, _CRESS_ROOT):
-        if os.path.isdir(p) and p not in sys.path:
-            sys.path.insert(0, p)
+def cressman_project_innov(
+    sta,
+    grd,
+    distance_limits,
+    num_limit=1.0,
+    smooth=0.001,
+    power_param=2.0,
+    rain_limit=None,
+    nearNum=None,
+    r_km_scale=1.35,
+    innov_gain=1.0,
+    residual_passes=0,
+    residual_degree_polish=True,
+    residual_polish_rounds=1,
+    degree_blend=0.85,
+    station_anchor_radius=0.35,
+    station_anchor_strength=0.0,
+):
+    """项目核再处理（aligned）：``InterpSg(method="cressman", reprocess=True)`` 的旧签名薄封装。
+
+    ``distance_limits`` 为度（对应 ``r_list``）；须带背景场 ``grd``；站点为空时返回背景场副本。
+    ``nearNum`` 为空时用 ``InterpSgCressman`` 的默认近邻数。
+    """
+    if len(sta) == 0:
+        return grd.copy()
+    extra = {} if nearNum is None else {"nearNum": nearNum}
+    return InterpSg(
+        method="cressman",
+        r_list=list(distance_limits),
+        reprocess=True,
+        rain_limit=rain_limit,
+        num_limit=num_limit,
+        smooth=smooth,
+        power_param=power_param,
+        r_km_scale=r_km_scale,
+        innov_gain=innov_gain,
+        residual_passes=residual_passes,
+        residual_degree_polish=residual_degree_polish,
+        residual_polish_rounds=residual_polish_rounds,
+        degree_blend=degree_blend,
+        station_anchor_radius=station_anchor_radius,
+        station_anchor_strength=station_anchor_strength,
+        **extra,
+    ).process(sta, background=grd)
 
 
-_ensure_cressman_on_path()
+def _import_optical_flow_src():
+    """从 optical_flow_nowcast 导入 ``src`` 包中的外推与 LSQR 光流。
 
-# Cressman 再处理已迁入 interp_sg_cressman.src.cressman_plugin
-from cressman_plugin import (  # noqa: E402
-    cressman_innov_gressman_like,
-    cressman_innov_wrap,
-    cressman_project_innov,
-    project_innov_wrap,
-)
+    顶层包名 ``src``、``utils`` 在多个子项目中重名，若直接 import 会被抢占或抢占本包。
+    此处临时将 optical_flow_nowcast 根置于 sys.path 最前，导入前后保存并恢复 ``src``、
+    ``utils`` 模块缓存与 sys.path，不影响本包后续导入。
+    """
+    def _pop(prefix):
+        return {k: sys.modules.pop(k) for k in list(sys.modules) if k == prefix or k.startswith(prefix + ".")}
 
-_extrap_forecast = extrap_fn
-_LsqrOpticalFlow = window_lsqr_cls
-_window_lsqr = _LsqrOpticalFlow()
+    saved_src, saved_utils = _pop("src"), _pop("utils")
+    path_before = list(sys.path)
+    try:
+        while _OF_ROOT in sys.path:
+            sys.path.remove(_OF_ROOT)
+        sys.path.insert(0, _OF_ROOT)
+        from src.extrapolation_plugin import forecast as extrap
+        from src.lsqr_optical_flow_plugin import LsqrOpticalFlow as lsqr
+    finally:
+        sys.path[:] = path_before
+        for prefix, saved in (("src", saved_src), ("utils", saved_utils)):
+            for k in [k for k in sys.modules if (k == prefix or k.startswith(prefix + ".")) and k not in saved]:
+                del sys.modules[k]
+            sys.modules.update(saved)
+    return extrap, lsqr
+
+
+_OF_CACHE = {}
+
+
+def _optical_flow_src():
+    """按需加载（首次用到 aligned / OpticalFlowProject 时才导入 optical_flow_nowcast）。"""
+    if not _OF_CACHE:
+        extrap, lsqr = _import_optical_flow_src()
+        _OF_CACHE["extrap"] = extrap
+        _OF_CACHE["lsqr"] = lsqr()
+    return _OF_CACHE
+
+
+def _extrap_forecast(*args, **kwargs):
+    return _optical_flow_src()["extrap"](*args, **kwargs)
+
+
 # LsqrOpticalFlow/mesh_val → meteva grid(gtime=...) 对 1970-01-01 等会触发
 # pandas date_range「exactly three must be specified」；统一换成安全时刻。
 _SAFE_TIME = pd.Timestamp("2000-01-01 00:00:00")
@@ -78,7 +144,7 @@ def _fix_grd_list(grds, t=_SAFE_TIME):
 
 def _sanitize_sta_for_project(sta):
     """
-    项目 Cressman / LsqrOpticalFlow 友好的站点表：固定 time，避免 set_stadata_coords
+    项目 LsqrOpticalFlow 友好的站点表：固定 time，避免 set_stadata_coords
     与异常 time 触发 pandas date_range 错误。
     """
     n = len(sta)
@@ -118,7 +184,7 @@ class OpticalFlowProject:
         # gd_output 就地写回：先规范化坐标再算，结果写回调用方原对象的 data
         out_u = _fix_grd_time(gd_output[0])
         out_v = _fix_grd_time(gd_output[1])
-        _window_lsqr.get_optical_flow(
+        _optical_flow_src()["lsqr"].get_optical_flow(
             before,
             next_,
             min_window,

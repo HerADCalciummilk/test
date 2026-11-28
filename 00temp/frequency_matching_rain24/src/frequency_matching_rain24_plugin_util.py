@@ -16,12 +16,8 @@ for _p in (_ROOT_DIR, _SRC_DIR):
         sys.path.insert(0, _p)
 
 from frequency_matching_rain24_plugin import Lagrangian
-from interpolation import GressManInterpolation, mesh_val
-from utils.cressman_extrap_reprocess import (
-    LagrangianAligned,
-    cressman_project_innov,
-    project_innov_wrap,
-)
+from interpolation import mesh_val
+from utils.cressman_extrap_reprocess import LagrangianAligned, cressman_project_innov
 from utils.logger import logger
 from utils.config import expansion, his_day, his_year, smooth_num
 from utils.data_proc import (
@@ -57,14 +53,15 @@ def _normalize_mode(match_mode: str) -> str:
 def _cressman_and_lagrangian(match_mode: str):
     """按 match_mode 选切片 Cressman、格点 Cressman、外推类。
 
-    aligned：项目再处理 ``cressman_project_innov`` / ``project_innov_wrap`` + ``LagrangianAligned``
-    original：原版 ``GressManInterpolation`` + ``Lagrangian``
+    aligned：``cressman_project_innov``（``InterpSg(reprocess=True, degree_blend=0.85)`` 旧签名封装）
+             + ``LagrangianAligned``
+    original：``None``（插件内用 ``InterpSg(reprocess=True, degree_blend=1.0)``）+ ``Lagrangian``
     估 UV 两边都用原版 ``OpticalFlow``。
     """
     mode = _normalize_mode(match_mode)
     if mode == "aligned":
-        return cressman_project_innov, project_innov_wrap, LagrangianAligned
-    return GressManInterpolation, GressManInterpolation, Lagrangian
+        return cressman_project_innov, cressman_project_innov, LagrangianAligned
+    return None, None, Lagrangian
 
 
 

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from interpolation import GressManInterpolation, bilinear_interp, mesh_val
+from interpolation import bilinear_interp, mesh_val
 from utils.config import (
     fact_level,
     fact_level1,
@@ -29,29 +29,18 @@ from utils.data_proc import (
 )
 from utils.logger import logger
 
-# 直接从同级 optical_flow_nowcast 取原版估速/搬雨；临时插路径，避免抢本包 utils
+# 估 UV / 原版外推用本包 cal_optical_flow（与 optical_flow_nowcast 的
+# Lagrangian / OpticalFlow 数值一致），本包独立，不依赖 optical_flow_nowcast。
+# aligned 再由 CLI 换成项目 Extrapolation（见 utils.cressman_extrap_reprocess，按需延迟加载）。
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_OF_ROOT = os.path.normpath(os.path.join(_HERE, "..", "..", "optical_flow_nowcast"))
-_saved_utils = {
-    k: sys.modules.pop(k)
-    for k in list(sys.modules)
-    if k == "utils" or k.startswith("utils.")
-}
-_path_before = list(sys.path)
-try:
-    while _OF_ROOT in sys.path:
-        sys.path.remove(_OF_ROOT)
-    sys.path.insert(0, _OF_ROOT)
-    from src.lagrangian_plugin import Lagrangian  # noqa: E402
-    from src.lsqr_optical_flow_plugin import OpticalFlow  # noqa: E402
-finally:
-    sys.path[:] = _path_before
-    for k in list(sys.modules):
-        if k == "utils" or k.startswith("utils."):
-            if k not in _saved_utils:
-                del sys.modules[k]
-    sys.modules.update(_saved_utils)
-del _saved_utils, _path_before, _HERE, _OF_ROOT
+_SG_SRC = os.path.normpath(os.path.join(_HERE, "..", "..", "interpolation_station_grid", "src"))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+if os.path.isdir(_SG_SRC) and _SG_SRC not in sys.path:
+    sys.path.append(_SG_SRC)
+from cal_optical_flow import Lagrangian, OpticalFlow  # noqa: E402
+from interp_sg_plugin import InterpSg  # noqa: E402
+del _HERE, _SG_SRC
 
 class FrequencyMatch:
 
@@ -285,7 +274,8 @@ class correct_by_opticalFlow:
         # 未传入时用本包原实现。
         self.optical_flow_cls = OpticalFlow if optical_flow_cls is None else optical_flow_cls
         self.lagrangian_cls = Lagrangian if lagrangian_cls is None else lagrangian_cls
-        self.cressman_fn = GressManInterpolation if cressman_fn is None else cressman_fn
+        # 未传入时用 InterpSg(method="cressman", reprocess=True, degree_blend=1.0)；aligned 由 CLI 注入。
+        self.cressman_fn = cressman_fn
         self.mesh_val_fn = mesh_val if mesh_val_fn is None else mesh_val_fn
         self.bilinear_fn = bilinear_interp if bilinear_fn is None else bilinear_fn
 
@@ -304,7 +294,16 @@ class correct_by_opticalFlow:
         grd_model = self.grd_hislist_model[int(self.similarity_index[0][i])]
         sta_obs = self.sta_hislist_obs[int(self.similarity_index[0][i])]
 
-        sta_obs_cressman = self.cressman_fn(sta_obs, grd_model, [1.0, 0.8, 0.6, 0.4], rain_limit=0.01)
+        if self.cressman_fn is not None:
+            sta_obs_cressman = self.cressman_fn(sta_obs, grd_model, [1.0, 0.8, 0.6, 0.4], rain_limit=0.01)
+        else:
+            sta_obs_cressman = InterpSg(
+                method="cressman",
+                r_list=[1.0, 0.8, 0.6, 0.4],
+                reprocess=True,
+                rain_limit=0.01,
+                degree_blend=1.0,
+            ).process(sta_obs, background=grd_model)
         grd_obs_smooth = smooth9(sta_obs_cressman, smooth_num)
         grd_obs_smooth = self.mesh_val_fn(grd_obs_smooth, self.grd_01res)
         grd_model_smooth_slice = self.mesh_val_fn(grd_model_smooth, self.grd_01res)
@@ -458,9 +457,9 @@ class OpticalFlowSliceCorrectPlugin:
 
 
 class CressmanFreqMatchGridPlugin:
-    """整域插值订正：Cressman（或再处理）+ FrequencyMatch；无光流。"""
+    """整域插值订正：Cressman（``cressman_fn`` 或 ``InterpSg(reprocess=True)``）+ FrequencyMatch；无光流。"""
 
-    def __init__(self, dataset, correct_sta, cressman_fn):
+    def __init__(self, dataset, correct_sta, cressman_fn=None):
         self.dataset = dataset
         self.correct_sta = correct_sta
         self.cressman_fn = cressman_fn
@@ -483,15 +482,19 @@ class CressmanFreqMatchGridPlugin:
         current_model_sta_add = pd.concat(
             [correct_sta, current_model_sta], ignore_index=True
         )
-        current_model_grd = smooth9(
-            self.cressman_fn(
-                current_model_sta_add,
-                grd_current_model,
-                [0.8, 0.6, 0.4, 0.2],
+        if self.cressman_fn is not None:
+            current_model_grd_add = self.cressman_fn(
+                current_model_sta_add, grd_current_model, [0.8, 0.6, 0.4, 0.2], rain_limit=0.01
+            )
+        else:
+            current_model_grd_add = InterpSg(
+                method="cressman",
+                r_list=[0.8, 0.6, 0.4, 0.2],
+                reprocess=True,
                 rain_limit=0.01,
-            ),
-            10,
-        )
+                degree_blend=1.0,
+            ).process(current_model_sta_add, background=grd_current_model)
+        current_model_grd = smooth9(current_model_grd_add, 10)
         used_model_level = FrequencyMatch(
             [
                 bilinear_interp(

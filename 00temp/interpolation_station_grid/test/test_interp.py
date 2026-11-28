@@ -1,5 +1,5 @@
-# 命令行（在本包目录执行，省略的数值参数读 resource/conf.ini）：
-# python -m cli --module idw --sta /data/code/nimm/demo_data/input/sta_grid_interp/sta.csv --grid /data/code/nimm/demo_data/input/sta_grid_interp/grid.nc
+# 命令行（在 00temp 目录执行，省略的参数读 resource/conf.ini）：
+# python -m interpolation_station_grid method=idw sta=/data/code/nimm/demo_data/input/sta_grid_interp/sta.csv grid=/data/code/nimm/demo_data/input/sta_grid_interp/grid.nc
 
 if __name__ == "__main__":
     import meteva_base as meb

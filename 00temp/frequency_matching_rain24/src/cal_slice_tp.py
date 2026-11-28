@@ -5,10 +5,20 @@
 # @File : cal_sliceTP.py
 # @Software: PyCharm
 
+import os
+import sys
+
 from utils.config import *
-from interpolation import *  # 原主程序的 Cressman / 双线性；nowcast 主程序会传入项目实现
+from interpolation import bilinear_interp, mesh_val  # 原主程序的双线性；nowcast 主程序会传入项目实现
 from cal_optical_flow import OpticalFlow, Lagrangian  # correct_tp_24h 的光流；nowcast 主程序会传入项目实现
 from cal_frequency_match import FrequencyMatch
+
+_SG_SRC = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "interpolation_station_grid", "src")
+)
+if os.path.isdir(_SG_SRC) and _SG_SRC not in sys.path:
+    sys.path.append(_SG_SRC)
+from interp_sg_plugin import InterpSg  # noqa: E402
 
 
 class correct_by_opticalFlow:
@@ -24,10 +34,10 @@ class correct_by_opticalFlow:
         self.grd_05res = ext_extend + [res * 5]
         self.similarity_index = similarity_index
         self.similar_lenth = self._cal_similar_lenth()
-        # 未传入时用本包原实现。correct_tp_24h_nowcast 传入项目实现。
+        # 未传入时用 InterpSg(method="cressman", reprocess=True, degree_blend=1.0)；nowcast 可注入 cressman_fn。
         self.optical_flow_cls = OpticalFlow if optical_flow_cls is None else optical_flow_cls
         self.lagrangian_cls = Lagrangian if lagrangian_cls is None else lagrangian_cls
-        self.cressman_fn = GressManInterpolation if cressman_fn is None else cressman_fn
+        self.cressman_fn = cressman_fn
         self.mesh_val_fn = mesh_val if mesh_val_fn is None else mesh_val_fn
         self.bilinear_fn = bilinear_interp if bilinear_fn is None else bilinear_fn
 
@@ -46,7 +56,16 @@ class correct_by_opticalFlow:
         grd_model = self.grd_hislist_model[int(self.similarity_index[0][i])]
         sta_obs = self.sta_hislist_obs[int(self.similarity_index[0][i])]
 
-        sta_obs_cressman = self.cressman_fn(sta_obs, grd_model, [1.0, 0.8, 0.6, 0.4], rain_limit=0.01)
+        if self.cressman_fn is not None:
+            sta_obs_cressman = self.cressman_fn(sta_obs, grd_model, [1.0, 0.8, 0.6, 0.4], rain_limit=0.01)
+        else:
+            sta_obs_cressman = InterpSg(
+                method="cressman",
+                r_list=[1.0, 0.8, 0.6, 0.4],
+                reprocess=True,
+                rain_limit=0.01,
+                degree_blend=1.0,
+            ).process(sta_obs, background=grd_model)
         grd_obs_smooth = smooth9(sta_obs_cressman, smooth_num)
         grd_obs_smooth = self.mesh_val_fn(grd_obs_smooth, self.grd_01res)
         grd_model_smooth_slice = self.mesh_val_fn(grd_model_smooth, self.grd_01res)

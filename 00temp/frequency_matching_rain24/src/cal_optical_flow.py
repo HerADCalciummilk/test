@@ -4,12 +4,21 @@
 # @Email : mjs1263153117@163.com
 # @File : cal_opticalFlow.py
 # @Software: PyCharm
+import os
+import sys
 import numpy as np
 import xarray as xr
 import meteva.base as meb
 from scipy.sparse.linalg import lsqr
 from utils.data_proc import creat_M3_grd
-from interpolation import GressManInterpolation, mesh_val
+from interpolation import mesh_val
+
+_SG_SRC = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "interpolation_station_grid", "src")
+)
+if os.path.isdir(_SG_SRC) and _SG_SRC not in sys.path:
+    sys.path.append(_SG_SRC)
+from interp_sg_plugin import InterpSg  # noqa: E402
 
 class OpticalFlow:
 
@@ -108,8 +117,11 @@ class OpticalFlow:
         gdBackgroundData2 = mesh_val(gd_output[0], [start_lon, end_lon, start_lat, end_lat, min_window[1]])
 
         distanceLimits = [4.0 * min_window[0], 2.0 * min_window[0], 1.0 * min_window[0]]
-        gridData2 = GressManInterpolation(sd_input_data1, gdBackgroundData2, distanceLimits)
-        gridData3 = GressManInterpolation(sd_input_data2, gdBackgroundData1, distanceLimits)
+        cressman = InterpSg(
+            method="cressman", r_list=distanceLimits, reprocess=True, degree_blend=1.0
+        )
+        gridData2 = cressman.process(sd_input_data1, background=gdBackgroundData2)
+        gridData3 = cressman.process(sd_input_data2, background=gdBackgroundData1)
         gd_output[0] = mesh_val(gridData2, [start_lon, end_lon, start_lat, end_lat, delt_lon])
         gd_output[1] = mesh_val(gridData3, [start_lon, end_lon, start_lat, end_lat, delt_lon])
 
@@ -185,8 +197,11 @@ class OpticalFlow:
         gdBackgroundData2 = mesh_val(gd_output[0], [start_lon, end_lon, start_lat, end_lat, min_window[1]])
 
         distanceLimits = [4.0 * min_window[0], 2.0 * min_window[0], 1.0 * min_window[0]]
-        gridData2 = GressManInterpolation(sd_input_data1, gdBackgroundData2, distanceLimits)
-        gridData3 = GressManInterpolation(sd_input_data2, gdBackgroundData1, distanceLimits)
+        cressman = InterpSg(
+            method="cressman", r_list=distanceLimits, reprocess=True, degree_blend=1.0
+        )
+        gridData2 = cressman.process(sd_input_data1, background=gdBackgroundData2)
+        gridData3 = cressman.process(sd_input_data2, background=gdBackgroundData1)
         gd_output[0] = mesh_val(gridData2, [start_lon, end_lon, start_lat, end_lat, delt_lon])
         gd_output[1] = mesh_val(gridData3, [start_lon, end_lon, start_lat, end_lat, delt_lon])
 

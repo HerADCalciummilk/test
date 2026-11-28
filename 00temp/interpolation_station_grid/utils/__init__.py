@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """网格站点融合工具包。
 
-本目录（``util_env`` 等）优先；再挂载同级 ``00temp/utils``（``CliBase`` /
-``base_plugin`` 等共享基类），使 ``from utils.xxx`` 在包内可解析。
+本目录无业务工具；再挂载同级 ``00temp/utils``（``merge_params`` /
+``base_plugin`` 等共享模块），使 ``from utils.xxx`` 在包内可解析。
 """
 import os
 
