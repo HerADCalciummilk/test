@@ -593,8 +593,7 @@ def read_model_terrain(case):
                             "end_lon"  :cls_model.latlon_info.lon_end,
                             "begin_lat":cls_model.latlon_info.lat_start,
                             "end_lat"  :cls_model.latlon_info.lat_end,
-                            # 与当前 EC 高空实况一致：近地面 0.1°、高空 0.2°（原业务多为 0.125°/0.25°）
-                            "lon_res"  :0.2, "lat_res"  :0.2} # 60–140 / 0–60 → 301×401
+                            "lon_res"  :0.25, "lat_res"  :0.25} #=481×561
         #(EC多层: 左-右:西-东 上-下:南-北)
         dylonlat_ML_IG_mdl=cls_itp3d.dlonlat_info(dylonlat_ML_IG_mdl, around=2,idebug=args.debug,slabel="EC_ML_IG")
         #找出在12.5km数据中的25km公共索引(1维数组)

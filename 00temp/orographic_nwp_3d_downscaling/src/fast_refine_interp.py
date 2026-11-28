@@ -374,8 +374,7 @@ def run_fast_refine(debug=0, update=0, operation="i", begin_date=None,
                             "end_lon"  :cls_model.latlon_info.lon_end,
                             "begin_lat":cls_model.latlon_info.lat_start,
                             "end_lat"  :cls_model.latlon_info.lat_end,
-                            # 与当前 EC 高空实况一致：近地面 0.1°、高空 0.2°（原业务多为 0.125°/0.25°）
-                            "lon_res"  :0.2, "lat_res"  :0.2} # 60–140 / 0–60 → 301×401
+                            "lon_res"  :0.25, "lat_res"  :0.25} #=481×561
         #(EC多层: 左-右:西-东 上-下:南-北)
         dylonlat_ML_IG_mdl=cls_itp3d.dlonlat_info(dylonlat_ML_IG_mdl, around=2,idebug=args.debug,slabel="EC_ML_IG")
         #找出在12.5km数据中的25km公共索引(1维数组)
@@ -458,7 +457,6 @@ def run_fast_refine(debug=0, update=0, operation="i", begin_date=None,
         stif_abs_path = os.path.join(sRoot_Path,"lib","terrain", dyInstantInfo["dem_head"]+"_"+sReso,"Zoning_"+sReso+".tif")  #坐标60-0 70-140 = 1201, 1401
         ndyzoning_rlt, mask_area_rlt = cls_itp3d.dRead_Zoning(stif_abs_path)#返回一个numpy 2-d数组 上-下(南-北) 左-右(西-东) 
         #检验指定省份
-        mask_selt_prov = None
         if dyInstantInfo["Prov_code"] is not None:
             mask_selt_prov = cls_itp3d.dSelect_Provinces(ndyzoning_rlt, dyInstantInfo["Prov_code"]) #指定哪些省份= 5km=(1201, 1401)
         #读取中国sReso地形文件-插值结果分辨率
@@ -589,8 +587,7 @@ def run_fast_refine(debug=0, update=0, operation="i", begin_date=None,
         #空间插值
         if not lDI_update:
             dyClass       = {"cls_obsdb":cls_obsdb,"cls_model":cls_model, "Spath":Spath}
-            dyCommon_Para = {"sModel_Region_upper":sModel_Region_upper, "sReso":sReso, "sReso_dir":sReso_dir,
-                            "sYMDH_mdl_begin_BJ":sYMDH_mdl_begin_BJ,
+            dyCommon_Para = {"sModel_Region_upper":sModel_Region_upper, "sReso":sReso, "sYMDH_mdl_begin_BJ":sYMDH_mdl_begin_BJ,
                             "Obs_Path":cls_obsdb.obs_info[sReso_dir]["path"],"Class":dyClass}
             if sReso=="Site":
                 dyCommon_Para["Site_Code"]=ltSlt_Site_Code

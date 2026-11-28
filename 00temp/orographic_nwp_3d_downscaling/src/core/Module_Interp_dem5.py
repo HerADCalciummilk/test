@@ -1505,7 +1505,7 @@ class Class_Interp_dem(object):
     sYMDH_Obs=self.cls_myfun.dBefAftDate2(dyCommon_Para["sYMDH_mdl_begin_BJ"], "hour", ifhour)
     #====格点实况要素路径====================================================
     sInterp_YMDH_dt = datetime.datetime.strptime(sYMDH_Obs, "%Y%m%d%H")
-    sIn_obs_abs_path_dt, lexist = dyCommon_Para["Class"]["Spath"].obs_path(sInterp_YMDH_dt, dyCommon_Para["sReso_dir"], sphyq_sn, sTime_range='000')
+    sIn_obs_abs_path_dt, lexist = dyCommon_Para["Class"]["Spath"].obs_path(sInterp_YMDH_dt, "Grid"+sReso, sphyq_sn, sTime_range='000')
 
     if self.iDebug>=1:print("gv:",sYMDH_Obs,sIn_obs_abs_path_dt)
     if not lexist:
